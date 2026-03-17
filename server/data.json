@@ -1,14 +1,5 @@
 {
-  "users": [
-    {
-      "id": "5b4fb9ae-fb58-410a-8804-52b76321dc08",
-      "name": "Test User",
-      "email": "test@example.com",
-      "passwordHash": "$2a$12$jfxIQ7fnrKuBV/C6qXJmT.BYKwP8jpW0.l.MTYk0vFELrcM8VrROW",
-      "role": "EIGENAAR",
-      "active": true
-    }
-  ],
+  "users": [],
   "opdrachten": [],
   "bestanden": []
 }
