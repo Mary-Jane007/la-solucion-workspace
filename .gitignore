@@ -1,0 +1,27 @@
+# Omgevingsvariabelen (bevatten geheimen)
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules
+
+# Build
+dist
+
+# Server uploads (lokaal)
+server/uploads/*
+!server/uploads/.gitkeep
+
+# Logs en OS
+*.log
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea
+.vscode/*.code-workspace
+
+# Cursor / agent tooling (lokaal)
+.agents/
+skills-lock.json
