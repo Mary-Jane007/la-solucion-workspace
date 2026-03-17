@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-const { query } = require("./db");
+const { query, isDbAvailable } = require("./db");
 
 // Fallback store (alleen dev) als DATABASE_URL ontbreekt.
 const DATA_PATH = path.join(__dirname, "data.json");
@@ -20,16 +20,21 @@ function writeFallback(data) {
 }
 
 function hasDb() {
-  return Boolean(process.env.DATABASE_URL);
+  return isDbAvailable();
 }
 
 async function getUsers() {
   if (!hasDb()) return readFallback().users || [];
-  const res = await query(
-    "select id, name, email, password_hash as \"passwordHash\", role, active from users order by created_at asc",
-    []
-  );
-  return res.rows;
+  try {
+    const res = await query(
+      "select id, name, email, password_hash as \"passwordHash\", role, active from users order by created_at asc",
+      []
+    );
+    return res.rows;
+  } catch (err) {
+    if (process.env.NODE_ENV !== "production") return readFallback().users || [];
+    throw err;
+  }
 }
 
 function rowToUser(row) {
@@ -46,20 +51,32 @@ function rowToUser(row) {
 
 async function getUserByEmail(email) {
   if (!hasDb()) return (readFallback().users || []).find((u) => u.email === email) || null;
-  const res = await query(
-    "select id, name, email, password_hash as \"passwordHash\", role, active from users where email=$1 limit 1",
-    [email]
-  );
-  return rowToUser(res.rows[0]);
+  try {
+    const res = await query(
+      "select id, name, email, password_hash as \"passwordHash\", role, active from users where email=$1 limit 1",
+      [email]
+    );
+    return rowToUser(res.rows[0]);
+  } catch (err) {
+    if (process.env.NODE_ENV !== "production")
+      return (readFallback().users || []).find((u) => u.email === email) || null;
+    throw err;
+  }
 }
 
 async function getUserById(id) {
   if (!hasDb()) return (readFallback().users || []).find((u) => u.id === id) || null;
-  const res = await query(
-    "select id, name, email, password_hash as \"passwordHash\", role, active from users where id=$1 limit 1",
-    [id]
-  );
-  return rowToUser(res.rows[0]);
+  try {
+    const res = await query(
+      "select id, name, email, password_hash as \"passwordHash\", role, active from users where id=$1 limit 1",
+      [id]
+    );
+    return rowToUser(res.rows[0]);
+  } catch (err) {
+    if (process.env.NODE_ENV !== "production")
+      return (readFallback().users || []).find((u) => u.id === id) || null;
+    throw err;
+  }
 }
 
 async function createUser(user) {
@@ -69,10 +86,20 @@ async function createUser(user) {
     writeFallback(data);
     return;
   }
-  await query(
-    "insert into users (id, name, email, password_hash, role, active) values ($1,$2,$3,$4,$5,$6)",
-    [user.id, user.name, user.email, user.passwordHash, user.role, user.active !== false]
-  );
+  try {
+    await query(
+      "insert into users (id, name, email, password_hash, role, active) values ($1,$2,$3,$4,$5,$6)",
+      [user.id, user.name, user.email, user.passwordHash, user.role, user.active !== false]
+    );
+  } catch (err) {
+    if (process.env.NODE_ENV !== "production") {
+      const data = readFallback();
+      data.users = [...(data.users || []), user];
+      writeFallback(data);
+      return;
+    }
+    throw err;
+  }
 }
 
 async function setUserActive(id, active) {
@@ -85,7 +112,20 @@ async function setUserActive(id, active) {
     writeFallback(data);
     return;
   }
-  await query("update users set active=$2 where id=$1", [id, active]);
+  try {
+    await query("update users set active=$2 where id=$1", [id, active]);
+  } catch (err) {
+    if (process.env.NODE_ENV !== "production") {
+      const data = readFallback();
+      const users = data.users || [];
+      const u = users.find((x) => x.id === id);
+      if (u) u.active = active;
+      data.users = users;
+      writeFallback(data);
+      return;
+    }
+    throw err;
+  }
 }
 
 module.exports = {

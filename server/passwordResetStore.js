@@ -1,7 +1,7 @@
-const { query } = require("./db");
+const { query, isDbAvailable } = require("./db");
 
 function hasDb() {
-  return Boolean(process.env.DATABASE_URL);
+  return isDbAvailable();
 }
 
 async function createResetToken({ id, userId, tokenHash, expiresAt }) {
@@ -14,18 +14,23 @@ async function createResetToken({ id, userId, tokenHash, expiresAt }) {
 
 async function getValidResetTokenByHash(tokenHash) {
   if (!hasDb()) return null;
-  const res = await query(
-    `
-    select id, user_id as "userId", token_hash as "tokenHash", expires_at as "expiresAt", used_at as "usedAt"
-    from password_reset_tokens
-    where token_hash = $1
-      and used_at is null
-      and expires_at > now()
-    limit 1
-    `,
-    [tokenHash]
-  );
-  return res.rows[0] || null;
+  try {
+    const res = await query(
+      `
+      select id, user_id as "userId", token_hash as "tokenHash", expires_at as "expiresAt", used_at as "usedAt"
+      from password_reset_tokens
+      where token_hash = $1
+        and used_at is null
+        and expires_at > now()
+      limit 1
+      `,
+      [tokenHash]
+    );
+    return res.rows[0] || null;
+  } catch (err) {
+    if (process.env.NODE_ENV !== "production") return null;
+    throw err;
+  }
 }
 
 async function markResetTokenUsed(id) {

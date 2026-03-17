@@ -1,11 +1,12 @@
-const { query } = require("./db");
+const { query, isDbAvailable } = require("./db");
 
 function hasDb() {
-  return Boolean(process.env.DATABASE_URL);
+  return isDbAvailable();
 }
 
 async function listOpdrachtenForUser(user) {
   if (!hasDb()) return [];
+  try {
   if (user.rol === "EIGENAAR") {
     const res = await query(
       `
@@ -52,88 +53,107 @@ async function listOpdrachtenForUser(user) {
     [user.id]
   );
   return res.rows;
+  } catch (err) {
+    if (process.env.NODE_ENV !== "production") return [];
+    throw err;
+  }
 }
 
 async function getOpdrachtById(id) {
   if (!hasDb()) return null;
-  const res = await query(
-    `
-    select
-      o.id,
-      o.klant_naam as "klantNaam",
-      o.omschrijving,
-      o.datum_aangemaakt as "datumAangemaakt",
-      o.datum_deadline as "datumDeadline",
-      o.status,
-      o.prioriteit,
-      o.behandelaar_user_id as "behandelaarUserId",
-      u.name as "behandelaarNaam",
-      o.notities,
-      o.categorie
-    from opdrachten o
-    left join users u on u.id = o.behandelaar_user_id
-    where o.id = $1
-    limit 1
-    `,
-    [id]
-  );
-  return res.rows[0] || null;
+  try {
+    const res = await query(
+      `
+      select
+        o.id,
+        o.klant_naam as "klantNaam",
+        o.omschrijving,
+        o.datum_aangemaakt as "datumAangemaakt",
+        o.datum_deadline as "datumDeadline",
+        o.status,
+        o.prioriteit,
+        o.behandelaar_user_id as "behandelaarUserId",
+        u.name as "behandelaarNaam",
+        o.notities,
+        o.categorie
+      from opdrachten o
+      left join users u on u.id = o.behandelaar_user_id
+      where o.id = $1
+      limit 1
+      `,
+      [id]
+    );
+    return res.rows[0] || null;
+  } catch (err) {
+    if (process.env.NODE_ENV !== "production") return null;
+    throw err;
+  }
 }
 
 async function createOpdracht(opdracht) {
   if (!hasDb()) throw new Error("Database niet geconfigureerd.");
-  await query(
-    `
-    insert into opdrachten
-      (id, klant_naam, omschrijving, datum_aangemaakt, datum_deadline, status, prioriteit, behandelaar_user_id, notities, categorie)
-    values
-      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-    `,
-    [
-      opdracht.id,
-      opdracht.klantNaam,
-      opdracht.omschrijving,
-      opdracht.datumAangemaakt,
-      opdracht.datumDeadline || null,
-      opdracht.status,
-      opdracht.prioriteit,
-      opdracht.behandelaarUserId || null,
-      opdracht.notities || null,
-      opdracht.categorie || null
-    ]
-  );
+  try {
+    await query(
+      `
+      insert into opdrachten
+        (id, klant_naam, omschrijving, datum_aangemaakt, datum_deadline, status, prioriteit, behandelaar_user_id, notities, categorie)
+      values
+        ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      `,
+      [
+        opdracht.id,
+        opdracht.klantNaam,
+        opdracht.omschrijving,
+        opdracht.datumAangemaakt,
+        opdracht.datumDeadline || null,
+        opdracht.status,
+        opdracht.prioriteit,
+        opdracht.behandelaarUserId || null,
+        opdracht.notities || null,
+        opdracht.categorie || null
+      ]
+    );
+  } catch (err) {
+    if (process.env.NODE_ENV !== "production") throw new Error("Database niet beschikbaar (dev).");
+    throw err;
+  }
 }
 
 async function updateOpdracht(opdracht) {
   if (!hasDb()) throw new Error("Database niet geconfigureerd.");
-  await query(
-    `
-    update opdrachten set
-      klant_naam=$2,
-      omschrijving=$3,
-      datum_aangemaakt=$4,
-      datum_deadline=$5,
-      status=$6,
-      prioriteit=$7,
-      behandelaar_user_id=$8,
-      notities=$9,
-      categorie=$10,
-      updated_at=now()
-    where id=$1
-    `,
-    [
-      opdracht.id,
-      opdracht.klantNaam,
-      opdracht.omschrijving,
-      opdracht.datumAangemaakt,
-      opdracht.datumDeadline || null,
-      opdracht.status,
-      opdracht.prioriteit,
-      opdracht.behandelaarUserId || null,
-      opdracht.notities || null,
-      opdracht.categorie || null
-    ]
-  );
+  try {
+    await query(
+      `
+      update opdrachten set
+        klant_naam=$2,
+        omschrijving=$3,
+        datum_aangemaakt=$4,
+        datum_deadline=$5,
+        status=$6,
+        prioriteit=$7,
+        behandelaar_user_id=$8,
+        notities=$9,
+        categorie=$10,
+        updated_at=now()
+      where id=$1
+      `,
+      [
+        opdracht.id,
+        opdracht.klantNaam,
+        opdracht.omschrijving,
+        opdracht.datumAangemaakt,
+        opdracht.datumDeadline || null,
+        opdracht.status,
+        opdracht.prioriteit,
+        opdracht.behandelaarUserId || null,
+        opdracht.notities || null,
+        opdracht.categorie || null
+      ]
+    );
+  } catch (err) {
+    if (process.env.NODE_ENV !== "production") throw new Error("Database niet beschikbaar (dev).");
+    throw err;
+  }
 }
 
 module.exports = {

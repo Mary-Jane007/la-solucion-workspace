@@ -2,6 +2,7 @@ const { Pool } = require("pg");
 
 const DATABASE_URL = process.env.DATABASE_URL;
 const NODE_ENV = process.env.NODE_ENV || "development";
+let dbDisabled = false;
 
 if (!DATABASE_URL) {
   if (NODE_ENV === "production") {
@@ -16,12 +17,29 @@ const pool = DATABASE_URL
     })
   : null;
 
+function isDbAvailable() {
+  return Boolean(pool) && dbDisabled === false;
+}
+
+function disableDb() {
+  dbDisabled = true;
+}
+
 async function query(text, params) {
-  if (!pool) {
-    throw new Error("Database niet geconfigureerd (DATABASE_URL ontbreekt).");
+  if (!isDbAvailable()) {
+    throw new Error("Database niet geconfigureerd of uitgeschakeld.");
   }
-  const res = await pool.query(text, params);
-  return res;
+  try {
+    const res = await pool.query(text, params);
+    return res;
+  } catch (err) {
+    // In development: als DATABASE_URL stuk is (bijv. fout wachtwoord),
+    // schakel DB uit zodat de fallback store kan werken.
+    if (NODE_ENV !== "production" && err && err.code === "28P01") {
+      dbDisabled = true;
+    }
+    throw err;
+  }
 }
 
 async function migrate() {
@@ -83,6 +101,8 @@ async function migrate() {
 
 module.exports = {
   pool,
+  isDbAvailable,
+  disableDb,
   query,
   migrate
 };
