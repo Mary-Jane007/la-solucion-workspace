@@ -1,5 +1,14 @@
 {
-  "users": [],
+  "users": [
+    {
+      "id": "dfc35e3e-9ec8-40a1-8dcb-4b518af2b108",
+      "name": "Astrid",
+      "email": "astridtaweroe@gmail.com",
+      "passwordHash": "$2a$12$J7ZIDCQNdAaHe0sJ0EJBrOdAesFGVlk8gQns4snN.DFUko7vyTOWa",
+      "role": "EIGENAAR",
+      "active": true
+    }
+  ],
   "opdrachten": [],
   "bestanden": []
 }

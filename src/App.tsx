@@ -78,7 +78,7 @@ export function App() {
                 try {
                   const lijst = await fetchOpdrachten();
                   setOpdrachten(lijst);
-                } catch (err) {
+                } catch {
                   setFout("Ingelogd, maar opdrachten konden niet geladen worden.");
                 }
               }}

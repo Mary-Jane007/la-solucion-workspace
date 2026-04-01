@@ -82,7 +82,7 @@ export function LoginScherm({ onLogin }: Props) {
           "Registratie gelukt. De eigenaar is per e-mail op de hoogte gesteld voor verificatie en toestemming. Je kunt inloggen zodra je account is goedgekeurd."
         );
         setWachtwoord("");
-      } catch (err) {
+      } catch {
         setFoutmelding("Er is een fout opgetreden bij registreren. Probeer het opnieuw.");
       } finally {
         setIsBezig(false);
@@ -122,7 +122,7 @@ export function LoginScherm({ onLogin }: Props) {
         email: data.user.email,
         rol: data.user.rol as Rol
       });
-    } catch (err) {
+    } catch {
       setFoutmelding("Er is een fout opgetreden bij inloggen. Probeer het opnieuw.");
     } finally {
       setIsBezig(false);

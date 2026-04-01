@@ -371,24 +371,22 @@ function createApp() {
     }
   });
 
-  app.get("/api/auth/me", authRequired, (req, res) => {
-    (async () => {
-      try {
-        const user = await getUserById(req.user.id);
-        if (!user) {
-          return res.status(404).json({ error: "Gebruiker niet gevonden." });
-        }
-        return res.json({
-          id: user.id,
-          naam: user.name,
-          email: user.email,
-          rol: user.role
-        });
-      } catch (err) {
-        console.error("Fout bij /api/auth/me:", err);
-        return res.status(500).json({ error: "Interne serverfout." });
+  app.get("/api/auth/me", authRequired, async (req, res) => {
+    try {
+      const user = await getUserById(req.user.id);
+      if (!user) {
+        return res.status(404).json({ error: "Gebruiker niet gevonden." });
       }
-    })();
+      return res.json({
+        id: user.id,
+        naam: user.name,
+        email: user.email,
+        rol: user.role
+      });
+    } catch (err) {
+      console.error("Fout bij /api/auth/me:", err);
+      return res.status(500).json({ error: "Interne serverfout." });
+    }
   });
 
   function requireOwner(req, res, next) {

@@ -1,5 +1,10 @@
 import { Gebruiker, Opdracht } from "./types";
 
+const API_BASE =
+  (import.meta as any).env?.VITE_API_BASE_URL && (import.meta as any).env.VITE_API_BASE_URL !== "undefined"
+    ? (import.meta as any).env.VITE_API_BASE_URL
+    : "";
+
 export function getToken() {
   return window.localStorage.getItem("la-solucion-token");
 }
@@ -9,10 +14,11 @@ export function clearToken() {
 }
 
 async function apiFetch(path: string, init?: RequestInit) {
+  const url = `${API_BASE}${path}`;
   const token = getToken();
   const headers = new Headers(init?.headers || {});
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  return fetch(path, { ...init, headers });
+  return fetch(url, { ...init, headers });
 }
 
 export async function fetchMe(): Promise<Gebruiker> {
