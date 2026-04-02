@@ -29,8 +29,9 @@ export function OpdrachtDialoog({
   const [isBezig, setIsBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
 
-  const actieveMedewerkers = useMemo(
-    () => teamGebruikers.filter((u) => u.active && u.role !== "EIGENAAR"),
+  /** Alle medewerkersaccounts (niet-eigenaar), ook als het account op non-actief staat. */
+  const medewerkersVoorToewijzing = useMemo(
+    () => teamGebruikers.filter((u) => u.role !== "EIGENAAR"),
     [teamGebruikers]
   );
 
@@ -196,7 +197,7 @@ export function OpdrachtDialoog({
                   onChange={(e) => {
                     const nextId = e.target.value || null;
                     const nextNaam =
-                      actieveMedewerkers.find((u) => u.id === nextId)?.name || null;
+                      medewerkersVoorToewijzing.find((u) => u.id === nextId)?.name || null;
                     setBewerkt({
                       ...bewerkt,
                       behandelaarUserId: nextId,
@@ -205,9 +206,10 @@ export function OpdrachtDialoog({
                   }}
                 >
                   <option value="">Niet toegewezen</option>
-                  {actieveMedewerkers.map((u) => (
+                  {medewerkersVoorToewijzing.map((u) => (
                     <option key={u.id} value={u.id}>
                       {u.name}
+                      {!u.active ? " (account niet actief)" : ""}
                     </option>
                   ))}
                 </select>
