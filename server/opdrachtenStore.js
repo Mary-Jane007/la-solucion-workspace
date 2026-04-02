@@ -1,11 +1,40 @@
+const fs = require("fs");
+const path = require("path");
 const { query, isDbAvailable } = require("./db");
 
 function hasDb() {
   return isDbAvailable();
 }
 
+const DATA_PATH = path.join(__dirname, "data.json");
+const defaultData = { users: [], opdrachten: [], bestanden: [] };
+
+function readFallback() {
+  try {
+    const raw = fs.readFileSync(DATA_PATH, "utf8");
+    return JSON.parse(raw);
+  } catch {
+    return { ...defaultData };
+  }
+}
+
+function writeFallback(data) {
+  fs.writeFileSync(DATA_PATH, JSON.stringify(data, null, 2), "utf8");
+}
+
 async function listOpdrachtenForUser(user) {
-  if (!hasDb()) return [];
+  if (!hasDb()) {
+    const data = readFallback();
+    const opdrachten = data.opdrachten || [];
+    if (user.rol === "EIGENAAR") return opdrachten;
+    return opdrachten.filter(
+      (o) =>
+        o.behandelaarUserId === user.id ||
+        (o.behandelaarNaam &&
+          typeof o.behandelaarNaam === "string" &&
+          o.behandelaarNaam.toLocaleLowerCase() === user.name.toLocaleLowerCase())
+    );
+  }
   try {
   if (user.rol === "EIGENAAR") {
     const res = await query(
@@ -60,7 +89,10 @@ async function listOpdrachtenForUser(user) {
 }
 
 async function getOpdrachtById(id) {
-  if (!hasDb()) return null;
+  if (!hasDb()) {
+    const data = readFallback();
+    return (data.opdrachten || []).find((o) => o.id === id) || null;
+  }
   try {
     const res = await query(
       `
@@ -91,7 +123,17 @@ async function getOpdrachtById(id) {
 }
 
 async function createOpdracht(opdracht) {
-  if (!hasDb()) throw new Error("Database niet geconfigureerd.");
+  if (!hasDb()) {
+    const data = readFallback();
+    const opdrachten = data.opdrachten || [];
+    const nieuw = {
+      ...opdracht,
+      bestanden: opdracht.bestanden || []
+    };
+    data.opdrachten = [nieuw, ...opdrachten];
+    writeFallback(data);
+    return;
+  }
   try {
     await query(
       `
@@ -120,7 +162,21 @@ async function createOpdracht(opdracht) {
 }
 
 async function updateOpdracht(opdracht) {
-  if (!hasDb()) throw new Error("Database niet geconfigureerd.");
+  if (!hasDb()) {
+    const data = readFallback();
+    const opdrachten = data.opdrachten || [];
+    const idx = opdrachten.findIndex((o) => o.id === opdracht.id);
+    if (idx === -1) {
+      data.opdrachten = [opdracht, ...opdrachten];
+    } else {
+      data.opdrachten[idx] = {
+        ...opdrachten[idx],
+        ...opdracht
+      };
+    }
+    writeFallback(data);
+    return;
+  }
   try {
     await query(
       `
@@ -156,10 +212,28 @@ async function updateOpdracht(opdracht) {
   }
 }
 
+async function deleteOpdracht(id) {
+  if (!hasDb()) {
+    const data = readFallback();
+    const opdrachten = data.opdrachten || [];
+    data.opdrachten = opdrachten.filter((o) => o.id !== id);
+    data.bestanden = (data.bestanden || []).filter((b) => b.opdrachtId !== id);
+    writeFallback(data);
+    return;
+  }
+  try {
+    await query("delete from opdrachten where id=$1", [id]);
+  } catch (err) {
+    if (process.env.NODE_ENV !== "production") throw new Error("Database niet beschikbaar (dev).");
+    throw err;
+  }
+}
+
 module.exports = {
   listOpdrachtenForUser,
   getOpdrachtById,
   createOpdracht,
-  updateOpdracht
+  updateOpdracht,
+  deleteOpdracht
 };
 

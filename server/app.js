@@ -22,12 +22,8 @@ const {
   createUser,
   setUserActive
 } = require("./store");
-const {
-  listOpdrachtenForUser,
-  getOpdrachtById,
-  createOpdracht,
-  updateOpdracht
-} = require("./opdrachtenStore");
+const { listOpdrachtenForUser, getOpdrachtById, createOpdracht, updateOpdracht, deleteOpdracht } =
+  require("./opdrachtenStore");
 const { listBestandenForOpdracht, getBestandById, createBestand } = require("./bestandenStore");
 
 const { createResetToken, getValidResetTokenByHash, markResetTokenUsed, updateUserPasswordHash } =
@@ -411,7 +407,6 @@ function createApp() {
 
   app.get("/api/opdrachten", authRequired, async (req, res) => {
     try {
-      if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
       const rows = await listOpdrachtenForUser(req.user);
       const withFiles = await Promise.all(
         rows.map(async (o) => {
@@ -426,9 +421,8 @@ function createApp() {
     }
   });
 
-  app.post("/api/opdrachten", authRequired, async (req, res) => {
+  app.post("/api/opdrachten", authRequired, requireOwner, async (req, res) => {
     try {
-      if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
       const parsed = opdrachtSchema.safeParse(req.body || {});
       if (!parsed.success) return res.status(400).json({ error: parseZodError(parsed.error) });
 
@@ -456,7 +450,6 @@ function createApp() {
 
   app.put("/api/opdrachten/:id", authRequired, async (req, res) => {
     try {
-      if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
       const opdrachtId = req.params.id;
       const bestaande = await getOpdrachtById(opdrachtId);
       if (!bestaande) return res.status(404).json({ error: "Opdracht niet gevonden." });
@@ -487,13 +480,25 @@ function createApp() {
     }
   });
 
+  app.delete("/api/opdrachten/:id", authRequired, requireOwner, async (req, res) => {
+    try {
+      const opdrachtId = req.params.id;
+      const bestaande = await getOpdrachtById(opdrachtId);
+      if (!bestaande) return res.status(404).json({ error: "Opdracht niet gevonden." });
+      await deleteOpdracht(opdrachtId);
+      return res.status(204).send();
+    } catch (err) {
+      console.error("Fout bij DELETE /api/opdrachten/:id", err);
+      return res.status(500).json({ error: "Interne serverfout." });
+    }
+  });
+
   app.post(
     "/api/opdrachten/:id/bestanden",
     authRequired,
     upload.single("file"),
     async (req, res) => {
       try {
-        if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
         const opdrachtId = req.params.id;
         const bestaande = await getOpdrachtById(opdrachtId);
         if (!bestaande) return res.status(404).json({ error: "Opdracht niet gevonden." });
@@ -523,7 +528,6 @@ function createApp() {
 
   app.get("/api/bestanden/:id/download", authRequired, async (req, res) => {
     try {
-      if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
       const bestand = await getBestandById(req.params.id);
       if (!bestand) return res.status(404).json({ error: "Bestand niet gevonden." });
 

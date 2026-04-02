@@ -57,6 +57,16 @@ export async function updateOpdracht(opdracht: Opdracht): Promise<Opdracht> {
   return data.opdracht as Opdracht;
 }
 
+export async function deleteOpdracht(id: string): Promise<void> {
+  const res = await apiFetch(`/api/opdrachten/${id}`, {
+    method: "DELETE"
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error((data as any).error || "Kon opdracht niet verwijderen.");
+  }
+}
+
 export async function uploadBestand(opdrachtId: string, file: File) {
   const form = new FormData();
   form.append("file", file);

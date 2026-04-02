@@ -1,11 +1,32 @@
+const fs = require("fs");
+const path = require("path");
 const { query, isDbAvailable } = require("./db");
 
 function hasDb() {
   return isDbAvailable();
 }
 
+const DATA_PATH = path.join(__dirname, "data.json");
+const defaultData = { users: [], opdrachten: [], bestanden: [] };
+
+function readFallback() {
+  try {
+    const raw = fs.readFileSync(DATA_PATH, "utf8");
+    return JSON.parse(raw);
+  } catch {
+    return { ...defaultData };
+  }
+}
+
+function writeFallback(data) {
+  fs.writeFileSync(DATA_PATH, JSON.stringify(data, null, 2), "utf8");
+}
+
 async function listBestandenForOpdracht(opdrachtId) {
-  if (!hasDb()) return [];
+  if (!hasDb()) {
+    const data = readFallback();
+    return (data.bestanden || []).filter((b) => b.opdrachtId === opdrachtId);
+  }
   try {
     const res = await query(
       `
@@ -34,7 +55,10 @@ async function listBestandenForOpdracht(opdrachtId) {
 }
 
 async function getBestandById(id) {
-  if (!hasDb()) return null;
+  if (!hasDb()) {
+    const data = readFallback();
+    return (data.bestanden || []).find((b) => b.id === id) || null;
+  }
   try {
     const res = await query(
       `
@@ -61,7 +85,13 @@ async function getBestandById(id) {
 }
 
 async function createBestand(bestand) {
-  if (!hasDb()) throw new Error("Database niet geconfigureerd.");
+  if (!hasDb()) {
+    const data = readFallback();
+    const bestanden = data.bestanden || [];
+    data.bestanden = [bestand, ...bestanden];
+    writeFallback(data);
+    return;
+  }
   try {
     await query(
       `

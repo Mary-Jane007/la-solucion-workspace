@@ -3,7 +3,7 @@ import { Gebruiker, Opdracht, OpdrachtStatus } from "../types";
 import { OpdrachtenBord } from "./OpdrachtenBord";
 import { Kalender } from "./Kalender";
 import { OpdrachtDialoog } from "./OpdrachtDialoog";
-import { createOpdracht, updateOpdracht } from "../api";
+import { createOpdracht, updateOpdracht, deleteOpdracht } from "../api";
 
 interface Props {
   gebruiker: Gebruiker;
@@ -204,6 +204,20 @@ export function Dashboard({
     }
   };
 
+  const handleDeleteOpdracht = async (opdrachtId: string) => {
+    try {
+      setOpdrachtFout(null);
+      await deleteOpdracht(opdrachtId);
+      const updated = opdrachten.filter((o) => o.id !== opdrachtId);
+      onOpdrachtenWijzig(updated);
+      sluitDialoog();
+    } catch (err) {
+      const message =
+        err instanceof Error && err.message ? err.message : "Kon opdracht niet verwijderen. Controleer de backend.";
+      setOpdrachtFout(message);
+    }
+  };
+
   return (
     <>
       {opdrachtFout && (
@@ -401,6 +415,7 @@ export function Dashboard({
           onSluit={sluitDialoog}
           onBewaar={handleOpdrachtUpdate}
           onCreate={handleCreateOpdracht}
+          onDelete={handleDeleteOpdracht}
         />
       )}
     </>

@@ -12,6 +12,7 @@ interface OpdrachtDialoogProps {
   onSluit: () => void;
   onBewaar: (opdracht: Opdracht) => Promise<Opdracht>;
   onCreate?: (draft: Opdracht) => Promise<void>;
+  onDelete?: (id: string) => Promise<void>;
 }
 
 export function OpdrachtDialoog({
@@ -21,7 +22,8 @@ export function OpdrachtDialoog({
   teamGebruikers,
   onSluit,
   onBewaar,
-  onCreate
+  onCreate,
+  onDelete
 }: OpdrachtDialoogProps) {
   const [bewerkt, setBewerkt] = useState<Opdracht>(opdracht);
   const [isBezig, setIsBezig] = useState(false);
@@ -36,6 +38,7 @@ export function OpdrachtDialoog({
   const isBekijken = mode === "bekijken";
   const alleenLezen = isBekijken;
   const kanBestandenToevoegen = mode === "bewerken" && bewerkt.id;
+  const kanVerwijderen = isEigenaar && mode === "bewerken" && Boolean(bewerkt.id);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -291,6 +294,26 @@ export function OpdrachtDialoog({
             <button type="button" className="btn-ghost" onClick={onSluit}>
               {isBekijken ? "Sluiten" : "Annuleren"}
             </button>
+            {kanVerwijderen && onDelete && (
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={isBezig}
+                onClick={async () => {
+                  try {
+                    setFout(null);
+                    setIsBezig(true);
+                    await onDelete(bewerkt.id);
+                  } catch {
+                    setFout("Verwijderen mislukt. Probeer opnieuw.");
+                  } finally {
+                    setIsBezig(false);
+                  }
+                }}
+              >
+                Opdracht verwijderen
+              </button>
+            )}
             {isBekijken ? (
               <button
                 type="button"
