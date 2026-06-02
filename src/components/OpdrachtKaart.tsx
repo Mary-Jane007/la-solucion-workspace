@@ -5,9 +5,16 @@ interface Props {
   isEigenaar: boolean;
   onKlik: () => void;
   onStatusWijzig: (status: OpdrachtStatus) => void;
+  onVerwijder?: () => void;
 }
 
-export function OpdrachtKaart({ opdracht, isEigenaar, onKlik, onStatusWijzig }: Props) {
+export function OpdrachtKaart({
+  opdracht,
+  isEigenaar,
+  onKlik,
+  onStatusWijzig,
+  onVerwijder
+}: Props) {
   const created = new Date(opdracht.datumAangemaakt).toLocaleDateString("nl-NL");
   const isOpgeslagen = Boolean(opdracht.id);
 
@@ -41,6 +48,18 @@ export function OpdrachtKaart({ opdracht, isEigenaar, onKlik, onStatusWijzig }: 
             }}
           >
             Bewerken
+          </button>
+        )}
+        {isOpgeslagen && onVerwijder && (
+          <button
+            type="button"
+            className="btn-secondary btn-danger"
+            onClick={(e) => {
+              e.stopPropagation();
+              onVerwijder();
+            }}
+          >
+            Verwijderen
           </button>
         )}
         <select

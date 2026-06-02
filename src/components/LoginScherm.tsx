@@ -1,8 +1,35 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Gebruiker, Rol } from "../types";
+
+const REMEMBER_EMAIL_KEY = "la-solucion-email";
 
 interface Props {
   onLogin: (gebruiker: Gebruiker) => void;
+}
+
+async function loginMetGegevens(
+  email: string,
+  password: string,
+  onLogin: (g: Gebruiker) => void
+) {
+  const response = await fetch("/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: email.trim(), password })
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || "Inloggen mislukt.");
+  }
+  if (data.token) {
+    window.localStorage.setItem("la-solucion-token", data.token);
+  }
+  onLogin({
+    id: data.user.id,
+    naam: data.user.naam,
+    email: data.user.email,
+    rol: data.user.rol as Rol
+  });
 }
 
 export function LoginScherm({ onLogin }: Props) {
@@ -11,7 +38,8 @@ export function LoginScherm({ onLogin }: Props) {
   const [email, setEmail] = useState("");
   const [wachtwoord, setWachtwoord] = useState("");
   const [nieuwWachtwoord, setNieuwWachtwoord] = useState("");
-  const [rol, setRol] = useState<Rol>(Rol.Medewerker);
+  const [onthoudEmail, setOnthoudEmail] = useState(true);
+  const [wordtEigenaar, setWordtEigenaar] = useState(false);
   const [foutmelding, setFoutmelding] = useState<string | null>(null);
   const [registratieSucces, setRegistratieSucces] = useState<string | null>(null);
   const [isBezig, setIsBezig] = useState(false);
@@ -20,6 +48,36 @@ export function LoginScherm({ onLogin }: Props) {
     const params = new URLSearchParams(window.location.search);
     return params.get("resetToken");
   }, []);
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem(REMEMBER_EMAIL_KEY);
+    if (saved) setEmail(saved);
+  }, []);
+
+  useEffect(() => {
+    if (!isRegistreren || !email.trim()) {
+      setWordtEigenaar(false);
+      return;
+    }
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const res = await fetch(
+          `/api/auth/registration-info?email=${encodeURIComponent(email.trim())}`
+        );
+        const data = await res.json();
+        if (!cancelled && res.ok) {
+          setWordtEigenaar(Boolean(data.willBeOwner));
+        }
+      } catch {
+        if (!cancelled) setWordtEigenaar(false);
+      }
+    };
+    check();
+    return () => {
+      cancelled = true;
+    };
+  }, [isRegistreren, email]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -67,21 +125,38 @@ export function LoginScherm({ onLogin }: Props) {
           body: JSON.stringify({
             name: naam.trim(),
             email: email.trim(),
-            password: wachtwoord,
-            role: rol
+            password: wachtwoord
           })
         });
 
         const data = await response.json();
-        if (!response.ok) {
+        if (!response.ok && response.status !== 200) {
           setFoutmelding(data.error || "Registratie mislukt.");
           return;
         }
 
-        setRegistratieSucces(
-          "Registratie gelukt. De eigenaar is per e-mail op de hoogte gesteld voor verificatie en toestemming. Je kunt inloggen zodra je account is goedgekeurd."
-        );
+        const isEigenaar = data.role === "EIGENAAR";
+        setRegistratieSucces(data.message || "Registratie gelukt.");
+
+        if (onthoudEmail) {
+          window.localStorage.setItem(REMEMBER_EMAIL_KEY, email.trim().toLowerCase());
+        }
+
+        if (isEigenaar && wachtwoord.trim()) {
+          try {
+            await loginMetGegevens(email, wachtwoord, onLogin);
+            return;
+          } catch {
+            setRegistratieSucces(
+              `${data.message} Log nu in met je e-mailadres en wachtwoord.`
+            );
+          }
+        }
+
         setWachtwoord("");
+        if (!isEigenaar) {
+          setIsRegistreren(false);
+        }
       } catch (err) {
         setFoutmelding("Er is een fout opgetreden bij registreren. Probeer het opnieuw.");
       } finally {
@@ -95,35 +170,16 @@ export function LoginScherm({ onLogin }: Props) {
 
     try {
       setIsBezig(true);
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          email: email.trim(),
-          password: wachtwoord
-        })
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        setFoutmelding(data.error || "Inloggen mislukt.");
-        return;
+      if (onthoudEmail) {
+        window.localStorage.setItem(REMEMBER_EMAIL_KEY, email.trim().toLowerCase());
+      } else {
+        window.localStorage.removeItem(REMEMBER_EMAIL_KEY);
       }
-
-      if (data.token) {
-        window.localStorage.setItem("la-solucion-token", data.token);
-      }
-
-      onLogin({
-        id: data.user.id,
-        naam: data.user.naam,
-        email: data.user.email,
-        rol: data.user.rol as Rol
-      });
+      await loginMetGegevens(email, wachtwoord, onLogin);
     } catch (err) {
-      setFoutmelding("Er is een fout opgetreden bij inloggen. Probeer het opnieuw.");
+      setFoutmelding(
+        err instanceof Error ? err.message : "Er is een fout opgetreden bij inloggen. Probeer het opnieuw."
+      );
     } finally {
       setIsBezig(false);
     }
@@ -188,18 +244,28 @@ export function LoginScherm({ onLogin }: Props) {
                 onChange={(e) => setWachtwoord(e.target.value)}
               />
             </label>
-            <label className="form-label">
-              Rol
-              <select
-                className="form-input"
-                value={rol}
-                onChange={(e) => setRol(e.target.value as Rol)}
-              >
-                <option value={Rol.Medewerker}>Medewerker</option>
-                <option value={Rol.Eigenaar}>Eigenaar</option>
-              </select>
-            </label>
+            {isRegistreren && wordtEigenaar && (
+              <p className="login-hint login-success">
+                Dit account wordt geregistreerd als <strong>eigenaar</strong>. Je gegevens worden
+                opgeslagen in de database.
+              </p>
+            )}
+            {isRegistreren && !wordtEigenaar && email.trim() && (
+              <p className="login-hint">
+                Dit account wordt geregistreerd als <strong>medewerker</strong>.
+              </p>
+            )}
               </>
+            )}
+            {!resetToken && !isRegistreren && (
+              <label className="form-label remember-row">
+                <input
+                  type="checkbox"
+                  checked={onthoudEmail}
+                  onChange={(e) => setOnthoudEmail(e.target.checked)}
+                />
+                <span>E-mailadres onthouden</span>
+              </label>
             )}
             <button type="submit" className="btn-primary">
               {isBezig
@@ -217,11 +283,11 @@ export function LoginScherm({ onLogin }: Props) {
             {foutmelding && <p className="login-hint login-error">{foutmelding}</p>}
             {registratieSucces && <p className="login-hint login-success">{registratieSucces}</p>}
             <p className="login-hint">
-              {isRegistreren ? (
-                "Bij elke registratie wordt een e-mail naar de eigenaar gestuurd voor toestemming en verificatie."
-              ) : (
-                "Nog geen account? Registreer je hieronder; de eigenaar ontvangt een e-mail voor goedkeuring."
-              )}
+              {isRegistreren
+                ? wordtEigenaar
+                  ? "Als eigenaar beheer je alle opdrachten en het team."
+                  : "Medewerkers zien alleen hun eigen toegewezen opdrachten."
+                : "Nog geen account? Registreer je hieronder."}
             </p>
             {!isRegistreren && !resetToken && (
               <button

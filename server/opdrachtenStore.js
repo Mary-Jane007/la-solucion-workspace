@@ -22,7 +22,7 @@ async function listOpdrachtenForUser(user) {
         o.notities,
         o.categorie
       from opdrachten o
-      left join users u on u.id = o.behandelaar_user_id
+      left join users u on u.id::text = o.behandelaar_user_id
       order by o.created_at desc
       `,
       []
@@ -45,8 +45,8 @@ async function listOpdrachtenForUser(user) {
       o.notities,
       o.categorie
     from opdrachten o
-    left join users u on u.id = o.behandelaar_user_id
-    where o.behandelaar_user_id = $1
+    left join users u on u.id::text = o.behandelaar_user_id
+    where o.behandelaar_user_id = $1::text
     order by o.created_at desc
     `,
     [user.id]
@@ -71,7 +71,7 @@ async function getOpdrachtById(id) {
       o.notities,
       o.categorie
     from opdrachten o
-    left join users u on u.id = o.behandelaar_user_id
+    left join users u on u.id::text = o.behandelaar_user_id
     where o.id = $1
     limit 1
     `,
@@ -102,6 +102,11 @@ async function createOpdracht(opdracht) {
       opdracht.categorie || null
     ]
   );
+}
+
+async function deleteOpdracht(id) {
+  if (!hasDb()) throw new Error("Database niet geconfigureerd.");
+  await query("delete from opdrachten where id = $1", [id]);
 }
 
 async function updateOpdracht(opdracht) {
@@ -140,6 +145,7 @@ module.exports = {
   listOpdrachtenForUser,
   getOpdrachtById,
   createOpdracht,
-  updateOpdracht
+  updateOpdracht,
+  deleteOpdracht
 };
 

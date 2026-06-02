@@ -6,13 +6,15 @@ export interface OpdrachtenBordProps {
   isEigenaar: boolean;
   onOpdrachtKlik: (opdracht: Opdracht) => void;
   onOpdrachtWijzig: (opdracht: Opdracht) => void | Promise<Opdracht>;
+  onOpdrachtVerwijder?: (opdracht: Opdracht) => void | Promise<void>;
 }
 
 export function OpdrachtenBord({
   opdrachten,
   isEigenaar,
   onOpdrachtKlik,
-  onOpdrachtWijzig
+  onOpdrachtWijzig,
+  onOpdrachtVerwijder
 }: OpdrachtenBordProps) {
   const kolommen: { key: OpdrachtStatus; titel: string }[] = [
     { key: OpdrachtStatus.Nieuw, titel: "Nieuw" },
@@ -42,6 +44,9 @@ export function OpdrachtenBord({
                   isEigenaar={isEigenaar}
                   onKlik={() => onOpdrachtKlik(o)}
                   onStatusWijzig={(status) => veranderStatus(o, status)}
+                  onVerwijder={
+                    onOpdrachtVerwijder ? () => onOpdrachtVerwijder(o) : undefined
+                  }
                 />
               ))}
               {items.length === 0 && (

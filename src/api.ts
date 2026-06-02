@@ -12,7 +12,7 @@ async function apiFetch(path: string, init?: RequestInit) {
   const token = getToken();
   const headers = new Headers(init?.headers || {});
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  return fetch(path, { ...init, headers });
+  return fetch(path, { cache: "no-store", ...init, headers });
 }
 
 export async function fetchMe(): Promise<Gebruiker> {
@@ -49,6 +49,14 @@ export async function updateOpdracht(opdracht: Opdracht): Promise<Opdracht> {
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Kon opdracht niet opslaan.");
   return data.opdracht as Opdracht;
+}
+
+export async function deleteOpdracht(id: string): Promise<void> {
+  const res = await apiFetch(`/api/opdrachten/${id}`, { method: "DELETE" });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error((data as { error?: string }).error || "Kon opdracht niet verwijderen.");
+  }
 }
 
 export async function uploadBestand(opdrachtId: string, file: File) {

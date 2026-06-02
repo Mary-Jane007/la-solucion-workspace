@@ -19,7 +19,7 @@ async function listBestandenForOpdracht(opdrachtId) {
       u.name as "uploadedByNaam",
       b.created_at as "createdAt"
     from bestanden b
-    left join users u on u.id = b.uploaded_by_user_id
+    left join users u on u.id::text = b.uploaded_by_user_id
     where b.opdracht_id = $1
     order by b.created_at desc
     `,

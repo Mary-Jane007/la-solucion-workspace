@@ -88,12 +88,56 @@ async function setUserActive(id, active) {
   await query("update users set active=$2 where id=$1", [id, active]);
 }
 
+async function updateUserRole(id, role) {
+  if (!hasDb()) {
+    const data = readFallback();
+    const users = data.users || [];
+    const u = users.find((x) => x.id === id);
+    if (u) u.role = role;
+    data.users = users;
+    writeFallback(data);
+    return;
+  }
+  await query("update users set role=$2 where id=$1", [id, role]);
+}
+
+function getOwnerEmailFromEnv() {
+  return String(process.env.OWNER_EMAIL || "")
+    .toLowerCase()
+    .trim();
+}
+
+function resolveRegistrationRole(users, email) {
+  const ownerEmail = getOwnerEmailFromEnv();
+  if (ownerEmail && email === ownerEmail) {
+    return "EIGENAAR";
+  }
+  if (users.length === 0) {
+    return "EIGENAAR";
+  }
+  return "MEDEWERKER";
+}
+
+async function ensureOwnerAccount() {
+  const ownerEmail = getOwnerEmailFromEnv();
+  if (!ownerEmail) return;
+  const user = await getUserByEmail(ownerEmail);
+  if (user && user.role !== "EIGENAAR") {
+    await updateUserRole(user.id, "EIGENAAR");
+    console.log(`[auth] ${ownerEmail} ingesteld als EIGENAAR (OWNER_EMAIL).`);
+  }
+}
+
 module.exports = {
   hasDb,
   getUsers,
   getUserByEmail,
   getUserById,
   createUser,
-  setUserActive
+  setUserActive,
+  updateUserRole,
+  getOwnerEmailFromEnv,
+  resolveRegistrationRole,
+  ensureOwnerAccount
 };
 

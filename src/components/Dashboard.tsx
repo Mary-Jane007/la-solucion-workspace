@@ -3,7 +3,7 @@ import { Gebruiker, Opdracht, OpdrachtStatus } from "../types";
 import { OpdrachtenBord } from "./OpdrachtenBord";
 import { Kalender } from "./Kalender";
 import { OpdrachtDialoog } from "./OpdrachtDialoog";
-import { createOpdracht, updateOpdracht } from "../api";
+import { createOpdracht, deleteOpdracht, updateOpdracht } from "../api";
 
 interface Props {
   gebruiker: Gebruiker;
@@ -204,6 +204,13 @@ export function Dashboard({
     }
   };
 
+  const handleDeleteOpdracht = async (opdrachtId: string) => {
+    setOpdrachtFout(null);
+    await deleteOpdracht(opdrachtId);
+    onOpdrachtenWijzig(opdrachten.filter((o) => o.id !== opdrachtId));
+    sluitDialoog();
+  };
+
   return (
     <>
       {opdrachtFout && (
@@ -316,6 +323,13 @@ export function Dashboard({
             isEigenaar={isEigenaar}
             onOpdrachtKlik={openOpdracht}
             onOpdrachtWijzig={handleOpdrachtUpdate}
+            onOpdrachtVerwijder={async (o) => {
+              const bevestigd = window.confirm(
+                `Weet je zeker dat je de opdracht voor "${o.klantNaam}" wilt verwijderen?`
+              );
+              if (!bevestigd) return;
+              await handleDeleteOpdracht(o.id);
+            }}
           />
         </section>
 
@@ -394,6 +408,11 @@ export function Dashboard({
 
       {dialoogMode !== null && geselecteerdeOpdracht && (
         <OpdrachtDialoog
+          key={
+            dialoogMode === "toevoegen"
+              ? "opdracht-nieuw"
+              : `opdracht-${geselecteerdeOpdracht.id}`
+          }
           mode={dialoogMode}
           opdracht={geselecteerdeOpdracht}
           isEigenaar={isEigenaar}
@@ -401,6 +420,7 @@ export function Dashboard({
           onSluit={sluitDialoog}
           onBewaar={handleOpdrachtUpdate}
           onCreate={handleCreateOpdracht}
+          onDelete={handleDeleteOpdracht}
         />
       )}
     </>

@@ -25,3 +25,6 @@ Thumbs.db
 # Cursor / agent tooling (lokaal)
 .agents/
 skills-lock.json
+
+# Vercel local link
+.vercel/

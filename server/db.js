@@ -9,9 +9,21 @@ if (!DATABASE_URL) {
   }
 }
 
+/** Neon: channel_binding kan node-pg breken. */
+function normalizeDatabaseUrl(raw) {
+  if (!raw) return raw;
+  try {
+    const u = new URL(raw);
+    u.searchParams.delete("channel_binding");
+    return u.toString();
+  } catch {
+    return String(raw).replace(/([?&])channel_binding=[^&]*&?/g, "$1").replace(/[?&]$/, "");
+  }
+}
+
 const pool = DATABASE_URL
   ? new Pool({
-      connectionString: DATABASE_URL,
+      connectionString: normalizeDatabaseUrl(DATABASE_URL),
       ssl: process.env.PGSSLMODE === "disable" ? false : { rejectUnauthorized: false }
     })
   : null;
@@ -24,8 +36,35 @@ async function query(text, params) {
   return res;
 }
 
+async function migrateLegacyUsersTable() {
+  const cols = await query(
+    `
+    select column_name
+    from information_schema.columns
+    where table_schema = 'public' and table_name = 'users'
+    `,
+    []
+  );
+  if (!cols.rows.length) return;
+
+  const names = new Set(cols.rows.map((r) => r.column_name));
+  if (names.has("password_hash")) return;
+
+  // Oud schema (o.a. kolom "password", integer id) — lege tabel veilig vervangen.
+  const count = await query("select count(*)::int as c from users", []);
+  if (count.rows[0].c > 0) {
+    throw new Error(
+      "De tabel users heeft een verouderd schema en bevat nog data. Neem contact op met beheer of migreer handmatig."
+    );
+  }
+  await query("drop table if exists users cascade", []);
+  console.log("[db] Verouderde users-tabel verwijderd; nieuwe structuur wordt aangemaakt.");
+}
+
 async function migrate() {
   if (!pool) return;
+
+  await migrateLegacyUsersTable();
 
   await query(
     `
@@ -40,14 +79,14 @@ async function migrate() {
     );
 
     create table if not exists opdrachten (
-      id uuid primary key,
+      id text primary key,
       klant_naam text not null,
       omschrijving text not null,
       datum_aangemaakt date not null,
       datum_deadline date,
       status text not null check (status in ('NIEUW','IN_BEHANDELING','AFGEROND')),
       prioriteit int not null check (prioriteit in (1,2,3)),
-      behandelaar_user_id uuid references users(id),
+      behandelaar_user_id text,
       notities text,
       categorie text,
       created_at timestamptz not null default now(),
@@ -55,19 +94,19 @@ async function migrate() {
     );
 
     create table if not exists bestanden (
-      id uuid primary key,
-      opdracht_id uuid not null references opdrachten(id) on delete cascade,
+      id text primary key,
+      opdracht_id text not null,
       originele_naam text not null,
       opslag_naam text not null unique,
       mime_type text not null,
       grootte int not null,
-      uploaded_by_user_id uuid references users(id),
+      uploaded_by_user_id text,
       created_at timestamptz not null default now()
     );
 
     create table if not exists password_reset_tokens (
-      id uuid primary key,
-      user_id uuid not null references users(id) on delete cascade,
+      id text primary key,
+      user_id text not null,
       token_hash text not null,
       expires_at timestamptz not null,
       used_at timestamptz,

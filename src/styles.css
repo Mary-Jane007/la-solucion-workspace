@@ -564,6 +564,16 @@ body {
   cursor: pointer;
 }
 
+.btn-danger {
+  border-color: rgba(248, 113, 113, 0.7);
+  color: #fecaca;
+}
+
+.btn-danger:hover {
+  background: rgba(127, 29, 29, 0.5);
+  border-color: #f87171;
+}
+
 .btn-ghost {
   border-radius: 999px;
   border: 1px solid rgba(148, 163, 184, 0.4);
@@ -778,6 +788,18 @@ textarea.form-input {
   margin: 0 0 12px;
   font-size: 12px;
   color: var(--color-text-muted);
+}
+
+.remember-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.remember-row input {
+  width: auto;
 }
 
 .login-hint {
