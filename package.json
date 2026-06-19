@@ -2,6 +2,9 @@
   "name": "la-solucion-adviesbureau-app",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": ">=18"
+  },
   "description": "Interne opdracht- en klantbeheerapp voor La-Solución Adviesbureau (NL UI).",
   "scripts": {
     "dev": "vite",

@@ -1,0 +1,13 @@
+# Render Blueprint – volledige app (frontend build + Express API)
+# Zet in het Render-dashboard de secrets: JWT_SECRET, DATABASE_URL, CORS_ORIGIN, APP_BASE_URL
+services:
+  - type: web
+    name: la-solucion-portaal
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
