@@ -1,7 +1,11 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Gebruiker, Rol } from "../types";
-
-const REMEMBER_EMAIL_KEY = "la-solucion-email";
+import {
+  getRememberedEmailForLogin,
+  isRememberEmailEnabled,
+  removeRememberedEmail,
+  saveRememberedEmail
+} from "../rememberedEmail";
 
 interface Props {
   onLogin: (gebruiker: Gebruiker) => void;
@@ -38,7 +42,7 @@ export function LoginScherm({ onLogin }: Props) {
   const [email, setEmail] = useState("");
   const [wachtwoord, setWachtwoord] = useState("");
   const [nieuwWachtwoord, setNieuwWachtwoord] = useState("");
-  const [onthoudEmail, setOnthoudEmail] = useState(true);
+  const [onthoudEmail, setOnthoudEmail] = useState(isRememberEmailEnabled);
   const [wordtEigenaar, setWordtEigenaar] = useState(false);
   const [foutmelding, setFoutmelding] = useState<string | null>(null);
   const [registratieSucces, setRegistratieSucces] = useState<string | null>(null);
@@ -50,7 +54,7 @@ export function LoginScherm({ onLogin }: Props) {
   }, []);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem(REMEMBER_EMAIL_KEY);
+    const saved = getRememberedEmailForLogin();
     if (saved) setEmail(saved);
   }, []);
 
@@ -138,13 +142,14 @@ export function LoginScherm({ onLogin }: Props) {
         const isEigenaar = data.role === "EIGENAAR";
         setRegistratieSucces(data.message || "Registratie gelukt.");
 
-        if (onthoudEmail) {
-          window.localStorage.setItem(REMEMBER_EMAIL_KEY, email.trim().toLowerCase());
-        }
-
         if (isEigenaar && wachtwoord.trim()) {
           try {
-            await loginMetGegevens(email, wachtwoord, onLogin);
+            await loginMetGegevens(email, wachtwoord, (gebruiker) => {
+              if (onthoudEmail) {
+                saveRememberedEmail(email);
+              }
+              onLogin(gebruiker);
+            });
             return;
           } catch {
             setRegistratieSucces(
@@ -170,12 +175,14 @@ export function LoginScherm({ onLogin }: Props) {
 
     try {
       setIsBezig(true);
-      if (onthoudEmail) {
-        window.localStorage.setItem(REMEMBER_EMAIL_KEY, email.trim().toLowerCase());
-      } else {
-        window.localStorage.removeItem(REMEMBER_EMAIL_KEY);
-      }
-      await loginMetGegevens(email, wachtwoord, onLogin);
+      await loginMetGegevens(email, wachtwoord, (gebruiker) => {
+        if (onthoudEmail) {
+          saveRememberedEmail(email);
+        } else {
+          removeRememberedEmail();
+        }
+        onLogin(gebruiker);
+      });
     } catch (err) {
       setFoutmelding(
         err instanceof Error ? err.message : "Er is een fout opgetreden bij inloggen. Probeer het opnieuw."

@@ -129,9 +129,15 @@ export function Dashboard({
   const belangrijksteOpdrachten = useMemo(
     () =>
       [...zichtbareOpdrachten]
-        .filter((o) => o.status !== OpdrachtStatus.Afgerond)
-        .sort((a, b) => a.prioriteit - b.prioriteit)
-        .slice(0, 5),
+        .filter((o) => o.status !== OpdrachtStatus.Afgerond && o.prioriteit === 1)
+        .sort((a, b) => {
+          if (a.datumDeadline && b.datumDeadline) {
+            return a.datumDeadline.localeCompare(b.datumDeadline);
+          }
+          if (a.datumDeadline) return -1;
+          if (b.datumDeadline) return 1;
+          return a.klantNaam.localeCompare(b.klantNaam);
+        }),
     [zichtbareOpdrachten]
   );
 
@@ -231,7 +237,7 @@ export function Dashboard({
             )}
           </div>
           <p className="metric-subtitle">
-            De hoogst geprioriteerde opdrachten die nog openstaan.
+            Alleen openstaande opdrachten met hoge prioriteit (P1).
           </p>
           <div className="important-list">
             {belangrijksteOpdrachten.map((o) => (
@@ -336,7 +342,9 @@ export function Dashboard({
         <section className="card split-right">
           <div className="section-header">
             <h2>Kalender</h2>
-            <p className="muted">Afspraken en opdrachten op basis van hun deadline.</p>
+            <p className="muted">
+              Opdrachten per aanmaakdatum en deadline, met prioriteitskleuren per dag.
+            </p>
           </div>
           <Kalender
             opdrachten={zichtbareOpdrachten}
