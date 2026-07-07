@@ -59,6 +59,20 @@ export async function deleteOpdracht(id: string): Promise<void> {
   }
 }
 
+export async function fetchPrullenbak(): Promise<Opdracht[]> {
+  const res = await apiFetch("/api/opdrachten/prullenbak");
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Kon prullenbak niet ophalen.");
+  return (data.opdrachten || []) as Opdracht[];
+}
+
+export async function herstelOpdracht(id: string): Promise<Opdracht> {
+  const res = await apiFetch(`/api/opdrachten/${id}/herstel`, { method: "POST" });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Kon opdracht niet herstellen.");
+  return data.opdracht as Opdracht;
+}
+
 export async function uploadBestand(opdrachtId: string, file: File) {
   const form = new FormData();
   form.append("file", file);

@@ -1,6 +1,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { Opdracht, OpdrachtStatus, Prioriteit } from "../types";
 import { downloadBestand, uploadBestand } from "../api";
+import { opdrachtVerwijderBevestiging } from "../opdrachtVerwijderen";
 
 type DialoogMode = "toevoegen" | "bewerken" | "bekijken";
 
@@ -38,7 +39,7 @@ export function OpdrachtDialoog({
   const isBekijken = mode === "bekijken";
   const alleenLezen = isBekijken;
   const kanBestandenToevoegen = mode === "bewerken" && bewerkt.id;
-  const kanVerwijderen = Boolean(bewerkt.id) && !isToevoegen && Boolean(onDelete);
+  const kanVerwijderen = isEigenaar && Boolean(bewerkt.id) && !isToevoegen && Boolean(onDelete);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -301,7 +302,7 @@ export function OpdrachtDialoog({
                 disabled={isBezig}
                 onClick={async () => {
                   const bevestigd = window.confirm(
-                    `Weet je zeker dat je de opdracht voor "${bewerkt.klantNaam}" wilt verwijderen?`
+                    opdrachtVerwijderBevestiging(bewerkt.klantNaam)
                   );
                   if (!bevestigd) return;
                   try {

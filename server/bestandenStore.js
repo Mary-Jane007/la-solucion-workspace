@@ -71,9 +71,37 @@ async function createBestand(bestand) {
   );
 }
 
+async function listBestandenForOpdrachtIds(opdrachtIds) {
+  if (!hasDb() || !opdrachtIds.length) return [];
+  const res = await query(
+    `
+    select
+      b.id,
+      b.opdracht_id as "opdrachtId",
+      b.originele_naam as "origineleNaam",
+      b.opslag_naam as "opslagNaam",
+      b.mime_type as "mimeType",
+      b.grootte,
+      b.uploaded_by_user_id as "uploadedByUserId",
+      b.created_at as "createdAt"
+    from bestanden b
+    where b.opdracht_id = any($1::text[])
+    `,
+    [opdrachtIds]
+  );
+  return res.rows;
+}
+
+async function deleteBestandenForOpdrachtIds(opdrachtIds) {
+  if (!hasDb() || !opdrachtIds.length) return;
+  await query("delete from bestanden where opdracht_id = any($1::text[])", [opdrachtIds]);
+}
+
 module.exports = {
   listBestandenForOpdracht,
+  listBestandenForOpdrachtIds,
   getBestandById,
-  createBestand
+  createBestand,
+  deleteBestandenForOpdrachtIds
 };
 

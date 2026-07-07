@@ -50,7 +50,7 @@ export function OpdrachtKaart({
             Bewerken
           </button>
         )}
-        {isOpgeslagen && onVerwijder && (
+        {isEigenaar && isOpgeslagen && onVerwijder && (
           <button
             type="button"
             className="btn-secondary btn-danger"

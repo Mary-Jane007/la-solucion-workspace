@@ -118,6 +118,16 @@ async function migrate() {
     `,
     []
   );
+
+  await query(
+    `
+    alter table opdrachten add column if not exists deleted_at timestamptz;
+    create index if not exists idx_opdrachten_deleted_at
+      on opdrachten(deleted_at)
+      where deleted_at is not null;
+    `,
+    []
+  );
 }
 
 module.exports = {

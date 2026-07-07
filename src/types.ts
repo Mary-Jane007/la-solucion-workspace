@@ -39,5 +39,7 @@ export interface Opdracht {
   notities?: string;
   categorie?: string;
   bestanden: BestandsKoppeling[];
+  verwijderdOp?: string;
+  bijgewerktOp?: string;
 }
 

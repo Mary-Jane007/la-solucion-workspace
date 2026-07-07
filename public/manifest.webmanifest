@@ -1,0 +1,23 @@
+{
+  "name": "La-Solución Adviesbureau Portal",
+  "short_name": "La-Solución",
+  "description": "Intern portaal voor opdrachten, klanten en afspraken.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020b1a",
+  "theme_color": "#0f2547",
+  "icons": [
+    {
+      "src": "/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

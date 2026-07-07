@@ -28,15 +28,23 @@ const {
 } = require("./store");
 const {
   listOpdrachtenForUser,
+  listPrullenbakForUser,
   getOpdrachtById,
+  getOpdrachtInPrullenbakById,
   createOpdracht,
   updateOpdracht,
-  deleteOpdracht
+  softDeleteOpdracht,
+  restoreOpdracht,
+  getExpiredOpdrachtIds,
+  permanentDeleteOpdrachten,
+  TRASH_RETENTION_DAYS
 } = require("./opdrachtenStore");
 const {
   listBestandenForOpdracht,
+  listBestandenForOpdrachtIds,
   getBestandById,
-  createBestand
+  createBestand,
+  deleteBestandenForOpdrachtIds
 } = require("./bestandenStore");
 
 const app = express();
@@ -477,6 +485,24 @@ function requireOwner(req, res, next) {
   return next();
 }
 
+async function purgeExpiredTrash() {
+  const ids = await getExpiredOpdrachtIds();
+  if (!ids.length) return;
+
+  const bestanden = await listBestandenForOpdrachtIds(ids);
+  for (const bestand of bestanden) {
+    const filePath = path.join(uploadDir, bestand.opslagNaam);
+    try {
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    } catch (unlinkErr) {
+      console.warn("Kon verlopen prullenbak-bestand niet verwijderen:", filePath, unlinkErr);
+    }
+  }
+
+  await deleteBestandenForOpdrachtIds(ids);
+  await permanentDeleteOpdrachten(ids);
+}
+
 // Opdrachten API
 const opdrachtSchema = z.object({
   id: z.string().uuid().optional(),
@@ -494,6 +520,7 @@ const opdrachtSchema = z.object({
 app.get("/api/opdrachten", authRequired, async (req, res) => {
   try {
     if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
+    await purgeExpiredTrash();
     const rows = await listOpdrachtenForUser(req.user);
     const withFiles = await Promise.all(
       rows.map(async (o) => {
@@ -504,6 +531,24 @@ app.get("/api/opdrachten", authRequired, async (req, res) => {
     return res.json({ opdrachten: withFiles });
   } catch (err) {
     console.error("Fout bij GET /api/opdrachten:", err);
+    return res.status(500).json({ error: "Interne serverfout." });
+  }
+});
+
+app.get("/api/opdrachten/prullenbak", authRequired, requireOwner, async (req, res) => {
+  try {
+    if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
+    await purgeExpiredTrash();
+    const rows = await listPrullenbakForUser(req.user);
+    const withFiles = await Promise.all(
+      rows.map(async (o) => {
+        const bestanden = await listBestandenForOpdracht(o.id);
+        return { ...o, bestanden };
+      })
+    );
+    return res.json({ opdrachten: withFiles, bewaarDagen: TRASH_RETENTION_DAYS });
+  } catch (err) {
+    console.error("Fout bij GET /api/opdrachten/prullenbak:", err);
     return res.status(500).json({ error: "Interne serverfout." });
   }
 });
@@ -569,30 +614,36 @@ app.put("/api/opdrachten/:id", authRequired, async (req, res) => {
   }
 });
 
-app.delete("/api/opdrachten/:id", authRequired, async (req, res) => {
+app.delete("/api/opdrachten/:id", authRequired, requireOwner, async (req, res) => {
   try {
     if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
     const opdrachtId = req.params.id;
     const bestaande = await getOpdrachtById(opdrachtId);
     if (!bestaande) return res.status(404).json({ error: "Opdracht niet gevonden." });
-    if (!canAccessOpdracht(req.user, bestaande)) {
-      return res.status(403).json({ error: "Geen toegang tot deze opdracht." });
-    }
 
-    const bestanden = await listBestandenForOpdracht(opdrachtId);
-    for (const b of bestanden) {
-      const filePath = path.join(uploadDir, b.opslagNaam);
-      try {
-        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      } catch (unlinkErr) {
-        console.warn("Kon bestand niet verwijderen:", filePath, unlinkErr);
-      }
-    }
-
-    await deleteOpdracht(opdrachtId);
+    await softDeleteOpdracht(opdrachtId);
     return res.status(204).send();
   } catch (err) {
     console.error("Fout bij DELETE /api/opdrachten/:id:", err);
+    return res.status(500).json({ error: "Interne serverfout." });
+  }
+});
+
+app.post("/api/opdrachten/:id/herstel", authRequired, requireOwner, async (req, res) => {
+  try {
+    if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
+    const opdrachtId = req.params.id;
+    const inPrullenbak = await getOpdrachtInPrullenbakById(opdrachtId);
+    if (!inPrullenbak) {
+      return res.status(404).json({ error: "Opdracht niet gevonden in de prullenbak." });
+    }
+
+    await restoreOpdracht(opdrachtId);
+    const hersteld = await getOpdrachtById(opdrachtId);
+    const bestanden = await listBestandenForOpdracht(opdrachtId);
+    return res.json({ opdracht: { ...hersteld, bestanden } });
+  } catch (err) {
+    console.error("Fout bij POST /api/opdrachten/:id/herstel:", err);
     return res.status(500).json({ error: "Interne serverfout." });
   }
 });
