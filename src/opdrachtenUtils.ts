@@ -125,6 +125,7 @@ export function groepeerDeadlines(opdrachten: Opdracht[]): DeadlineGroep[] {
 export interface StatistiekenData {
   totaal: number;
   nieuw: number;
+  afwachting: number;
   lopend: number;
   afgerond: number;
   p1: number;
@@ -169,12 +170,14 @@ export function berekenStatistieken(opdrachten: Opdracht[]): StatistiekenData {
     }));
 
   const nieuw = opdrachten.filter((o) => o.status === OpdrachtStatus.Nieuw).length;
+  const afwachting = opdrachten.filter((o) => o.status === OpdrachtStatus.Afwachting).length;
   const lopend = opdrachten.filter((o) => o.status === OpdrachtStatus.InBehandeling).length;
   const afgerond = opdrachten.filter((o) => o.status === OpdrachtStatus.Afgerond).length;
 
   return {
     totaal: opdrachten.length,
     nieuw,
+    afwachting,
     lopend,
     afgerond,
     p1: open.filter((o) => o.prioriteit === 1).length,
@@ -193,6 +196,7 @@ export function berekenStatistieken(opdrachten: Opdracht[]): StatistiekenData {
     perMaand,
     perStatus: [
       { label: "Nieuw", waarde: nieuw, kleur: "#3b82f6" },
+      { label: "Afwachting", waarde: afwachting, kleur: "#a78bfa" },
       { label: "In behandeling", waarde: lopend, kleur: "#f59e0b" },
       { label: "Afgerond", waarde: afgerond, kleur: "#22c55e" }
     ]
@@ -314,6 +318,10 @@ export function exportOpdrachtenCsv(opdrachten: Opdracht[]) {
 }
 
 export function telDeadlinesBadge(opdrachten: Opdracht[]): number {
+  return deadlineBadgeOpdrachten(opdrachten).length;
+}
+
+export function deadlineBadgeOpdrachten(opdrachten: Opdracht[]): Opdracht[] {
   const vandaag = vandaagIso();
   const week = eindeWeekIso();
   return opdrachten.filter(
@@ -321,5 +329,55 @@ export function telDeadlinesBadge(opdrachten: Opdracht[]): number {
       o.status !== OpdrachtStatus.Afgerond &&
       o.datumDeadline &&
       (o.datumDeadline < vandaag || (o.datumDeadline >= vandaag && o.datumDeadline <= week))
-  ).length;
+  );
+}
+
+export function deadlineBadgeIds(opdrachten: Opdracht[]): string[] {
+  return deadlineBadgeOpdrachten(opdrachten).map((o) => o.id);
+}
+
+function normTekst(waarde: string | undefined | null): string {
+  return (waarde || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+export function statusLabel(status: OpdrachtStatus): string {
+  if (status === OpdrachtStatus.Nieuw) return "Nieuw";
+  if (status === OpdrachtStatus.Afwachting) return "Afwachting";
+  if (status === OpdrachtStatus.InBehandeling) return "In behandeling";
+  return "Afgerond";
+}
+
+/** Bestaande opdrachten met dezelfde klantnaam. */
+export function vindOvereenkomstigeOpdrachten(
+  bestaande: Opdracht[],
+  draft: Pick<Opdracht, "klantNaam" | "omschrijving">,
+  excludeId?: string,
+  options?: { applyDefaults?: boolean; alleenExact?: boolean }
+): Opdracht[] {
+  const applyDefaults = options?.applyDefaults === true;
+  const alleenExact = options?.alleenExact === true || applyDefaults;
+  const klant = normTekst(applyDefaults ? draft.klantNaam.trim() || "Naam klant" : draft.klantNaam);
+
+  // Live: toon pas iets vanaf 2 tekens, zodat typen meteen een melding kan geven.
+  if (!klant || (!alleenExact && klant.length < 2)) return [];
+
+  const matches = bestaande.filter((o) => {
+    if (excludeId && o.id === excludeId) return false;
+    if (o.verwijderdOp) return false;
+    const oKlant = normTekst(o.klantNaam);
+    if (!oKlant) return false;
+    if (alleenExact) return oKlant === klant;
+    // Tijdens typen: exact of bestaande naam begint met wat je typt.
+    return oKlant === klant || oKlant.startsWith(`${klant} `) || oKlant.startsWith(klant);
+  });
+
+  return matches.sort((a, b) => {
+    const aExact = normTekst(a.klantNaam) === klant ? 0 : 1;
+    const bExact = normTekst(b.klantNaam) === klant ? 0 : 1;
+    if (aExact !== bExact) return aExact - bExact;
+    const aOpen = a.status === OpdrachtStatus.Afgerond ? 1 : 0;
+    const bOpen = b.status === OpdrachtStatus.Afgerond ? 1 : 0;
+    if (aOpen !== bOpen) return aOpen - bOpen;
+    return (b.datumAangemaakt || "").localeCompare(a.datumAangemaakt || "");
+  });
 }

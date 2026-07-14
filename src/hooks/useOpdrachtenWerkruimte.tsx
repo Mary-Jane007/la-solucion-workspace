@@ -20,13 +20,15 @@ interface Params {
   isEigenaar: boolean;
   opdrachten: Opdracht[];
   onOpdrachtenWijzig: (opdrachten: Opdracht[]) => void;
+  onOpdrachtNaarPrullenbak?: (opdrachtId: string) => void;
 }
 
 export function useOpdrachtenWerkruimte({
   gebruiker,
   isEigenaar,
   opdrachten,
-  onOpdrachtenWijzig
+  onOpdrachtenWijzig,
+  onOpdrachtNaarPrullenbak
 }: Params) {
   const [dialoogMode, setDialoogMode] = useState<DialoogMode>(null);
   const [geselecteerdeOpdracht, setGeselecteerdeOpdracht] = useState<Opdracht | null>(null);
@@ -134,6 +136,7 @@ export function useOpdrachtenWerkruimte({
     setOpdrachtFout(null);
     await deleteOpdracht(opdrachtId);
     onOpdrachtenWijzig(opdrachten.filter((o) => o.id !== opdrachtId));
+    onOpdrachtNaarPrullenbak?.(opdrachtId);
     sluitDialoog();
   };
 
@@ -155,6 +158,7 @@ export function useOpdrachtenWerkruimte({
         opdracht={geselecteerdeOpdracht}
         isEigenaar={isEigenaar}
         teamGebruikers={beheerGebruikers}
+        bestaandeOpdrachten={opdrachten}
         onSluit={sluitDialoog}
         onBewaar={handleOpdrachtUpdate}
         onCreate={handleCreateOpdracht}

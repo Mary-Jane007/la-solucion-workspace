@@ -3,6 +3,7 @@ import { Opdracht, Prioriteit } from "../types";
 
 interface Props {
   opdrachten: Opdracht[];
+  isOngelezen?: (opdrachtId: string) => boolean;
   onSelectOpdracht: (opdracht: Opdracht) => void;
 }
 
@@ -16,6 +17,7 @@ const PRIO_LABELS: Record<Prioriteit, string> = {
 
 const STATUS_LABELS: Record<string, string> = {
   NIEUW: "Nieuw",
+  AFWACHTING: "Afwachting",
   IN_BEHANDELING: "In behandeling",
   AFGEROND: "Afgerond"
 };
@@ -51,7 +53,7 @@ function dagRedenLabel(item: KalenderDagOpdracht): string {
   return "Deadline op deze dag";
 }
 
-export function Kalender({ opdrachten, onSelectOpdracht }: Props) {
+export function Kalender({ opdrachten, isOngelezen, onSelectOpdracht }: Props) {
   const vandaag = new Date();
   const jaar = vandaag.getFullYear();
   const maand = vandaag.getMonth();
@@ -221,7 +223,9 @@ export function Kalender({ opdrachten, onSelectOpdracht }: Props) {
                     <li key={o.id}>
                       <button
                         type="button"
-                        className={`calendar-day-opdracht calendar-item-prio-${o.prioriteit}`}
+                        className={`calendar-day-opdracht calendar-item-prio-${o.prioriteit}${
+                          isOngelezen?.(o.id) ? " melding-ongelezen" : ""
+                        }`}
                         onClick={() => openOpdracht(o)}
                       >
                         <span className="calendar-day-opdracht-top">

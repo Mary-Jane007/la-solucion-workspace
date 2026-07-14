@@ -3,6 +3,7 @@ import { Opdracht, OpdrachtStatus } from "../types";
 interface Props {
   opdracht: Opdracht;
   isEigenaar: boolean;
+  isOngelezen?: boolean;
   onKlik: () => void;
   onStatusWijzig: (status: OpdrachtStatus) => void;
   onVerwijder?: () => void;
@@ -11,6 +12,7 @@ interface Props {
 export function OpdrachtKaart({
   opdracht,
   isEigenaar,
+  isOngelezen = false,
   onKlik,
   onStatusWijzig,
   onVerwijder
@@ -19,7 +21,7 @@ export function OpdrachtKaart({
   const isOpgeslagen = Boolean(opdracht.id);
 
   return (
-    <div className="card opdracht-card">
+    <div className={`card opdracht-card${isOngelezen ? " opdracht-card-ongelezen" : ""}`}>
       <button className="opdracht-main" onClick={onKlik} type="button">
         <div className="opdracht-header">
           <span className="opdracht-client">{opdracht.klantNaam || "Nieuwe klant"}</span>
@@ -68,6 +70,7 @@ export function OpdrachtKaart({
           onChange={(e) => onStatusWijzig(e.target.value as OpdrachtStatus)}
         >
           <option value={OpdrachtStatus.Nieuw}>Nieuw</option>
+          <option value={OpdrachtStatus.Afwachting}>Afwachting</option>
           <option value={OpdrachtStatus.InBehandeling}>In behandeling</option>
           <option value={OpdrachtStatus.Afgerond}>Afgerond</option>
         </select>

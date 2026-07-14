@@ -2,9 +2,13 @@ import { useMemo, useState } from "react";
 import { downloadBestand } from "../api";
 import { flattenDocumenten } from "../opdrachtenUtils";
 import { OpdrachtenWerkruimte } from "../hooks/useOpdrachtenWerkruimte";
+import { useLijstGezienStatus } from "../hooks/useLijstGezienStatus";
+import { documentenItemIds } from "../badgeItems";
 
 interface Props {
   werkruimte: OpdrachtenWerkruimte;
+  userId: string;
+  onGezien: () => void;
 }
 
 function formatGrootte(bytes: number): string {
@@ -13,7 +17,7 @@ function formatGrootte(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function DocumentenPagina({ werkruimte }: Props) {
+export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
   const [zoekterm, setZoekterm] = useState("");
   const [fout, setFout] = useState<string | null>(null);
   const { alleOpdrachten } = werkruimte;
@@ -30,9 +34,18 @@ export function DocumentenPagina({ werkruimte }: Props) {
     );
   }, [alleOpdrachten, zoekterm]);
 
+  const itemIds = useMemo(() => documentenItemIds(alleOpdrachten), [alleOpdrachten]);
+  const { isOngelezen, markeerGeopend } = useLijstGezienStatus(
+    "documenten",
+    userId,
+    itemIds,
+    onGezien
+  );
+
   const handleDownload = async (id: string, naam: string) => {
     try {
       setFout(null);
+      markeerGeopend(id);
       await downloadBestand(id, naam);
     } catch {
       setFout("Download mislukt.");
@@ -67,22 +80,32 @@ export function DocumentenPagina({ werkruimte }: Props) {
               </tr>
             </thead>
             <tbody>
-              {documenten.map((d) => (
-                <tr key={d.id}>
-                  <td>{d.origineleNaam}</td>
-                  <td>{d.klantNaam}</td>
-                  <td>{formatGrootte(d.grootte)}</td>
-                  <td>
-                    <button
-                      type="button"
-                      className="btn-secondary"
-                      onClick={() => void handleDownload(d.id, d.origineleNaam)}
-                    >
-                      Download
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {documenten.map((d) => {
+                const ongelezen = isOngelezen(d.id);
+                return (
+                  <tr
+                    key={d.id}
+                    className={ongelezen ? "prullenbak-rij-ongelezen" : undefined}
+                    onClick={() => markeerGeopend(d.id)}
+                  >
+                    <td>{d.origineleNaam}</td>
+                    <td>{d.klantNaam}</td>
+                    <td>{formatGrootte(d.grootte)}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleDownload(d.id, d.origineleNaam);
+                        }}
+                      >
+                        Download
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

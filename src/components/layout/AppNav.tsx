@@ -1,11 +1,8 @@
 import { AppPagina } from "../../appPages";
+import { BadgeLijst } from "../../meldingenStatus";
 import { Thema } from "../../theme";
 
-export interface NavBadges {
-  meldingen: number;
-  deadlines: number;
-  prullenbak: number;
-}
+export type NavBadges = Partial<Record<BadgeLijst, number>>;
 
 interface Props {
   huidigePagina: AppPagina;
@@ -21,7 +18,7 @@ interface Props {
 type NavItem = {
   id: AppPagina;
   label: string;
-  badgeKey?: keyof NavBadges;
+  badgeKey?: BadgeLijst;
   alleenEigenaar?: boolean;
   alleenMedewerker?: boolean;
 };
@@ -36,10 +33,10 @@ const NAV_GROEPEN: NavGroep[] = [
   {
     titel: "Werk",
     items: [
-      { id: "home", label: "Home" },
-      { id: "bord", label: "Opdrachtenbord" },
-      { id: "kalender", label: "Kalender" },
-      { id: "mijn-opdrachten", label: "Mijn opdrachten" },
+      { id: "home", label: "Home", badgeKey: "home" },
+      { id: "bord", label: "Opdrachtenbord", badgeKey: "bord" },
+      { id: "kalender", label: "Kalender", badgeKey: "kalender" },
+      { id: "mijn-opdrachten", label: "Mijn opdrachten", badgeKey: "mijn-opdrachten" },
       { id: "meldingen", label: "Meldingen", badgeKey: "meldingen" },
       { id: "deadlines", label: "Deadlines", badgeKey: "deadlines" }
     ]
@@ -49,9 +46,9 @@ const NAV_GROEPEN: NavGroep[] = [
     alleenEigenaar: true,
     items: [
       { id: "statistieken", label: "Statistieken", alleenEigenaar: true },
-      { id: "klanten", label: "Klanten", alleenEigenaar: true },
-      { id: "documenten", label: "Documenten", alleenEigenaar: true },
-      { id: "activiteit", label: "Activiteit", alleenEigenaar: true },
+      { id: "klanten", label: "Klanten", badgeKey: "klanten", alleenEigenaar: true },
+      { id: "documenten", label: "Documenten", badgeKey: "documenten", alleenEigenaar: true },
+      { id: "activiteit", label: "Activiteit", badgeKey: "activiteit", alleenEigenaar: true },
       { id: "team", label: "Team", alleenEigenaar: true },
       { id: "prullenbak", label: "Prullenbak", badgeKey: "prullenbak", alleenEigenaar: true },
       { id: "export", label: "Export", alleenEigenaar: true }
@@ -100,7 +97,11 @@ export function AppNav({
             <ul className="sidebar-nav-list">
               {groep.titel === "Beheer" && isEigenaar && (
                 <li>
-                  <button type="button" className="sidebar-nav-link sidebar-nav-action-link" onClick={onNieuweOpdracht}>
+                  <button
+                    type="button"
+                    className="sidebar-nav-link sidebar-nav-action-link"
+                    onClick={onNieuweOpdracht}
+                  >
                     + Nieuwe opdracht
                   </button>
                 </li>
@@ -114,7 +115,7 @@ export function AppNav({
                     onClick={() => onNavigeer(item.id)}
                   >
                     <span>{item.label}</span>
-                    {item.badgeKey && <NavBadge count={badges[item.badgeKey]} />}
+                    {item.badgeKey && <NavBadge count={badges[item.badgeKey] ?? 0} />}
                   </button>
                 </li>
               ))}

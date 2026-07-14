@@ -1,18 +1,35 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Opdracht } from "../types";
 import { fetchPrullenbak, herstelOpdracht } from "../api";
 import { permanentVerwijderDatum, PRULLENBAK_BEWAAR_DAGEN } from "../opdrachtVerwijderen";
+import { useLijstGezienStatus } from "../hooks/useLijstGezienStatus";
 
 interface Props {
   opdrachten: Opdracht[];
+  userId: string;
   onOpdrachtenWijzig: (opdrachten: Opdracht[]) => void;
-  onAantalWijzig?: (aantal: number) => void;
+  onPrullenbakIdsWijzig: (ids: string[]) => void;
+  onGezien: () => void;
 }
 
-export function PrullenbakPagina({ opdrachten, onOpdrachtenWijzig, onAantalWijzig }: Props) {
+export function PrullenbakPagina({
+  opdrachten,
+  userId,
+  onOpdrachtenWijzig,
+  onPrullenbakIdsWijzig,
+  onGezien
+}: Props) {
   const [prullenbak, setPrullenbak] = useState<Opdracht[]>([]);
   const [laden, setLaden] = useState(true);
   const [fout, setFout] = useState<string | null>(null);
+
+  const itemIds = useMemo(() => prullenbak.map((o) => o.id), [prullenbak]);
+  const { isOngelezen, markeerGeopend } = useLijstGezienStatus(
+    "prullenbak",
+    userId,
+    itemIds,
+    onGezien
+  );
 
   const laadPrullenbak = async () => {
     try {
@@ -20,7 +37,7 @@ export function PrullenbakPagina({ opdrachten, onOpdrachtenWijzig, onAantalWijzi
       setFout(null);
       const items = await fetchPrullenbak();
       setPrullenbak(items);
-      onAantalWijzig?.(items.length);
+      onPrullenbakIdsWijzig(items.map((o) => o.id));
     } catch {
       setFout("Kon de prullenbak niet laden.");
     } finally {
@@ -35,10 +52,11 @@ export function PrullenbakPagina({ opdrachten, onOpdrachtenWijzig, onAantalWijzi
   const handleHerstel = async (opdrachtId: string) => {
     try {
       setFout(null);
+      markeerGeopend(opdrachtId);
       const hersteld = await herstelOpdracht(opdrachtId);
       setPrullenbak((prev) => {
         const next = prev.filter((o) => o.id !== opdrachtId);
-        onAantalWijzig?.(next.length);
+        onPrullenbakIdsWijzig(next.map((o) => o.id));
         return next;
       });
       onOpdrachtenWijzig([hersteld, ...opdrachten]);
@@ -76,27 +94,37 @@ export function PrullenbakPagina({ opdrachten, onOpdrachtenWijzig, onAantalWijzi
               </tr>
             </thead>
             <tbody>
-              {prullenbak.map((o) => (
-                <tr key={o.id}>
-                  <td>{o.klantNaam}</td>
-                  <td>{o.omschrijving}</td>
-                  <td>
-                    {o.verwijderdOp
-                      ? new Date(o.verwijderdOp).toLocaleDateString("nl-NL")
-                      : "—"}
-                  </td>
-                  <td>{o.verwijderdOp ? permanentVerwijderDatum(o.verwijderdOp) : "—"}</td>
-                  <td>
-                    <button
-                      type="button"
-                      className="btn-secondary"
-                      onClick={() => void handleHerstel(o.id)}
-                    >
-                      Herstellen
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {prullenbak.map((o) => {
+                const ongelezen = isOngelezen(o.id);
+                return (
+                  <tr
+                    key={o.id}
+                    className={ongelezen ? "prullenbak-rij-ongelezen" : undefined}
+                    onClick={() => markeerGeopend(o.id)}
+                  >
+                    <td>{o.klantNaam}</td>
+                    <td>{o.omschrijving}</td>
+                    <td>
+                      {o.verwijderdOp
+                        ? new Date(o.verwijderdOp).toLocaleDateString("nl-NL")
+                        : "—"}
+                    </td>
+                    <td>{o.verwijderdOp ? permanentVerwijderDatum(o.verwijderdOp) : "—"}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleHerstel(o.id);
+                        }}
+                      >
+                        Herstellen
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

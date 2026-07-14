@@ -58,6 +58,7 @@ export function StatistiekenPagina({ werkruimte }: Props) {
         <div className="stat-grid">
           <StatKaart label="Totaal opdrachten" waarde={stats.totaal} />
           <StatKaart label="Nieuw" waarde={stats.nieuw} accent="#3b82f6" />
+          <StatKaart label="Afwachting" waarde={stats.afwachting} accent="#a78bfa" />
           <StatKaart label="In behandeling" waarde={stats.lopend} accent="#f59e0b" />
           <StatKaart label="Afgerond" waarde={stats.afgerond} accent="#22c55e" />
           <StatKaart label="P1 open" waarde={stats.p1} accent="#ef4444" />

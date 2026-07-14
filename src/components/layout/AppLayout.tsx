@@ -23,7 +23,7 @@ export function AppLayout({
   huidigePagina = "home",
   isEigenaar = false,
   thema = "donker",
-  navBadges = { meldingen: 0, deadlines: 0, prullenbak: 0 },
+  navBadges = {},
   onNavigeer,
   onNieuweOpdracht,
   onThemaWissel,

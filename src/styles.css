@@ -368,6 +368,14 @@ body {
   margin-bottom: 8px;
 }
 
+.section-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .section-header h2 {
   margin: 0 0 4px;
   font-size: 15px;
@@ -401,8 +409,20 @@ body {
 
 .board-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
+}
+
+@media (max-width: 1100px) {
+  .board-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .board-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .board-column {
@@ -1198,6 +1218,47 @@ textarea.form-input {
   margin-bottom: 10px;
 }
 
+.opdracht-dubbel-waarschuwing {
+  margin: 6px 0 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(245, 158, 11, 0.55);
+  background: rgba(245, 158, 11, 0.18);
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.12);
+}
+
+.form-input-waarschuwing {
+  border-color: rgba(245, 158, 11, 0.75) !important;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+}
+
+.opdracht-dubbel-waarschuwing.is-exact {
+  border-color: rgba(248, 113, 113, 0.55);
+  background: rgba(248, 113, 113, 0.14);
+}
+
+.opdracht-dubbel-waarschuwing strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
+.opdracht-dubbel-waarschuwing p {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.opdracht-dubbel-waarschuwing ul {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12px;
+}
+
+.opdracht-dubbel-waarschuwing li {
+  margin-bottom: 2px;
+}
+
 .settings-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -1331,6 +1392,15 @@ textarea.form-input {
   color: #b91c1c !important;
 }
 
+[data-theme="licht"] .opdracht-dubbel-waarschuwing {
+  border-color: rgba(217, 119, 6, 0.45);
+  background: rgba(251, 191, 36, 0.18);
+}
+
+[data-theme="licht"] .form-input-waarschuwing {
+  border-color: rgba(217, 119, 6, 0.7) !important;
+}
+
 [data-theme="licht"] .important-item,
 [data-theme="licht"] .opdracht-card {
   background: #f9fafb;
@@ -1365,6 +1435,57 @@ textarea.form-input {
 
 .page-list-item:hover {
   border-color: rgba(148, 163, 184, 0.45);
+}
+
+.page-list-item.melding-ongelezen {
+  border-color: rgba(239, 68, 68, 0.55);
+  background: rgba(127, 29, 29, 0.35);
+  color: #fecaca;
+}
+
+.page-list-item.melding-ongelezen strong {
+  color: #fee2e2;
+}
+
+.prullenbak-rij-ongelezen {
+  background: rgba(127, 29, 29, 0.35);
+  color: #fecaca;
+  cursor: pointer;
+}
+
+.prullenbak-rij-ongelezen td {
+  color: inherit;
+}
+
+.melding-ongelezen-sub {
+  color: #fca5a5;
+  font-size: 13px;
+}
+
+.link-btn-ongelezen {
+  color: #fecaca !important;
+}
+
+.opdracht-card-ongelezen {
+  border-color: rgba(239, 68, 68, 0.55) !important;
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.25);
+}
+
+.important-item.melding-ongelezen {
+  border-color: rgba(239, 68, 68, 0.55);
+  background: rgba(127, 29, 29, 0.35);
+  color: #fecaca;
+}
+
+.klant-kaart-ongelezen {
+  border-color: rgba(239, 68, 68, 0.45);
+  background: rgba(127, 29, 29, 0.25);
+}
+
+.calendar-day-opdracht.melding-ongelezen {
+  border-color: rgba(239, 68, 68, 0.55);
+  background: rgba(127, 29, 29, 0.4);
+  color: #fecaca;
 }
 
 .page-list-main {
@@ -1531,6 +1652,38 @@ textarea.form-input {
 [data-theme="licht"] .klant-kaart {
   background: #f9fafb;
   border-color: rgba(15, 23, 42, 0.1);
+}
+
+[data-theme="licht"] .page-list-item.melding-ongelezen {
+  background: #fef2f2;
+  border-color: rgba(185, 28, 28, 0.4);
+  color: #991b1b;
+}
+
+[data-theme="licht"] .page-list-item.melding-ongelezen strong {
+  color: #7f1d1d;
+}
+
+[data-theme="licht"] .melding-ongelezen-sub {
+  color: #b91c1c;
+}
+
+[data-theme="licht"] .link-btn-ongelezen {
+  color: #b91c1c !important;
+}
+
+[data-theme="licht"] .opdracht-card-ongelezen,
+[data-theme="licht"] .important-item.melding-ongelezen,
+[data-theme="licht"] .klant-kaart-ongelezen,
+[data-theme="licht"] .calendar-day-opdracht.melding-ongelezen {
+  background: #fef2f2;
+  border-color: rgba(185, 28, 28, 0.4);
+  color: #991b1b;
+}
+
+[data-theme="licht"] .prullenbak-rij-ongelezen {
+  background: #fef2f2;
+  color: #991b1b;
 }
 
 [data-theme="licht"] .sidebar-nav-action-link {

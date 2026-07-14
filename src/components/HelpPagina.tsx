@@ -4,8 +4,9 @@ export function HelpPagina() {
       <section className="card page-card">
         <h2>Opdracht aanmaken</h2>
         <p className="muted">
-          Als eigenaar kies je in het menu <strong>Beheer → Nieuwe opdracht</strong> of de knop op
-          Home. Vul klant, omschrijving, prioriteit en optioneel een deadline in.
+          Als eigenaar kies je in het menu <strong>Beheer → Nieuwe opdracht</strong>, de knop op
+          het dashboard, of <strong>Voeg nieuwe opdracht toe</strong> op het opdrachtenbord.
+          Vul klant, omschrijving, prioriteit en optioneel een deadline in.
         </p>
       </section>
       <section className="card page-card">

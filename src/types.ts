@@ -12,6 +12,7 @@ export interface Gebruiker {
 
 export enum OpdrachtStatus {
   Nieuw = "NIEUW",
+  Afwachting = "AFWACHTING",
   InBehandeling = "IN_BEHANDELING",
   Afgerond = "AFGEROND"
 }

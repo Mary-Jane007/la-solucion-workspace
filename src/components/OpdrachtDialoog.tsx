@@ -2,6 +2,7 @@ import { FormEvent, useMemo, useState } from "react";
 import { Opdracht, OpdrachtStatus, Prioriteit } from "../types";
 import { downloadBestand, uploadBestand } from "../api";
 import { opdrachtVerwijderBevestiging } from "../opdrachtVerwijderen";
+import { statusLabel, vindOvereenkomstigeOpdrachten } from "../opdrachtenUtils";
 
 type DialoogMode = "toevoegen" | "bewerken" | "bekijken";
 
@@ -10,6 +11,7 @@ interface OpdrachtDialoogProps {
   opdracht: Opdracht;
   isEigenaar: boolean;
   teamGebruikers: { id: string; name: string; role: string; active: boolean }[];
+  bestaandeOpdrachten?: Opdracht[];
   onSluit: () => void;
   onBewaar: (opdracht: Opdracht) => Promise<Opdracht>;
   onCreate?: (draft: Opdracht) => Promise<void>;
@@ -21,6 +23,7 @@ export function OpdrachtDialoog({
   opdracht,
   isEigenaar,
   teamGebruikers,
+  bestaandeOpdrachten = [],
   onSluit,
   onBewaar,
   onCreate,
@@ -41,14 +44,46 @@ export function OpdrachtDialoog({
   const kanBestandenToevoegen = mode === "bewerken" && bewerkt.id;
   const kanVerwijderen = isEigenaar && Boolean(bewerkt.id) && !isToevoegen && Boolean(onDelete);
 
+  const overeenkomstigeOpdrachten = useMemo(() => {
+    if (!isToevoegen) return [];
+    return vindOvereenkomstigeOpdrachten(bestaandeOpdrachten, bewerkt);
+  }, [isToevoegen, bestaandeOpdrachten, bewerkt.klantNaam]);
+
+  const waarschuwingTitel = useMemo(() => {
+    const naam = bewerkt.klantNaam.trim() || "Naam klant";
+    return `Bestaande opdracht(en) voor “${naam}”`;
+  }, [bewerkt.klantNaam]);
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     try {
       setFout(null);
+      const matchesBijOpslaan = isToevoegen
+        ? vindOvereenkomstigeOpdrachten(
+            bestaandeOpdrachten,
+            {
+              klantNaam: bewerkt.klantNaam,
+              omschrijving: bewerkt.omschrijving
+            },
+            undefined,
+            { applyDefaults: true }
+          )
+        : [];
+      if (matchesBijOpslaan.length > 0) {
+        const voorbeelden = matchesBijOpslaan
+          .slice(0, 3)
+          .map((o) => `• ${o.klantNaam} – ${o.omschrijving} (${statusLabel(o.status)})`)
+          .join("\n");
+        const bevestigd = window.confirm(
+          `Let op: er bestaan al ${matchesBijOpslaan.length} opdracht(en) voor deze klant:\n\n${voorbeelden}${
+            matchesBijOpslaan.length > 3 ? "\n• …" : ""
+          }\n\nToch een nieuwe opdracht maken?`
+        );
+        if (!bevestigd) return;
+      }
       setIsBezig(true);
       if (isToevoegen && onCreate) {
         await onCreate(bewerkt);
-        onSluit();
       } else {
         const saved = await onBewaar(bewerkt);
         setBewerkt(saved);
@@ -123,14 +158,52 @@ export function OpdrachtDialoog({
         <form className="modal-body form" onSubmit={handleSubmit}>
           <div className="modal-columns">
             <div className="modal-col">
-              <label className="form-label">Naam klant</label>
+              <label className="form-label" htmlFor="opdracht-klantnaam">
+                Naam klant
+              </label>
               <input
-                className="form-input"
+                id="opdracht-klantnaam"
+                className={`form-input${
+                  isToevoegen && overeenkomstigeOpdrachten.length > 0 ? " form-input-waarschuwing" : ""
+                }`}
                 value={bewerkt.klantNaam}
                 onChange={(e) => setBewerkt({ ...bewerkt, klantNaam: e.target.value })}
                 readOnly={alleenLezen}
                 disabled={alleenLezen}
+                autoComplete="off"
+                aria-describedby={
+                  isToevoegen && overeenkomstigeOpdrachten.length > 0
+                    ? "opdracht-klant-waarschuwing"
+                    : undefined
+                }
               />
+              {isToevoegen && overeenkomstigeOpdrachten.length > 0 && (
+                <div
+                  id="opdracht-klant-waarschuwing"
+                  className="opdracht-dubbel-waarschuwing"
+                  role="alert"
+                  aria-live="polite"
+                >
+                  <strong>{waarschuwingTitel}</strong>
+                  <p>
+                    Er {overeenkomstigeOpdrachten.length === 1 ? "bestaat" : "bestaan"} al{" "}
+                    {overeenkomstigeOpdrachten.length} opdracht(en) met deze klantnaam.
+                  </p>
+                  <ul>
+                    {overeenkomstigeOpdrachten.slice(0, 4).map((o) => (
+                      <li key={o.id}>
+                        <span>
+                          {o.klantNaam} – {o.omschrijving || "Geen omschrijving"}
+                        </span>
+                        <span className="muted"> · {statusLabel(o.status)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {overeenkomstigeOpdrachten.length > 4 && (
+                    <p className="muted">+ {overeenkomstigeOpdrachten.length - 4} andere</p>
+                  )}
+                </div>
+              )}
               <label className="form-label">Omschrijving opdracht</label>
               <textarea
                 className="form-input"
@@ -173,6 +246,7 @@ export function OpdrachtDialoog({
                 disabled={alleenLezen}
               >
                 <option value={OpdrachtStatus.Nieuw}>Nieuw</option>
+                <option value={OpdrachtStatus.Afwachting}>Afwachting</option>
                 <option value={OpdrachtStatus.InBehandeling}>In behandeling</option>
                 <option value={OpdrachtStatus.Afgerond}>Afgerond</option>
               </select>
@@ -339,4 +413,3 @@ export function OpdrachtDialoog({
     </div>
   );
 }
-

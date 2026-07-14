@@ -510,7 +510,7 @@ const opdrachtSchema = z.object({
   omschrijving: z.string().min(1),
   datumAangemaakt: z.string().min(10),
   datumDeadline: z.string().optional().nullable(),
-  status: z.enum(["NIEUW", "IN_BEHANDELING", "AFGEROND"]),
+  status: z.enum(["NIEUW", "AFWACHTING", "IN_BEHANDELING", "AFGEROND"]),
   prioriteit: z.number().int().min(1).max(3),
   behandelaarUserId: z.string().uuid().optional().nullable(),
   notities: z.string().optional().nullable(),
