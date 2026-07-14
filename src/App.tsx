@@ -11,6 +11,7 @@ import { KlantenPagina } from "./components/KlantenPagina";
 import { DocumentenPagina } from "./components/DocumentenPagina";
 import { ActiviteitPagina } from "./components/ActiviteitPagina";
 import { PrullenbakPagina } from "./components/PrullenbakPagina";
+import { FinancieleAdministratiePagina } from "./components/FinancieleAdministratiePagina";
 import { TeamPagina } from "./components/TeamPagina";
 import { ExportPagina } from "./components/ExportPagina";
 import { ProfielPagina } from "./components/ProfielPagina";
@@ -226,6 +227,9 @@ function IngelogdeApp({
         />
       )}
       {huidigePagina === "team" && isEigenaar && <TeamPagina />}
+      {huidigePagina === "financieel" && isEigenaar && (
+        <FinancieleAdministratiePagina opdrachten={opdrachten} />
+      )}
       {huidigePagina === "export" && isEigenaar && <ExportPagina werkruimte={werkruimte} />}
       {huidigePagina === "profiel" && <ProfielPagina gebruiker={gebruiker} />}
       {huidigePagina === "instellingen" && (

@@ -50,6 +50,7 @@ const NAV_GROEPEN: NavGroep[] = [
       { id: "documenten", label: "Documenten", badgeKey: "documenten", alleenEigenaar: true },
       { id: "activiteit", label: "Activiteit", badgeKey: "activiteit", alleenEigenaar: true },
       { id: "team", label: "Team", alleenEigenaar: true },
+      { id: "financieel", label: "Financiën", alleenEigenaar: true },
       { id: "prullenbak", label: "Prullenbak", badgeKey: "prullenbak", alleenEigenaar: true },
       { id: "export", label: "Export", alleenEigenaar: true }
     ]

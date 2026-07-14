@@ -104,3 +104,63 @@ export async function downloadBestand(bestandId: string, bestandsnaam: string): 
   URL.revokeObjectURL(url);
 }
 
+export type FinancieelType = "INKOMST" | "UITGAVE";
+export type FinancieelStatus = "OPEN" | "BETAALD";
+
+export interface FinancieelPost {
+  id: string;
+  datum: string;
+  type: FinancieelType;
+  omschrijving: string;
+  bedrag: number;
+  categorie?: string;
+  referentie?: string;
+  klantNaam?: string;
+  status: FinancieelStatus;
+  notities?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export async function fetchFinancieel(): Promise<FinancieelPost[]> {
+  const res = await apiFetch("/api/admin/financieel");
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Kon financiële administratie niet ophalen.");
+  return (data.posten || []) as FinancieelPost[];
+}
+
+export async function createFinancieelPost(
+  post: Omit<FinancieelPost, "id" | "createdAt" | "updatedAt">
+): Promise<FinancieelPost> {
+  const res = await apiFetch("/api/admin/financieel", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(post)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Kon financiële post niet aanmaken.");
+  return data.post as FinancieelPost;
+}
+
+export async function updateFinancieelPost(
+  id: string,
+  post: Omit<FinancieelPost, "id" | "createdAt" | "updatedAt">
+): Promise<FinancieelPost> {
+  const res = await apiFetch(`/api/admin/financieel/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(post)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Kon financiële post niet opslaan.");
+  return data.post as FinancieelPost;
+}
+
+export async function deleteFinancieelPost(id: string): Promise<void> {
+  const res = await apiFetch(`/api/admin/financieel/${id}`, { method: "DELETE" });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error((data as { error?: string }).error || "Kon financiële post niet verwijderen.");
+  }
+}
+

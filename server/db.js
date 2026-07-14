@@ -154,6 +154,29 @@ async function migrate() {
     `,
     []
   );
+
+  await query(
+    `
+    create table if not exists financiele_posten (
+      id text primary key,
+      datum date not null,
+      type text not null check (type in ('INKOMST','UITGAVE')),
+      omschrijving text not null,
+      bedrag numeric(12,2) not null check (bedrag >= 0),
+      categorie text,
+      referentie text,
+      klant_naam text,
+      status text not null check (status in ('OPEN','BETAALD')),
+      notities text,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+    create index if not exists idx_financiele_posten_datum on financiele_posten(datum desc);
+    create index if not exists idx_financiele_posten_type on financiele_posten(type);
+    alter table financiele_posten add column if not exists klant_naam text;
+    `,
+    []
+  );
 }
 
 module.exports = {

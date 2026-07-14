@@ -1488,6 +1488,101 @@ textarea.form-input {
   color: #fecaca;
 }
 
+.financieel-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.financieel-metrics {
+  margin-top: 10px;
+}
+
+.financieel-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.financieel-form-grid .form-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.financieel-span-2 {
+  grid-column: 1 / -1;
+}
+
+.financieel-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.financieel-filter {
+  width: auto;
+  min-width: 180px;
+}
+
+.financieel-row-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.financieel-inkomst {
+  color: #86efac;
+}
+
+.financieel-uitgave {
+  color: #fca5a5;
+}
+
+.financieel-pill {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.financieel-pill.inkomst {
+  background: rgba(34, 197, 94, 0.18);
+  color: #86efac;
+}
+
+.financieel-pill.uitgave {
+  background: rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+}
+
+.financieel-pill.saldo-te-ontvangen {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fcd34d;
+}
+
+.financieel-pill.saldo-te-betalen {
+  background: rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+}
+
+.financieel-pill.saldo-ok {
+  background: rgba(34, 197, 94, 0.18);
+  color: #86efac;
+}
+
+.financieel-pill.saldo-mix {
+  background: rgba(96, 165, 250, 0.2);
+  color: #93c5fd;
+}
+
+@media (max-width: 720px) {
+  .financieel-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .page-list-main {
   display: flex;
   align-items: center;
@@ -1684,6 +1779,44 @@ textarea.form-input {
 [data-theme="licht"] .prullenbak-rij-ongelezen {
   background: #fef2f2;
   color: #991b1b;
+}
+
+[data-theme="licht"] .financieel-inkomst,
+[data-theme="licht"] .financieel-pill.inkomst {
+  color: #15803d;
+}
+
+[data-theme="licht"] .financieel-uitgave,
+[data-theme="licht"] .financieel-pill.uitgave {
+  color: #b91c1c;
+}
+
+[data-theme="licht"] .financieel-pill.inkomst {
+  background: rgba(22, 163, 74, 0.12);
+}
+
+[data-theme="licht"] .financieel-pill.uitgave {
+  background: rgba(185, 28, 28, 0.1);
+}
+
+[data-theme="licht"] .financieel-pill.saldo-te-ontvangen {
+  background: rgba(217, 119, 6, 0.12);
+  color: #b45309;
+}
+
+[data-theme="licht"] .financieel-pill.saldo-te-betalen {
+  background: rgba(185, 28, 28, 0.1);
+  color: #b91c1c;
+}
+
+[data-theme="licht"] .financieel-pill.saldo-ok {
+  background: rgba(22, 163, 74, 0.12);
+  color: #15803d;
+}
+
+[data-theme="licht"] .financieel-pill.saldo-mix {
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
 }
 
 [data-theme="licht"] .sidebar-nav-action-link {

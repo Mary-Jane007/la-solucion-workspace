@@ -46,6 +46,12 @@ const {
   createBestand,
   deleteBestandenForOpdrachtIds
 } = require("./bestandenStore");
+const {
+  listFinancielePosten,
+  createFinancielePost,
+  updateFinancielePost,
+  deleteFinancielePost
+} = require("./financieStore");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -706,6 +712,68 @@ app.get("/api/bestanden/:id/download", authRequired, async (req, res) => {
     return res.sendFile(filePath);
   } catch (err) {
     console.error("Fout bij download:", err);
+    return res.status(500).json({ error: "Interne serverfout." });
+  }
+});
+
+app.get("/api/admin/financieel", authRequired, requireOwner, async (req, res) => {
+  try {
+    if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
+    const posten = await listFinancielePosten();
+    return res.json({ posten });
+  } catch (err) {
+    console.error("Fout bij GET /api/admin/financieel:", err);
+    return res.status(500).json({ error: "Interne serverfout." });
+  }
+});
+
+const financieelSchema = z.object({
+  datum: z.string().min(10),
+  type: z.enum(["INKOMST", "UITGAVE"]),
+  omschrijving: z.string().min(1),
+  bedrag: z.number().finite().nonnegative(),
+  categorie: z.string().optional().nullable(),
+  referentie: z.string().optional().nullable(),
+  klantNaam: z.string().optional().nullable(),
+  status: z.enum(["OPEN", "BETAALD"]),
+  notities: z.string().optional().nullable()
+});
+
+app.post("/api/admin/financieel", authRequired, requireOwner, async (req, res) => {
+  try {
+    if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
+    const parsed = financieelSchema.safeParse(req.body || {});
+    if (!parsed.success) return res.status(400).json({ error: parseZodError(parsed.error) });
+    const post = await createFinancielePost(parsed.data);
+    return res.status(201).json({ post });
+  } catch (err) {
+    console.error("Fout bij POST /api/admin/financieel:", err);
+    return res.status(500).json({ error: "Interne serverfout." });
+  }
+});
+
+app.put("/api/admin/financieel/:id", authRequired, requireOwner, async (req, res) => {
+  try {
+    if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
+    const parsed = financieelSchema.safeParse(req.body || {});
+    if (!parsed.success) return res.status(400).json({ error: parseZodError(parsed.error) });
+    const post = await updateFinancielePost(req.params.id, parsed.data);
+    if (!post) return res.status(404).json({ error: "Post niet gevonden." });
+    return res.json({ post });
+  } catch (err) {
+    console.error("Fout bij PUT /api/admin/financieel/:id:", err);
+    return res.status(500).json({ error: "Interne serverfout." });
+  }
+});
+
+app.delete("/api/admin/financieel/:id", authRequired, requireOwner, async (req, res) => {
+  try {
+    if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
+    const ok = await deleteFinancielePost(req.params.id);
+    if (!ok) return res.status(404).json({ error: "Post niet gevonden." });
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("Fout bij DELETE /api/admin/financieel/:id:", err);
     return res.status(500).json({ error: "Interne serverfout." });
   }
 });

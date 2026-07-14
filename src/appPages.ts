@@ -11,6 +11,7 @@ export type AppPagina =
   | "activiteit"
   | "prullenbak"
   | "team"
+  | "financieel"
   | "export"
   | "profiel"
   | "instellingen"
@@ -24,6 +25,7 @@ export const EIGENAAR_PAGINAS: AppPagina[] = [
   "documenten",
   "team",
   "prullenbak",
+  "financieel",
   "export"
 ];
 
@@ -75,6 +77,10 @@ export const PAGINA_INFO: Record<AppPagina, { titel: string; ondertitel: string 
   team: {
     titel: "Team",
     ondertitel: "Medewerkers beheren en actieve accounts bekijken."
+  },
+  financieel: {
+    titel: "Financiële administratie",
+    ondertitel: "Inkomsten, uitgaven en openstaande posten — alleen voor de eigenaar."
   },
   export: {
     titel: "Export",
