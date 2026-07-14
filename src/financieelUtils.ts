@@ -1,5 +1,48 @@
-import { FinancieelPost } from "./api";
+import { FinancieelBetalingswijze, FinancieelPost, FinancieelValuta } from "./api";
 import { Opdracht } from "./types";
+
+export const FINANCIEEL_VALUTAS: FinancieelValuta[] = ["EUR", "USD", "SRD", "XCG"];
+
+export const VALUTA_LABELS: Record<FinancieelValuta, string> = {
+  EUR: "Euro (EUR)",
+  USD: "US dollar (USD)",
+  SRD: "Surinaamse dollar (SRD)",
+  XCG: "Caribische gulden (XCG)"
+};
+
+export const BETALINGSWIJZE_LABELS: Record<FinancieelBetalingswijze, string> = {
+  OPGEHAALD: "Opgehaald door medewerker",
+  OVERGEMAAKT: "Overgemaakt",
+  GESTORT: "Gestort op bank"
+};
+
+/** Banken in Suriname (SBV-leden, verkorte namen). */
+export const SURINAAME_BANKEN = [
+  "De Surinaamsche Bank (DSB)",
+  "Hakrinbank",
+  "Republic Bank Suriname",
+  "Finabank",
+  "Surichange Bank",
+  "Surinaamse Postspaarbank",
+  "Volkscredietbank (VCB)",
+  "Southern Commercial Bank",
+  "Godo",
+  "Finatrust / Trustbank",
+  "Nationale Ontwikkelingsbank (NOB)",
+  "Anders / overig"
+] as const;
+
+const VALUTA_SYMBOL: Record<FinancieelValuta, string> = {
+  EUR: "€",
+  USD: "US$",
+  SRD: "SRD",
+  XCG: "Cg"
+};
+
+export function normalizeValuta(waarde?: string | null): FinancieelValuta {
+  const v = String(waarde || "EUR").toUpperCase();
+  return FINANCIEEL_VALUTAS.includes(v as FinancieelValuta) ? (v as FinancieelValuta) : "EUR";
+}
 
 export type SaldoCijfers = {
   teOntvangen: number;
@@ -10,6 +53,7 @@ export type SaldoCijfers = {
 
 export type KlantSaldo = SaldoCijfers & {
   klantNaam: string;
+  valuta: FinancieelValuta;
   netto: number;
   statusLabel: string;
   statusClass: string;
@@ -19,9 +63,19 @@ export type DossierSaldo = SaldoCijfers & {
   opdrachtId: string;
   klantNaam: string;
   dossierLabel: string;
+  valuta: FinancieelValuta;
   netto: number;
   statusLabel: string;
   statusClass: string;
+};
+
+export type FinancieelTotalen = {
+  valuta: FinancieelValuta;
+  inkomsten: number;
+  uitgaven: number;
+  saldo: number;
+  teOntvangen: number;
+  teBetalen: number;
 };
 
 function vandaagIso() {
@@ -64,11 +118,25 @@ export function formatDatumTijd(waarde: string): string {
   });
 }
 
+export function formatGeld(bedrag: number, valuta: FinancieelValuta | string = "EUR"): string {
+  const code = normalizeValuta(valuta);
+  try {
+    return new Intl.NumberFormat("nl-NL", {
+      style: "currency",
+      currency: code,
+      currencyDisplay: "symbol"
+    }).format(bedrag);
+  } catch {
+    return `${VALUTA_SYMBOL[code]} ${bedrag.toLocaleString("nl-NL", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })}`;
+  }
+}
+
+/** @deprecated Gebruik formatGeld */
 export function formatEuro(bedrag: number): string {
-  return new Intl.NumberFormat("nl-NL", {
-    style: "currency",
-    currency: "EUR"
-  }).format(bedrag);
+  return formatGeld(bedrag, "EUR");
 }
 
 export function opdrachtDossierLabel(o: Opdracht): string {
@@ -107,25 +175,64 @@ function telPostOp(entry: SaldoCijfers, p: FinancieelPost): SaldoCijfers {
   return next;
 }
 
+export function berekenTotalenPerValuta(posten: FinancieelPost[]): FinancieelTotalen[] {
+  const map = new Map<FinancieelValuta, FinancieelTotalen>();
+  for (const code of FINANCIEEL_VALUTAS) {
+    map.set(code, {
+      valuta: code,
+      inkomsten: 0,
+      uitgaven: 0,
+      saldo: 0,
+      teOntvangen: 0,
+      teBetalen: 0
+    });
+  }
+
+  for (const p of posten) {
+    const valuta = normalizeValuta(p.valuta);
+    const t = map.get(valuta)!;
+    if (p.type === "INKOMST") {
+      t.inkomsten += p.bedrag;
+      if (p.status === "OPEN") t.teOntvangen += p.bedrag;
+    } else {
+      t.uitgaven += p.bedrag;
+      if (p.status === "OPEN") t.teBetalen += p.bedrag;
+    }
+  }
+
+  for (const t of map.values()) {
+    t.saldo = t.inkomsten - t.uitgaven;
+  }
+
+  return FINANCIEEL_VALUTAS.map((v) => map.get(v)!).filter(
+    (t) => t.inkomsten > 0 || t.uitgaven > 0 || t.teOntvangen > 0 || t.teBetalen > 0
+  );
+}
+
 export function berekenKlantSaldi(posten: FinancieelPost[]): KlantSaldo[] {
-  const map = new Map<string, SaldoCijfers>();
+  const map = new Map<string, SaldoCijfers & { klantNaam: string; valuta: FinancieelValuta }>();
 
   for (const p of posten) {
     const naam = (p.klantNaam || "").trim();
     if (!naam) continue;
-    map.set(naam, telPostOp(map.get(naam) || leegSaldo(), p));
+    const valuta = normalizeValuta(p.valuta);
+    const key = `${naam.toLowerCase()}||${valuta}`;
+    const bestaand = map.get(key) || { klantNaam: naam, valuta, ...leegSaldo() };
+    map.set(key, { ...telPostOp(bestaand, p), klantNaam: naam, valuta });
   }
 
-  return [...map.entries()]
-    .map(([klantNaam, s]) => {
+  return [...map.values()]
+    .map((s) => {
       const netto = s.teOntvangen - s.teBetalen;
-      return { klantNaam, ...s, netto, ...saldoStatus(s) };
+      return { ...s, netto, ...saldoStatus(s) };
     })
     .sort((a, b) => {
       const aOpen = a.teOntvangen + a.teBetalen;
       const bOpen = b.teOntvangen + b.teBetalen;
       if (aOpen !== bOpen) return bOpen - aOpen;
-      return a.klantNaam.localeCompare(b.klantNaam, "nl");
+      const naam = a.klantNaam.localeCompare(b.klantNaam, "nl");
+      if (naam !== 0) return naam;
+      return a.valuta.localeCompare(b.valuta);
     });
 }
 
@@ -133,30 +240,35 @@ export function berekenDossierSaldi(
   posten: FinancieelPost[],
   opdrachtenById: Map<string, Opdracht>
 ): DossierSaldo[] {
-  const map = new Map<string, SaldoCijfers>();
+  const map = new Map<
+    string,
+    SaldoCijfers & { opdrachtId: string; valuta: FinancieelValuta }
+  >();
 
   for (const p of posten) {
     const id = (p.opdrachtId || "").trim();
     if (!id) continue;
-    map.set(id, telPostOp(map.get(id) || leegSaldo(), p));
+    const valuta = normalizeValuta(p.valuta);
+    const key = `${id}||${valuta}`;
+    const bestaand = map.get(key) || { opdrachtId: id, valuta, ...leegSaldo() };
+    map.set(key, { ...telPostOp(bestaand, p), opdrachtId: id, valuta });
   }
 
-  return [...map.entries()]
-    .map(([opdrachtId, s]) => {
-      const opdracht = opdrachtenById.get(opdrachtId);
+  return [...map.values()]
+    .map((s) => {
+      const opdracht = opdrachtenById.get(s.opdrachtId);
       const klantNaam =
         opdracht?.klantNaam?.trim() ||
-        posten.find((p) => p.opdrachtId === opdrachtId)?.klantNaam?.trim() ||
+        posten.find((p) => p.opdrachtId === s.opdrachtId)?.klantNaam?.trim() ||
         "Onbekende klant";
       const dossierLabel = opdracht
         ? opdrachtDossierLabel(opdracht)
         : `${klantNaam} – (dossier niet meer beschikbaar)`;
       const netto = s.teOntvangen - s.teBetalen;
       return {
-        opdrachtId,
+        ...s,
         klantNaam,
         dossierLabel,
-        ...s,
         netto,
         ...saldoStatus(s)
       };
@@ -165,7 +277,9 @@ export function berekenDossierSaldi(
       const aOpen = a.teOntvangen + a.teBetalen;
       const bOpen = b.teOntvangen + b.teBetalen;
       if (aOpen !== bOpen) return bOpen - aOpen;
-      return a.dossierLabel.localeCompare(b.dossierLabel, "nl");
+      const label = a.dossierLabel.localeCompare(b.dossierLabel, "nl");
+      if (label !== 0) return label;
+      return a.valuta.localeCompare(b.valuta);
     });
 }
 
@@ -174,6 +288,38 @@ export function postStatusLabel(p: FinancieelPost): string {
     return p.type === "INKOMST" ? "Betaald door klant" : "Uitbetaald";
   }
   return p.type === "INKOMST" ? "Klant moet nog betalen" : "Wij moeten nog betalen";
+}
+
+export function betalingsLabel(p: FinancieelPost): string {
+  const wijze = p.betalingswijze;
+  if (!wijze) {
+    return p.afgehandeldDoorNaam ? `Afgehandeld · ${p.afgehandeldDoorNaam}` : "";
+  }
+  if (wijze === "OPGEHAALD") {
+    return p.afgehandeldDoorNaam
+      ? `Opgehaald · ${p.afgehandeldDoorNaam}`
+      : BETALINGSWIJZE_LABELS.OPGEHAALD;
+  }
+  const bank = (p.bank || "").trim();
+  if (wijze === "OVERGEMAAKT") {
+    return bank ? `Overgemaakt · ${bank}` : BETALINGSWIJZE_LABELS.OVERGEMAAKT;
+  }
+  return bank ? `Gestort · ${bank}` : BETALINGSWIJZE_LABELS.GESTORT;
+}
+
+export function klantSaldoSamenvatting(saldo: KlantSaldo | undefined, valuta: FinancieelValuta): string {
+  if (!saldo) return `Nog geen saldo voor deze klant in ${valuta}.`;
+  const delen: string[] = [];
+  if (saldo.teOntvangen > 0) {
+    delen.push(`nog te ontvangen ${formatGeld(saldo.teOntvangen, valuta)}`);
+  }
+  if (saldo.teBetalen > 0) {
+    delen.push(`nog te betalen door ons ${formatGeld(saldo.teBetalen, valuta)}`);
+  }
+  if (delen.length === 0) {
+    return `Geen open saldo (${valuta}). Netto open: ${formatGeld(saldo.netto, valuta)}.`;
+  }
+  return `Open saldo (${valuta}): ${delen.join(" · ")}.`;
 }
 
 function csvEscape(waarde: string | number): string {
@@ -210,6 +356,7 @@ export function exportFinancieelPostenCsv(
   const headers = [
     "Datum",
     "Type",
+    "Valuta",
     "Klant",
     "Dossier",
     "Omschrijving",
@@ -217,12 +364,15 @@ export function exportFinancieelPostenCsv(
     "Referentie",
     "Bedrag",
     "Status",
+    "Betalingswijze",
+    "Bank",
     "Afgehandeld door",
     "Notities"
   ];
   const rows = posten.map((p) => [
     p.datum.includes("T") ? formatDatumTijd(p.datum) : p.datum.slice(0, 10),
     p.type === "INKOMST" ? "Inkomst" : "Uitgave",
+    normalizeValuta(p.valuta),
     p.klantNaam || "",
     dossierLabelVoorPost(p, opdrachtenById),
     p.omschrijving,
@@ -230,6 +380,8 @@ export function exportFinancieelPostenCsv(
     p.referentie || "",
     String(p.bedrag).replace(".", ","),
     postStatusLabel(p),
+    p.betalingswijze ? BETALINGSWIJZE_LABELS[p.betalingswijze] : "",
+    p.bank || "",
     p.afgehandeldDoorNaam || "",
     p.notities || ""
   ]);
@@ -240,6 +392,7 @@ export function exportKlantSaldiCsv(posten: FinancieelPost[]) {
   const saldi = berekenKlantSaldi(posten);
   const headers = [
     "Klant",
+    "Valuta",
     "Nog te betalen (klant)",
     "Al betaald (klant)",
     "Nog te betalen (wij)",
@@ -249,6 +402,7 @@ export function exportKlantSaldiCsv(posten: FinancieelPost[]) {
   ];
   const rows = saldi.map((s) => [
     s.klantNaam,
+    s.valuta,
     String(s.teOntvangen).replace(".", ","),
     String(s.ontvangen).replace(".", ","),
     String(s.teBetalen).replace(".", ","),
@@ -267,6 +421,7 @@ export function exportDossierSaldiCsv(
   const headers = [
     "Klant",
     "Dossier",
+    "Valuta",
     "Nog te betalen (klant)",
     "Al betaald (klant)",
     "Nog te betalen (wij)",
@@ -277,6 +432,7 @@ export function exportDossierSaldiCsv(
   const rows = saldi.map((s) => [
     s.klantNaam,
     s.dossierLabel,
+    s.valuta,
     String(s.teOntvangen).replace(".", ","),
     String(s.ontvangen).replace(".", ","),
     String(s.teBetalen).replace(".", ","),
@@ -310,26 +466,50 @@ export function exportFinancieelPdf(
 ) {
   const klantSaldi = berekenKlantSaldi(posten);
   const dossierSaldi = berekenDossierSaldi(posten, opdrachtenById);
-  const inkomsten = posten.filter((p) => p.type === "INKOMST").reduce((s, p) => s + p.bedrag, 0);
-  const uitgaven = posten.filter((p) => p.type === "UITGAVE").reduce((s, p) => s + p.bedrag, 0);
+  const totalen = berekenTotalenPerValuta(posten);
+
+  const totalenHtml = totalen.length
+    ? `<ul>${totalen
+        .map(
+          (t) =>
+            `<li><strong>${htmlEscape(VALUTA_LABELS[t.valuta])}</strong>: inkomsten ${htmlEscape(
+              formatGeld(t.inkomsten, t.valuta)
+            )}, uitgaven ${htmlEscape(formatGeld(t.uitgaven, t.valuta))}, saldo ${htmlEscape(
+              formatGeld(t.saldo, t.valuta)
+            )}</li>`
+        )
+        .join("")}</ul>`
+    : "<p>Geen totalen.</p>";
 
   const postenTabel = tabelHtml(
-    ["Datum", "Type", "Klant", "Dossier", "Omschrijving", "Bedrag", "Status", "Afgehandeld door"],
+    [
+      "Datum",
+      "Type",
+      "Valuta",
+      "Klant",
+      "Dossier",
+      "Omschrijving",
+      "Bedrag",
+      "Status",
+      "Betaling"
+    ],
     posten.map((p) => [
       formatDatumTijd(p.datum),
       p.type === "INKOMST" ? "Inkomst" : "Uitgave",
+      normalizeValuta(p.valuta),
       p.klantNaam || "—",
       dossierLabelVoorPost(p, opdrachtenById) || "—",
       p.omschrijving,
-      formatEuro(p.bedrag),
+      formatGeld(p.bedrag, p.valuta),
       postStatusLabel(p),
-      p.afgehandeldDoorNaam || "—"
+      betalingsLabel(p) || "—"
     ])
   );
 
   const klantTabel = tabelHtml(
     [
       "Klant",
+      "Valuta",
       "Nog te betalen (klant)",
       "Al betaald",
       "Nog te betalen (wij)",
@@ -339,11 +519,12 @@ export function exportFinancieelPdf(
     ],
     klantSaldi.map((s) => [
       s.klantNaam,
-      formatEuro(s.teOntvangen),
-      formatEuro(s.ontvangen),
-      formatEuro(s.teBetalen),
-      formatEuro(s.uitbetaald),
-      formatEuro(s.netto),
+      s.valuta,
+      formatGeld(s.teOntvangen, s.valuta),
+      formatGeld(s.ontvangen, s.valuta),
+      formatGeld(s.teBetalen, s.valuta),
+      formatGeld(s.uitbetaald, s.valuta),
+      formatGeld(s.netto, s.valuta),
       s.statusLabel
     ])
   );
@@ -351,6 +532,7 @@ export function exportFinancieelPdf(
   const dossierTabel = tabelHtml(
     [
       "Dossier",
+      "Valuta",
       "Nog te betalen (klant)",
       "Al betaald",
       "Nog te betalen (wij)",
@@ -360,11 +542,12 @@ export function exportFinancieelPdf(
     ],
     dossierSaldi.map((s) => [
       s.dossierLabel,
-      formatEuro(s.teOntvangen),
-      formatEuro(s.ontvangen),
-      formatEuro(s.teBetalen),
-      formatEuro(s.uitbetaald),
-      formatEuro(s.netto),
+      s.valuta,
+      formatGeld(s.teOntvangen, s.valuta),
+      formatGeld(s.ontvangen, s.valuta),
+      formatGeld(s.teBetalen, s.valuta),
+      formatGeld(s.uitbetaald, s.valuta),
+      formatGeld(s.netto, s.valuta),
       s.statusLabel
     ])
   );
@@ -383,7 +566,7 @@ export function exportFinancieelPdf(
     table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 8px; }
     th, td { border: 1px solid #c9d3e2; padding: 5px 6px; text-align: left; vertical-align: top; }
     th { background: #eef3fa; }
-    .totals span { display: inline-block; margin-right: 18px; }
+    ul { margin: 8px 0; padding-left: 18px; font-size: 13px; }
     @media print {
       body { margin: 12mm; }
       h2 { break-after: avoid; }
@@ -396,12 +579,8 @@ export function exportFinancieelPdf(
   <h1>La-Solución – Financiële administratie</h1>
   <div class="meta">
     <p>Exportdatum: ${htmlEscape(new Date().toLocaleString("nl-NL"))}</p>
-    <p class="totals">
-      <span>Inkomsten: <strong>${htmlEscape(formatEuro(inkomsten))}</strong></span>
-      <span>Uitgaven: <strong>${htmlEscape(formatEuro(uitgaven))}</strong></span>
-      <span>Saldo: <strong>${htmlEscape(formatEuro(inkomsten - uitgaven))}</strong></span>
-      <span>Posten: <strong>${posten.length}</strong></span>
-    </p>
+    <p>Posten: <strong>${posten.length}</strong></p>
+    ${totalenHtml}
   </div>
   <h2>Klantsaldo’s</h2>
   ${klantSaldi.length ? klantTabel : "<p>Geen klantsaldo’s.</p>"}

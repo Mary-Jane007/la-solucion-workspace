@@ -163,6 +163,7 @@ async function migrate() {
       type text not null check (type in ('INKOMST','UITGAVE')),
       omschrijving text not null,
       bedrag numeric(12,2) not null check (bedrag >= 0),
+      valuta text not null default 'EUR',
       categorie text,
       referentie text,
       klant_naam text,
@@ -177,6 +178,31 @@ async function migrate() {
     alter table financiele_posten add column if not exists opdracht_id text;
     alter table financiele_posten add column if not exists afgehandeld_door_user_id text;
     alter table financiele_posten add column if not exists afgehandeld_door_naam text;
+    alter table financiele_posten add column if not exists valuta text;
+    alter table financiele_posten add column if not exists betalingswijze text;
+    alter table financiele_posten add column if not exists bank text;
+    update financiele_posten set valuta = 'EUR' where valuta is null or valuta = '';
+    alter table financiele_posten alter column valuta set default 'EUR';
+    -- Check constraint (idempotent): bestaande constraint negeren als hij al bestaat.
+    do $$
+    begin
+      alter table financiele_posten
+        add constraint financiele_posten_valuta_check
+        check (valuta in ('EUR', 'USD', 'SRD', 'XCG'));
+    exception
+      when duplicate_object then null;
+    end $$;
+    do $$
+    begin
+      alter table financiele_posten
+        add constraint financiele_posten_betalingswijze_check
+        check (
+          betalingswijze is null
+          or betalingswijze in ('OPGEHAALD', 'OVERGEMAAKT', 'GESTORT')
+        );
+    exception
+      when duplicate_object then null;
+    end $$;
     create index if not exists idx_financiele_posten_opdracht on financiele_posten(opdracht_id);
     -- Bestaande date-kolom upgraden naar datum+tijd.
     do $$

@@ -732,12 +732,15 @@ const financieelSchema = z.object({
   type: z.enum(["INKOMST", "UITGAVE"]),
   omschrijving: z.string().min(1),
   bedrag: z.number().finite().nonnegative(),
+  valuta: z.enum(["EUR", "USD", "SRD", "XCG"]),
   categorie: z.string().optional().nullable(),
   referentie: z.string().optional().nullable(),
   klantNaam: z.string().optional().nullable(),
   opdrachtId: z.string().optional().nullable(),
   afgehandeldDoorUserId: z.string().optional().nullable(),
   afgehandeldDoorNaam: z.string().optional().nullable(),
+  betalingswijze: z.enum(["OPGEHAALD", "OVERGEMAAKT", "GESTORT"]).optional().nullable(),
+  bank: z.string().optional().nullable(),
   status: z.enum(["OPEN", "BETAALD"]),
   notities: z.string().optional().nullable()
 }).superRefine((data, ctx) => {
@@ -754,7 +757,9 @@ const financieelSchema = z.object({
 app.post("/api/admin/financieel", authRequired, requireOwner, async (req, res) => {
   try {
     if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
-    const parsed = financieelSchema.safeParse(req.body || {});
+    const body = { ...(req.body || {}) };
+    if (!body.valuta) body.valuta = "EUR";
+    const parsed = financieelSchema.safeParse(body);
     if (!parsed.success) return res.status(400).json({ error: parseZodError(parsed.error) });
     const post = await createFinancielePost(parsed.data);
     return res.status(201).json({ post });
@@ -767,7 +772,9 @@ app.post("/api/admin/financieel", authRequired, requireOwner, async (req, res) =
 app.put("/api/admin/financieel/:id", authRequired, requireOwner, async (req, res) => {
   try {
     if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
-    const parsed = financieelSchema.safeParse(req.body || {});
+    const body = { ...(req.body || {}) };
+    if (!body.valuta) body.valuta = "EUR";
+    const parsed = financieelSchema.safeParse(body);
     if (!parsed.success) return res.status(400).json({ error: parseZodError(parsed.error) });
     const post = await updateFinancielePost(req.params.id, parsed.data);
     if (!post) return res.status(404).json({ error: "Post niet gevonden." });

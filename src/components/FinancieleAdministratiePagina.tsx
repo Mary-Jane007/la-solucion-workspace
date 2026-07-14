@@ -4,27 +4,37 @@ import {
   deleteFinancieelPost,
   fetchAdminUsers,
   fetchFinancieel,
+  FinancieelBetalingswijze,
   FinancieelPost,
   FinancieelStatus,
   FinancieelType,
+  FinancieelValuta,
   updateFinancieelPost
 } from "../api";
 import {
   berekenDossierSaldi,
   berekenKlantSaldi,
+  berekenTotalenPerValuta,
+  BETALINGSWIJZE_LABELS,
+  betalingsLabel,
   dateTimeLocalNaarIso,
   DossierSaldo,
   exportDossierSaldiCsv,
   exportFinancieelPdf,
   exportFinancieelPostenCsv,
   exportKlantSaldiCsv,
+  FINANCIEEL_VALUTAS,
   formatDatumTijd,
-  formatEuro,
+  formatGeld,
   KlantSaldo,
+  klantSaldoSamenvatting,
   naarDateTimeLocal,
+  normalizeValuta,
   nuDateTimeLocal,
   opdrachtDossierLabel,
-  SaldoCijfers
+  SaldoCijfers,
+  SURINAAME_BANKEN,
+  VALUTA_LABELS
 } from "../financieelUtils";
 import { groepeerPerKlant, statusLabel } from "../opdrachtenUtils";
 import { Opdracht } from "../types";
@@ -34,10 +44,13 @@ type FormState = {
   type: FinancieelType;
   omschrijving: string;
   bedrag: string;
+  valuta: FinancieelValuta;
   categorie: string;
   referentie: string;
   klantNaam: string;
   opdrachtId: string;
+  betalingswijze: "" | FinancieelBetalingswijze;
+  bank: string;
   afgehandeldDoorUserId: string;
   afgehandeldDoorNaam: string;
   status: FinancieelStatus;
@@ -48,16 +61,19 @@ interface Props {
   opdrachten: Opdracht[];
 }
 
-function leegFormulier(): FormState {
+function leegFormulier(valuta: FinancieelValuta = "EUR"): FormState {
   return {
     datum: nuDateTimeLocal(),
     type: "INKOMST",
     omschrijving: "",
     bedrag: "",
+    valuta,
     categorie: "",
     referentie: "",
     klantNaam: "",
     opdrachtId: "",
+    betalingswijze: "",
+    bank: "",
     afgehandeldDoorUserId: "",
     afgehandeldDoorNaam: "",
     status: "OPEN",
@@ -74,6 +90,7 @@ function SaldoTabel({
 }: {
   rows: Array<
     SaldoCijfers & {
+      valuta: FinancieelValuta;
       netto: number;
       statusLabel: string;
       statusClass: string;
@@ -94,6 +111,7 @@ function SaldoTabel({
         <thead>
           <tr>
             <th>{labelHeader}</th>
+            <th>Valuta</th>
             <th>Nog te betalen (klant)</th>
             <th>Al betaald (klant)</th>
             <th>Nog te betalen (wij)</th>
@@ -116,14 +134,15 @@ function SaldoTabel({
                     </>
                   )}
                 </td>
+                <td>{row.valuta}</td>
                 <td className={row.teOntvangen > 0 ? "financieel-inkomst" : undefined}>
-                  {formatEuro(row.teOntvangen)}
+                  {formatGeld(row.teOntvangen, row.valuta)}
                 </td>
-                <td>{formatEuro(row.ontvangen)}</td>
+                <td>{formatGeld(row.ontvangen, row.valuta)}</td>
                 <td className={row.teBetalen > 0 ? "financieel-uitgave" : undefined}>
-                  {formatEuro(row.teBetalen)}
+                  {formatGeld(row.teBetalen, row.valuta)}
                 </td>
-                <td>{formatEuro(row.uitbetaald)}</td>
+                <td>{formatGeld(row.uitbetaald, row.valuta)}</td>
                 <td
                   className={
                     row.netto > 0
@@ -133,7 +152,7 @@ function SaldoTabel({
                         : undefined
                   }
                 >
-                  {formatEuro(row.netto)}
+                  {formatGeld(row.netto, row.valuta)}
                 </td>
                 <td>
                   <span className={`financieel-pill ${row.statusClass}`}>{row.statusLabel}</span>
@@ -155,6 +174,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
   const [form, setForm] = useState<FormState>(leegFormulier);
   const [bewerkId, setBewerkId] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<"ALLE" | FinancieelType>("ALLE");
+  const [filterValuta, setFilterValuta] = useState<"ALLE" | FinancieelValuta>("ALLE");
   const [laden, setLaden] = useState(true);
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
@@ -244,40 +264,45 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
   }, []);
 
   const zichtbaar = useMemo(() => {
-    if (filterType === "ALLE") return posten;
-    return posten.filter((p) => p.type === filterType);
-  }, [posten, filterType]);
+    return posten.filter((p) => {
+      if (filterType !== "ALLE" && p.type !== filterType) return false;
+      if (filterValuta !== "ALLE" && normalizeValuta(p.valuta) !== filterValuta) return false;
+      return true;
+    });
+  }, [posten, filterType, filterValuta]);
 
-  const totalen = useMemo(() => {
-    const inkomsten = posten
-      .filter((p) => p.type === "INKOMST")
-      .reduce((sum, p) => sum + p.bedrag, 0);
-    const uitgaven = posten
-      .filter((p) => p.type === "UITGAVE")
-      .reduce((sum, p) => sum + p.bedrag, 0);
-    const teOntvangen = posten
-      .filter((p) => p.type === "INKOMST" && p.status === "OPEN")
-      .reduce((sum, p) => sum + p.bedrag, 0);
-    const teBetalen = posten
-      .filter((p) => p.type === "UITGAVE" && p.status === "OPEN")
-      .reduce((sum, p) => sum + p.bedrag, 0);
-    return {
-      inkomsten,
-      uitgaven,
-      saldo: inkomsten - uitgaven,
-      teOntvangen,
-      teBetalen
-    };
-  }, [posten]);
+  const totalenPerValuta = useMemo(() => berekenTotalenPerValuta(posten), [posten]);
 
-  const klantSaldi = useMemo(() => berekenKlantSaldi(posten), [posten]);
-  const dossierSaldi = useMemo(
-    () => berekenDossierSaldi(posten, opdrachtenById),
-    [posten, opdrachtenById]
-  );
+  const getoondeTotalen = useMemo(() => {
+    if (filterValuta === "ALLE") return totalenPerValuta;
+    return totalenPerValuta.filter((t) => t.valuta === filterValuta);
+  }, [totalenPerValuta, filterValuta]);
+
+  const klantSaldi = useMemo(() => {
+    const basis = berekenKlantSaldi(posten);
+    if (filterValuta === "ALLE") return basis;
+    return basis.filter((s) => s.valuta === filterValuta);
+  }, [posten, filterValuta]);
+
+  const dossierSaldi = useMemo(() => {
+    const basis = berekenDossierSaldi(posten, opdrachtenById);
+    if (filterValuta === "ALLE") return basis;
+    return basis.filter((s) => s.valuta === filterValuta);
+  }, [posten, opdrachtenById, filterValuta]);
+
+  const actueelKlantSaldo = useMemo(() => {
+    const naam = form.klantNaam.trim().toLowerCase();
+    if (!naam) return undefined;
+    return berekenKlantSaldi(posten).find(
+      (s) => s.klantNaam.trim().toLowerCase() === naam && s.valuta === form.valuta
+    );
+  }, [posten, form.klantNaam, form.valuta]);
+
+  const toontMedewerker = form.betalingswijze === "OPGEHAALD" || form.betalingswijze === "";
+  const toontBank = form.betalingswijze === "OVERGEMAAKT" || form.betalingswijze === "GESTORT";
 
   const resetForm = () => {
-    setForm(leegFormulier());
+    setForm(leegFormulier(form.valuta));
     setBewerkId(null);
   };
 
@@ -288,10 +313,13 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       type: post.type,
       omschrijving: post.omschrijving,
       bedrag: String(post.bedrag),
+      valuta: normalizeValuta(post.valuta),
       categorie: post.categorie || "",
       referentie: post.referentie || "",
       klantNaam: post.klantNaam || "",
       opdrachtId: post.opdrachtId || "",
+      betalingswijze: post.betalingswijze || "",
+      bank: post.bank || "",
       afgehandeldDoorUserId: post.afgehandeldDoorUserId || "",
       afgehandeldDoorNaam: post.afgehandeldDoorNaam || "",
       status: post.status,
@@ -333,17 +361,24 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       ? team.find((u) => u.id === form.afgehandeldDoorUserId)
       : undefined;
     const handmatigeNaam = form.afgehandeldDoorNaam.trim();
+    const wijze = form.betalingswijze || null;
+    const medewerkerNaam =
+      wijze === "OPGEHAALD" || !wijze ? medewerker?.name || handmatigeNaam : "";
     const payload = {
       datum: datumIso,
       type: form.type,
       omschrijving: form.omschrijving.trim(),
       bedrag,
+      valuta: normalizeValuta(form.valuta),
       categorie: form.categorie.trim(),
       referentie: form.referentie.trim(),
       klantNaam: (gekozen?.klantNaam || form.klantNaam).trim(),
       opdrachtId: form.opdrachtId || null,
-      afgehandeldDoorUserId: form.afgehandeldDoorUserId || null,
-      afgehandeldDoorNaam: medewerker?.name || handmatigeNaam,
+      afgehandeldDoorUserId:
+        wijze === "OPGEHAALD" || !wijze ? form.afgehandeldDoorUserId || null : null,
+      afgehandeldDoorNaam: medewerkerNaam,
+      betalingswijze: wijze,
+      bank: toontBank ? form.bank.trim() : "",
       status: form.status,
       notities: form.notities.trim()
     };
@@ -353,10 +388,19 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       setFout(null);
       if (bewerkId) {
         const updated = await updateFinancieelPost(bewerkId, payload);
-        setPosten((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+        setPosten((prev) =>
+          prev.map((p) =>
+            p.id === updated.id
+              ? { ...updated, valuta: normalizeValuta(updated.valuta || payload.valuta) }
+              : p
+          )
+        );
       } else {
         const created = await createFinancieelPost(payload);
-        setPosten((prev) => [created, ...prev]);
+        setPosten((prev) => [
+          { ...created, valuta: normalizeValuta(created.valuta || payload.valuta) },
+          ...prev
+        ]);
       }
       resetForm();
     } catch (err) {
@@ -391,33 +435,65 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
   return (
     <div className="financieel-stack">
       <section className="card page-card">
-        <div className="section-header">
-          <h2>Financiële administratie</h2>
-          <p className="muted">Alleen zichtbaar en bewerkbaar voor de eigenaar.</p>
+        <div className="section-header section-header-row">
+          <div>
+            <h2>Financiële administratie</h2>
+            <p className="muted">Alleen zichtbaar en bewerkbaar voor de eigenaar.</p>
+          </div>
+          <select
+            className="form-input financieel-filter"
+            value={filterValuta}
+            onChange={(e) => setFilterValuta(e.target.value as "ALLE" | FinancieelValuta)}
+            aria-label="Filter op valuta"
+          >
+            <option value="ALLE">Alle valuta’s</option>
+            {FINANCIEEL_VALUTAS.map((v) => (
+              <option key={v} value={v}>
+                {VALUTA_LABELS[v]}
+              </option>
+            ))}
+          </select>
         </div>
 
-        <div className="metric-row financieel-metrics">
-          <div className="metric-badge">
-            <span className="metric-label">Inkomsten</span>
-            <span className="metric-value financieel-inkomst">{formatEuro(totalen.inkomsten)}</span>
-          </div>
-          <div className="metric-badge">
-            <span className="metric-label">Uitgaven</span>
-            <span className="metric-value financieel-uitgave">{formatEuro(totalen.uitgaven)}</span>
-          </div>
-          <div className="metric-badge">
-            <span className="metric-label">Saldo</span>
-            <span className="metric-value">{formatEuro(totalen.saldo)}</span>
-          </div>
-          <div className="metric-badge">
-            <span className="metric-label">Klanten moeten betalen</span>
-            <span className="metric-value financieel-inkomst">{formatEuro(totalen.teOntvangen)}</span>
-          </div>
-          <div className="metric-badge">
-            <span className="metric-label">Wij moeten betalen</span>
-            <span className="metric-value financieel-uitgave">{formatEuro(totalen.teBetalen)}</span>
-          </div>
-        </div>
+        {getoondeTotalen.length === 0 ? (
+          <p className="muted">Nog geen posten om totalen te tonen.</p>
+        ) : (
+          getoondeTotalen.map((totalen) => (
+            <div key={totalen.valuta} className="financieel-valuta-blok">
+              <h3 className="financieel-valuta-titel">{VALUTA_LABELS[totalen.valuta]}</h3>
+              <div className="metric-row financieel-metrics">
+                <div className="metric-badge">
+                  <span className="metric-label">Inkomsten</span>
+                  <span className="metric-value financieel-inkomst">
+                    {formatGeld(totalen.inkomsten, totalen.valuta)}
+                  </span>
+                </div>
+                <div className="metric-badge">
+                  <span className="metric-label">Uitgaven</span>
+                  <span className="metric-value financieel-uitgave">
+                    {formatGeld(totalen.uitgaven, totalen.valuta)}
+                  </span>
+                </div>
+                <div className="metric-badge">
+                  <span className="metric-label">Saldo</span>
+                  <span className="metric-value">{formatGeld(totalen.saldo, totalen.valuta)}</span>
+                </div>
+                <div className="metric-badge">
+                  <span className="metric-label">Klanten moeten betalen</span>
+                  <span className="metric-value financieel-inkomst">
+                    {formatGeld(totalen.teOntvangen, totalen.valuta)}
+                  </span>
+                </div>
+                <div className="metric-badge">
+                  <span className="metric-label">Wij moeten betalen</span>
+                  <span className="metric-value financieel-uitgave">
+                    {formatGeld(totalen.teBetalen, totalen.valuta)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
       </section>
 
       <section className="card page-card">
@@ -474,7 +550,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
           rows={dossierSaldi}
           emptyText="Nog geen posten gekoppeld aan een opdracht. Kies bij een post een dossier om saldo’s te zien."
           labelHeader="Dossier"
-          getKey={(row) => (row as DossierSaldo).opdrachtId}
+          getKey={(row) => `${(row as DossierSaldo).opdrachtId}-${(row as DossierSaldo).valuta}`}
           getLabel={(row) => {
             const d = row as DossierSaldo;
             return { title: d.klantNaam, subtitle: d.dossierLabel.replace(`${d.klantNaam} – `, "") };
@@ -486,14 +562,14 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
         <div className="section-header">
           <h2>Klantsaldo’s</h2>
           <p className="muted">
-            Totaal per klant over alle dossiers: wat nog openstaat en wat al betaald is.
+            Totaal per klant en valuta: wat nog openstaat en wat al betaald is.
           </p>
         </div>
         <SaldoTabel
           rows={klantSaldi}
           emptyText="Nog geen posten met een klant. Koppel bij inkomsten/uitgaven een klant of dossier."
           labelHeader="Klant"
-          getKey={(row) => (row as KlantSaldo).klantNaam}
+          getKey={(row) => `${(row as KlantSaldo).klantNaam}-${(row as KlantSaldo).valuta}`}
           getLabel={(row) => ({ title: (row as KlantSaldo).klantNaam })}
         />
       </section>
@@ -533,7 +609,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
               </select>
             </label>
             <label className="form-label">
-              Bedrag (€)
+              Bedrag
               <input
                 className="form-input"
                 inputMode="decimal"
@@ -542,6 +618,20 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                 onChange={(e) => setForm({ ...form, bedrag: e.target.value })}
                 required
               />
+            </label>
+            <label className="form-label">
+              Valuta
+              <select
+                className="form-input"
+                value={form.valuta}
+                onChange={(e) => setForm({ ...form, valuta: e.target.value as FinancieelValuta })}
+              >
+                {FINANCIEEL_VALUTAS.map((v) => (
+                  <option key={v} value={v}>
+                    {VALUTA_LABELS[v]}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="form-label">
               Status
@@ -578,56 +668,111 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                 ))}
               </select>
             </label>
-            <label className="form-label financieel-span-2">
-              Opgehaald / afgehandeld door (medewerker)
+            <label className="form-label">
+              Betalingswijze
               <select
                 className="form-input"
-                value={form.afgehandeldDoorUserId}
+                value={form.betalingswijze}
                 onChange={(e) => {
-                  const id = e.target.value;
-                  const u = medewerkerOpties.find((m) => m.id === id);
+                  const betalingswijze = e.target.value as "" | FinancieelBetalingswijze;
                   setForm({
                     ...form,
-                    afgehandeldDoorUserId: id,
-                    afgehandeldDoorNaam: u?.name || ""
+                    betalingswijze,
+                    bank:
+                      betalingswijze === "OVERGEMAAKT" || betalingswijze === "GESTORT"
+                        ? form.bank
+                        : "",
+                    afgehandeldDoorUserId:
+                      betalingswijze === "OPGEHAALD" || betalingswijze === ""
+                        ? form.afgehandeldDoorUserId
+                        : "",
+                    afgehandeldDoorNaam:
+                      betalingswijze === "OPGEHAALD" || betalingswijze === ""
+                        ? form.afgehandeldDoorNaam
+                        : ""
                   });
                 }}
               >
-                <option value="">— Geen medewerker gekozen —</option>
-                {medewerkerOpties.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name}
-                    {!u.active ? " (inactief)" : ""}
-                    {u.role === "EIGENAAR" ? " · eigenaar" : ""}
+                <option value="">— Niet gekozen —</option>
+                {(Object.keys(BETALINGSWIJZE_LABELS) as FinancieelBetalingswijze[]).map((k) => (
+                  <option key={k} value={k}>
+                    {BETALINGSWIJZE_LABELS[k]}
                   </option>
                 ))}
               </select>
             </label>
-            <label className="form-label financieel-span-2">
-              Of typ een naam handmatig
-              <input
-                className="form-input"
-                list="financieel-afgehandeld-door"
-                placeholder="Voor- en achternaam"
-                value={form.afgehandeldDoorNaam}
-                onChange={(e) => {
-                  const naam = e.target.value;
-                  const match = team.find(
-                    (u) => u.name.trim().toLowerCase() === naam.trim().toLowerCase()
-                  );
-                  setForm({
-                    ...form,
-                    afgehandeldDoorNaam: naam,
-                    afgehandeldDoorUserId: match?.id || ""
-                  });
-                }}
-              />
-              <datalist id="financieel-afgehandeld-door">
-                {medewerkerOpties.map((u) => (
-                  <option key={u.id} value={u.name} />
-                ))}
-              </datalist>
-            </label>
+            {toontBank ? (
+              <label className="form-label">
+                Bank (Suriname)
+                <select
+                  className="form-input"
+                  value={form.bank}
+                  onChange={(e) => setForm({ ...form, bank: e.target.value })}
+                >
+                  <option value="">— Kies bank —</option>
+                  {SURINAAME_BANKEN.map((b) => (
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <label className="form-label">
+                Medewerker
+                <select
+                  className="form-input"
+                  value={form.afgehandeldDoorUserId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    const u = medewerkerOpties.find((m) => m.id === id);
+                    setForm({
+                      ...form,
+                      afgehandeldDoorUserId: id,
+                      afgehandeldDoorNaam: u?.name || "",
+                      betalingswijze: form.betalingswijze || "OPGEHAALD"
+                    });
+                  }}
+                >
+                  <option value="">— Geen medewerker —</option>
+                  {medewerkerOpties.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                      {!u.active ? " (inactief)" : ""}
+                      {u.role === "EIGENAAR" ? " · eigenaar" : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {toontMedewerker && (
+              <label className="form-label financieel-span-2">
+                Of typ medewerkernaam
+                <input
+                  className="form-input"
+                  list="financieel-afgehandeld-door"
+                  placeholder="Voor- en achternaam"
+                  value={form.afgehandeldDoorNaam}
+                  onChange={(e) => {
+                    const naam = e.target.value;
+                    const match = team.find(
+                      (u) => u.name.trim().toLowerCase() === naam.trim().toLowerCase()
+                    );
+                    setForm({
+                      ...form,
+                      afgehandeldDoorNaam: naam,
+                      afgehandeldDoorUserId: match?.id || "",
+                      betalingswijze: form.betalingswijze || (naam ? "OPGEHAALD" : "")
+                    });
+                  }}
+                />
+                <datalist id="financieel-afgehandeld-door">
+                  {medewerkerOpties.map((u) => (
+                    <option key={u.id} value={u.name} />
+                  ))}
+                </datalist>
+              </label>
+            )}
             <label className="form-label financieel-span-2">
               {form.type === "INKOMST"
                 ? "Klant (betaler / nog te betalen)"
@@ -682,6 +827,18 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                   <option key={naam} value={naam} />
                 ))}
               </datalist>
+              {form.klantNaam.trim() && (
+                <p
+                  className={`financieel-klant-saldo-hint${
+                    actueelKlantSaldo &&
+                    (actueelKlantSaldo.teOntvangen > 0 || actueelKlantSaldo.teBetalen > 0)
+                      ? " heeft-saldo"
+                      : ""
+                  }`}
+                >
+                  {klantSaldoSamenvatting(actueelKlantSaldo, form.valuta)}
+                </p>
+              )}
             </label>
             <label className="form-label financieel-span-2">
               Omschrijving
@@ -761,9 +918,10 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                 <tr>
                   <th>Datum</th>
                   <th>Type</th>
+                  <th>Valuta</th>
                   <th>Klant</th>
                   <th>Dossier</th>
-                  <th>Afgehandeld door</th>
+                  <th>Betaling</th>
                   <th>Omschrijving</th>
                   <th>Categorie</th>
                   <th>Bedrag</th>
@@ -784,16 +942,17 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                         {p.type === "INKOMST" ? "Inkomst" : "Uitgave"}
                       </span>
                     </td>
+                    <td>{normalizeValuta(p.valuta)}</td>
                     <td>{p.klantNaam || "—"}</td>
                     <td>{dossierLabelVoorPost(p)}</td>
-                    <td>{p.afgehandeldDoorNaam || "—"}</td>
+                    <td>{betalingsLabel(p) || "—"}</td>
                     <td>
                       <div>{p.omschrijving}</div>
                       {p.referentie && <span className="muted">{p.referentie}</span>}
                     </td>
                     <td>{p.categorie || "—"}</td>
                     <td className={p.type === "INKOMST" ? "financieel-inkomst" : "financieel-uitgave"}>
-                      {formatEuro(p.bedrag)}
+                      {formatGeld(p.bedrag, p.valuta)}
                     </td>
                     <td>
                       {p.status === "BETAALD"

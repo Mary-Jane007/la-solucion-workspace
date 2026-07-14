@@ -121,6 +121,8 @@ export async function downloadBestand(bestandId: string, bestandsnaam: string): 
 
 export type FinancieelType = "INKOMST" | "UITGAVE";
 export type FinancieelStatus = "OPEN" | "BETAALD";
+export type FinancieelValuta = "EUR" | "USD" | "SRD" | "XCG";
+export type FinancieelBetalingswijze = "OPGEHAALD" | "OVERGEMAAKT" | "GESTORT";
 
 export interface FinancieelPost {
   id: string;
@@ -128,12 +130,15 @@ export interface FinancieelPost {
   type: FinancieelType;
   omschrijving: string;
   bedrag: number;
+  valuta?: FinancieelValuta;
   categorie?: string;
   referentie?: string;
   klantNaam?: string;
   opdrachtId?: string | null;
   afgehandeldDoorUserId?: string | null;
   afgehandeldDoorNaam?: string;
+  betalingswijze?: FinancieelBetalingswijze | null;
+  bank?: string;
   status: FinancieelStatus;
   notities?: string;
   createdAt?: string;

@@ -1521,6 +1521,22 @@ textarea.form-input {
   margin-top: 12px;
 }
 
+.financieel-valuta-blok {
+  margin-top: 14px;
+}
+
+.financieel-valuta-blok + .financieel-valuta-blok {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.financieel-valuta-titel {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
 .financieel-export-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1531,6 +1547,21 @@ textarea.form-input {
 .financieel-filter {
   width: auto;
   min-width: 180px;
+}
+
+.financieel-klant-saldo-hint {
+  margin: 8px 0 0;
+  font-size: 0.88rem;
+  color: color-mix(in srgb, currentColor 72%, transparent);
+}
+
+.financieel-klant-saldo-hint.heeft-saldo {
+  color: #c45c26;
+  font-weight: 560;
+}
+
+[data-theme="licht"] .financieel-klant-saldo-hint.heeft-saldo {
+  color: #9a3f12;
 }
 
 .financieel-row-actions {
