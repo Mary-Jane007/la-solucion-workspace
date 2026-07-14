@@ -6,15 +6,24 @@ function hasDb() {
 }
 
 function rowToPost(row) {
+  const datum =
+    row.datum instanceof Date
+      ? row.datum.toISOString()
+      : row.datum
+        ? String(row.datum)
+        : null;
   return {
     id: row.id,
-    datum: row.datum,
+    datum,
     type: row.type,
     omschrijving: row.omschrijving,
     bedrag: Number(row.bedrag),
     categorie: row.categorie || "",
     referentie: row.referentie || "",
     klantNaam: row.klant_naam || "",
+    opdrachtId: row.opdracht_id || null,
+    afgehandeldDoorUserId: row.afgehandeld_door_user_id || null,
+    afgehandeldDoorNaam: row.afgehandeld_door_naam || "",
     status: row.status,
     notities: row.notities || "",
     createdAt: row.created_at,
@@ -35,6 +44,9 @@ async function listFinancielePosten() {
       categorie,
       referentie,
       klant_naam,
+      opdracht_id,
+      afgehandeld_door_user_id,
+      afgehandeld_door_naam,
       status,
       notities,
       created_at,
@@ -53,11 +65,13 @@ async function createFinancielePost(input) {
   const res = await query(
     `
     insert into financiele_posten
-      (id, datum, type, omschrijving, bedrag, categorie, referentie, klant_naam, status, notities)
+      (id, datum, type, omschrijving, bedrag, categorie, referentie, klant_naam, opdracht_id,
+       afgehandeld_door_user_id, afgehandeld_door_naam, status, notities)
     values
-      ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
     returning
-      id, datum, type, omschrijving, bedrag, categorie, referentie, klant_naam, status, notities,
+      id, datum, type, omschrijving, bedrag, categorie, referentie, klant_naam, opdracht_id,
+      afgehandeld_door_user_id, afgehandeld_door_naam, status, notities,
       created_at, updated_at
     `,
     [
@@ -69,6 +83,9 @@ async function createFinancielePost(input) {
       input.categorie || "",
       input.referentie || "",
       input.klantNaam || "",
+      input.opdrachtId || null,
+      input.afgehandeldDoorUserId || null,
+      input.afgehandeldDoorNaam || "",
       input.status,
       input.notities || ""
     ]
@@ -88,12 +105,16 @@ async function updateFinancielePost(id, input) {
       categorie = $6,
       referentie = $7,
       klant_naam = $8,
-      status = $9,
-      notities = $10,
+      opdracht_id = $9,
+      afgehandeld_door_user_id = $10,
+      afgehandeld_door_naam = $11,
+      status = $12,
+      notities = $13,
       updated_at = now()
     where id = $1
     returning
-      id, datum, type, omschrijving, bedrag, categorie, referentie, klant_naam, status, notities,
+      id, datum, type, omschrijving, bedrag, categorie, referentie, klant_naam, opdracht_id,
+      afgehandeld_door_user_id, afgehandeld_door_naam, status, notities,
       created_at, updated_at
     `,
     [
@@ -105,6 +126,9 @@ async function updateFinancielePost(id, input) {
       input.categorie || "",
       input.referentie || "",
       input.klantNaam || "",
+      input.opdrachtId || null,
+      input.afgehandeldDoorUserId || null,
+      input.afgehandeldDoorNaam || "",
       input.status,
       input.notities || ""
     ]

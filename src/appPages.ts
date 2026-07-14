@@ -84,7 +84,7 @@ export const PAGINA_INFO: Record<AppPagina, { titel: string; ondertitel: string 
   },
   export: {
     titel: "Export",
-    ondertitel: "Opdrachten exporteren voor rapportage."
+    ondertitel: "Opdrachten en financiën exporteren voor rapportage."
   },
   profiel: {
     titel: "Profiel",

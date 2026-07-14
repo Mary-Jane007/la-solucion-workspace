@@ -2,13 +2,31 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   createFinancieelPost,
   deleteFinancieelPost,
+  fetchAdminUsers,
   fetchFinancieel,
   FinancieelPost,
   FinancieelStatus,
   FinancieelType,
   updateFinancieelPost
 } from "../api";
-import { groepeerPerKlant } from "../opdrachtenUtils";
+import {
+  berekenDossierSaldi,
+  berekenKlantSaldi,
+  dateTimeLocalNaarIso,
+  DossierSaldo,
+  exportDossierSaldiCsv,
+  exportFinancieelPdf,
+  exportFinancieelPostenCsv,
+  exportKlantSaldiCsv,
+  formatDatumTijd,
+  formatEuro,
+  KlantSaldo,
+  naarDateTimeLocal,
+  nuDateTimeLocal,
+  opdrachtDossierLabel,
+  SaldoCijfers
+} from "../financieelUtils";
+import { groepeerPerKlant, statusLabel } from "../opdrachtenUtils";
 import { Opdracht } from "../types";
 
 type FormState = {
@@ -19,6 +37,9 @@ type FormState = {
   categorie: string;
   referentie: string;
   klantNaam: string;
+  opdrachtId: string;
+  afgehandeldDoorUserId: string;
+  afgehandeldDoorNaam: string;
   status: FinancieelStatus;
   notities: string;
 };
@@ -27,101 +48,122 @@ interface Props {
   opdrachten: Opdracht[];
 }
 
-type KlantSaldo = {
-  klantNaam: string;
-  teOntvangen: number;
-  ontvangen: number;
-  teBetalen: number;
-  uitbetaald: number;
-  netto: number;
-  statusLabel: string;
-  statusClass: string;
-};
-
-function vandaagIso() {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function leegFormulier(): FormState {
   return {
-    datum: vandaagIso(),
+    datum: nuDateTimeLocal(),
     type: "INKOMST",
     omschrijving: "",
     bedrag: "",
     categorie: "",
     referentie: "",
     klantNaam: "",
+    opdrachtId: "",
+    afgehandeldDoorUserId: "",
+    afgehandeldDoorNaam: "",
     status: "OPEN",
     notities: ""
   };
 }
 
-function formatEuro(bedrag: number): string {
-  return new Intl.NumberFormat("nl-NL", {
-    style: "currency",
-    currency: "EUR"
-  }).format(bedrag);
-}
-
-function berekenKlantSaldi(posten: FinancieelPost[]): KlantSaldo[] {
-  const map = new Map<
-    string,
-    { teOntvangen: number; ontvangen: number; teBetalen: number; uitbetaald: number }
-  >();
-
-  for (const p of posten) {
-    const naam = (p.klantNaam || "").trim();
-    if (!naam) continue;
-    const entry = map.get(naam) || {
-      teOntvangen: 0,
-      ontvangen: 0,
-      teBetalen: 0,
-      uitbetaald: 0
-    };
-    if (p.type === "INKOMST") {
-      if (p.status === "OPEN") entry.teOntvangen += p.bedrag;
-      else entry.ontvangen += p.bedrag;
-    } else if (p.status === "OPEN") {
-      entry.teBetalen += p.bedrag;
-    } else {
-      entry.uitbetaald += p.bedrag;
+function SaldoTabel({
+  rows,
+  emptyText,
+  labelHeader,
+  getKey,
+  getLabel
+}: {
+  rows: Array<
+    SaldoCijfers & {
+      netto: number;
+      statusLabel: string;
+      statusClass: string;
     }
-    map.set(naam, entry);
+  >;
+  emptyText: string;
+  labelHeader: string;
+  getKey: (row: (typeof rows)[number], index: number) => string;
+  getLabel: (row: (typeof rows)[number]) => { title: string; subtitle?: string };
+}) {
+  if (rows.length === 0) {
+    return <p className="muted">{emptyText}</p>;
   }
 
-  return [...map.entries()]
-    .map(([klantNaam, s]) => {
-      const netto = s.teOntvangen - s.teBetalen;
-      let statusLabel = "Alles betaald";
-      let statusClass = "saldo-ok";
-      if (s.teOntvangen > 0 && s.teBetalen > 0) {
-        statusLabel = "Open posten beide kanten";
-        statusClass = "saldo-mix";
-      } else if (s.teOntvangen > 0) {
-        statusLabel = "Klant moet nog betalen";
-        statusClass = "saldo-te-ontvangen";
-      } else if (s.teBetalen > 0) {
-        statusLabel = "Wij moeten nog betalen";
-        statusClass = "saldo-te-betalen";
-      }
-      return { klantNaam, ...s, netto, statusLabel, statusClass };
-    })
-    .sort((a, b) => {
-      const aOpen = a.teOntvangen + a.teBetalen;
-      const bOpen = b.teOntvangen + b.teBetalen;
-      if (aOpen !== bOpen) return bOpen - aOpen;
-      return a.klantNaam.localeCompare(b.klantNaam, "nl");
-    });
+  return (
+    <div className="owner-table-wrapper">
+      <table className="owner-table">
+        <thead>
+          <tr>
+            <th>{labelHeader}</th>
+            <th>Nog te betalen (klant)</th>
+            <th>Al betaald (klant)</th>
+            <th>Nog te betalen (wij)</th>
+            <th>Al uitbetaald</th>
+            <th>Netto open</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, index) => {
+            const label = getLabel(row);
+            return (
+              <tr key={getKey(row, index)}>
+                <td>
+                  <strong>{label.title}</strong>
+                  {label.subtitle && (
+                    <>
+                      <br />
+                      <span className="muted">{label.subtitle}</span>
+                    </>
+                  )}
+                </td>
+                <td className={row.teOntvangen > 0 ? "financieel-inkomst" : undefined}>
+                  {formatEuro(row.teOntvangen)}
+                </td>
+                <td>{formatEuro(row.ontvangen)}</td>
+                <td className={row.teBetalen > 0 ? "financieel-uitgave" : undefined}>
+                  {formatEuro(row.teBetalen)}
+                </td>
+                <td>{formatEuro(row.uitbetaald)}</td>
+                <td
+                  className={
+                    row.netto > 0
+                      ? "financieel-inkomst"
+                      : row.netto < 0
+                        ? "financieel-uitgave"
+                        : undefined
+                  }
+                >
+                  {formatEuro(row.netto)}
+                </td>
+                <td>
+                  <span className={`financieel-pill ${row.statusClass}`}>{row.statusLabel}</span>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 export function FinancieleAdministratiePagina({ opdrachten }: Props) {
   const [posten, setPosten] = useState<FinancieelPost[]>([]);
+  const [team, setTeam] = useState<Array<{ id: string; name: string; role: string; active: boolean }>>(
+    []
+  );
   const [form, setForm] = useState<FormState>(leegFormulier);
   const [bewerkId, setBewerkId] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<"ALLE" | FinancieelType>("ALLE");
   const [laden, setLaden] = useState(true);
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
+
+  const opdrachtenById = useMemo(() => {
+    const map = new Map<string, Opdracht>();
+    for (const o of opdrachten) map.set(o.id, o);
+    return map;
+  }, [opdrachten]);
 
   const klanten = useMemo(
     () => groepeerPerKlant(opdrachten).map((k) => k.klantNaam).filter(Boolean),
@@ -137,11 +179,59 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
     return [...set].sort((a, b) => a.localeCompare(b, "nl"));
   }, [klanten, form.klantNaam, posten]);
 
+  const dossierOpties = useMemo(() => {
+    const actief = opdrachten
+      .filter((o) => !o.verwijderdOp)
+      .slice()
+      .sort((a, b) => {
+        const naam = a.klantNaam.localeCompare(b.klantNaam, "nl");
+        if (naam !== 0) return naam;
+        return (b.datumAangemaakt || "").localeCompare(a.datumAangemaakt || "");
+      });
+
+    if (!form.opdrachtId) return actief;
+    if (actief.some((o) => o.id === form.opdrachtId)) return actief;
+    const gekoppeld = opdrachtenById.get(form.opdrachtId);
+    return gekoppeld ? [gekoppeld, ...actief] : actief;
+  }, [opdrachten, opdrachtenById, form.opdrachtId]);
+
+  const gefilterdeDossiers = useMemo(() => {
+    const klant = form.klantNaam.trim().toLowerCase();
+    if (!klant) return dossierOpties;
+    return dossierOpties.filter((o) => o.klantNaam.trim().toLowerCase() === klant);
+  }, [dossierOpties, form.klantNaam]);
+
+  const medewerkerOpties = useMemo(() => {
+    const actief = team
+      .filter((u) => u.active)
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name, "nl"));
+    if (!form.afgehandeldDoorUserId) return actief;
+    if (actief.some((u) => u.id === form.afgehandeldDoorUserId)) return actief;
+    const gekozen = team.find((u) => u.id === form.afgehandeldDoorUserId);
+    if (gekozen) return [gekozen, ...actief];
+    const naam =
+      (bewerkId &&
+        posten.find((p) => p.id === bewerkId)?.afgehandeldDoorNaam) ||
+      "Onbekende medewerker";
+    return [
+      {
+        id: form.afgehandeldDoorUserId,
+        name: naam,
+        role: "",
+        active: false
+      },
+      ...actief
+    ];
+  }, [team, form.afgehandeldDoorUserId, bewerkId, posten]);
+
   const laad = async () => {
     try {
       setLaden(true);
       setFout(null);
-      setPosten(await fetchFinancieel());
+      const [postenLijst, users] = await Promise.all([fetchFinancieel(), fetchAdminUsers()]);
+      setPosten(postenLijst);
+      setTeam(users);
     } catch (e) {
       setFout(e instanceof Error ? e.message : "Kon financiële gegevens niet laden.");
     } finally {
@@ -181,6 +271,10 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
   }, [posten]);
 
   const klantSaldi = useMemo(() => berekenKlantSaldi(posten), [posten]);
+  const dossierSaldi = useMemo(
+    () => berekenDossierSaldi(posten, opdrachtenById),
+    [posten, opdrachtenById]
+  );
 
   const resetForm = () => {
     setForm(leegFormulier());
@@ -190,15 +284,31 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
   const startBewerk = (post: FinancieelPost) => {
     setBewerkId(post.id);
     setForm({
-      datum: post.datum.slice(0, 10),
+      datum: naarDateTimeLocal(post.datum),
       type: post.type,
       omschrijving: post.omschrijving,
       bedrag: String(post.bedrag),
       categorie: post.categorie || "",
       referentie: post.referentie || "",
       klantNaam: post.klantNaam || "",
+      opdrachtId: post.opdrachtId || "",
+      afgehandeldDoorUserId: post.afgehandeldDoorUserId || "",
+      afgehandeldDoorNaam: post.afgehandeldDoorNaam || "",
       status: post.status,
       notities: post.notities || ""
+    });
+  };
+
+  const kiesDossier = (opdrachtId: string) => {
+    if (!opdrachtId) {
+      setForm({ ...form, opdrachtId: "" });
+      return;
+    }
+    const opdracht = opdrachtenById.get(opdrachtId);
+    setForm({
+      ...form,
+      opdrachtId,
+      klantNaam: opdracht?.klantNaam || form.klantNaam
     });
   };
 
@@ -210,14 +320,30 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       return;
     }
 
+    let datumIso: string;
+    try {
+      datumIso = dateTimeLocalNaarIso(form.datum);
+    } catch {
+      setFout("Vul een geldige datum en tijd in.");
+      return;
+    }
+
+    const gekozen = form.opdrachtId ? opdrachtenById.get(form.opdrachtId) : undefined;
+    const medewerker = form.afgehandeldDoorUserId
+      ? team.find((u) => u.id === form.afgehandeldDoorUserId)
+      : undefined;
+    const handmatigeNaam = form.afgehandeldDoorNaam.trim();
     const payload = {
-      datum: form.datum,
+      datum: datumIso,
       type: form.type,
       omschrijving: form.omschrijving.trim(),
       bedrag,
       categorie: form.categorie.trim(),
       referentie: form.referentie.trim(),
-      klantNaam: form.klantNaam.trim(),
+      klantNaam: (gekozen?.klantNaam || form.klantNaam).trim(),
+      opdrachtId: form.opdrachtId || null,
+      afgehandeldDoorUserId: form.afgehandeldDoorUserId || null,
+      afgehandeldDoorNaam: medewerker?.name || handmatigeNaam,
       status: form.status,
       notities: form.notities.trim()
     };
@@ -251,6 +377,15 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
     } catch (err) {
       setFout(err instanceof Error ? err.message : "Verwijderen mislukt.");
     }
+  };
+
+  const dossierLabelVoorPost = (p: FinancieelPost): string => {
+    if (!p.opdrachtId) return "—";
+    const o = opdrachtenById.get(p.opdrachtId);
+    if (!o) return "Dossier verwijderd";
+    const desc = (o.omschrijving || "").trim();
+    const short = desc.length > 40 ? `${desc.slice(0, 37)}…` : desc || "Geen omschrijving";
+    return short;
   };
 
   return (
@@ -287,71 +422,88 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
 
       <section className="card page-card">
         <div className="section-header">
-          <h2>Klantsaldo’s</h2>
+          <h2>Exporteren</h2>
           <p className="muted">
-            Per klant: wat nog openstaat, wat al betaald is, en of er nog betaald moet worden.
+            CSV voor Excel/boekhouding, of PDF via het printvenster (“Opslaan als PDF”).
           </p>
         </div>
-        {klantSaldi.length === 0 ? (
+        <div className="financieel-export-actions">
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={laden || posten.length === 0}
+            onClick={() => exportFinancieelPostenCsv(posten, opdrachtenById)}
+          >
+            CSV posten ({posten.length})
+          </button>
+          <button
+            type="button"
+            className="btn-secondary"
+            disabled={laden || klantSaldi.length === 0}
+            onClick={() => exportKlantSaldiCsv(posten)}
+          >
+            CSV klantsaldo’s ({klantSaldi.length})
+          </button>
+          <button
+            type="button"
+            className="btn-secondary"
+            disabled={laden || dossierSaldi.length === 0}
+            onClick={() => exportDossierSaldiCsv(posten, opdrachtenById)}
+          >
+            CSV dossiersaldo’s ({dossierSaldi.length})
+          </button>
+          <button
+            type="button"
+            className="btn-secondary"
+            disabled={laden || posten.length === 0}
+            onClick={() => exportFinancieelPdf(posten, opdrachtenById)}
+          >
+            PDF / afdrukken
+          </button>
+        </div>
+      </section>
+
+      <section className="card page-card">
+        <div className="section-header">
+          <h2>Dossiersaldo’s</h2>
           <p className="muted">
-            Nog geen posten met een klant. Koppel bij inkomsten/uitgaven een klant om saldo’s te zien.
+            Per gekoppelde opdracht: openstaande en betaalde bedragen voor dat dossier.
           </p>
-        ) : (
-          <div className="owner-table-wrapper">
-            <table className="owner-table">
-              <thead>
-                <tr>
-                  <th>Klant</th>
-                  <th>Nog te betalen (klant)</th>
-                  <th>Al betaald (klant)</th>
-                  <th>Nog te betalen (wij)</th>
-                  <th>Al uitbetaald</th>
-                  <th>Netto open</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {klantSaldi.map((k) => (
-                  <tr key={k.klantNaam}>
-                    <td>
-                      <strong>{k.klantNaam}</strong>
-                    </td>
-                    <td className={k.teOntvangen > 0 ? "financieel-inkomst" : undefined}>
-                      {formatEuro(k.teOntvangen)}
-                    </td>
-                    <td>{formatEuro(k.ontvangen)}</td>
-                    <td className={k.teBetalen > 0 ? "financieel-uitgave" : undefined}>
-                      {formatEuro(k.teBetalen)}
-                    </td>
-                    <td>{formatEuro(k.uitbetaald)}</td>
-                    <td
-                      className={
-                        k.netto > 0
-                          ? "financieel-inkomst"
-                          : k.netto < 0
-                            ? "financieel-uitgave"
-                            : undefined
-                      }
-                    >
-                      {formatEuro(k.netto)}
-                    </td>
-                    <td>
-                      <span className={`financieel-pill ${k.statusClass}`}>{k.statusLabel}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        </div>
+        <SaldoTabel
+          rows={dossierSaldi}
+          emptyText="Nog geen posten gekoppeld aan een opdracht. Kies bij een post een dossier om saldo’s te zien."
+          labelHeader="Dossier"
+          getKey={(row) => (row as DossierSaldo).opdrachtId}
+          getLabel={(row) => {
+            const d = row as DossierSaldo;
+            return { title: d.klantNaam, subtitle: d.dossierLabel.replace(`${d.klantNaam} – `, "") };
+          }}
+        />
+      </section>
+
+      <section className="card page-card">
+        <div className="section-header">
+          <h2>Klantsaldo’s</h2>
+          <p className="muted">
+            Totaal per klant over alle dossiers: wat nog openstaat en wat al betaald is.
+          </p>
+        </div>
+        <SaldoTabel
+          rows={klantSaldi}
+          emptyText="Nog geen posten met een klant. Koppel bij inkomsten/uitgaven een klant of dossier."
+          labelHeader="Klant"
+          getKey={(row) => (row as KlantSaldo).klantNaam}
+          getLabel={(row) => ({ title: (row as KlantSaldo).klantNaam })}
+        />
       </section>
 
       <section className="card page-card">
         <div className="section-header">
           <h2>{bewerkId ? "Post bewerken" : "Nieuwe post"}</h2>
           <p className="muted">
-            Gebruik status “Nog te betalen…” voor openstaande bedragen, en koppel altijd een klant
-            voor saldo’s.
+            Koppel een opdracht (dossier) voor saldo per dossier. De klantnaam wordt dan automatisch
+            overgenomen.
           </p>
         </div>
 
@@ -360,9 +512,9 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
         <form className="form financieel-form" onSubmit={handleSubmit}>
           <div className="financieel-form-grid">
             <label className="form-label">
-              Datum
+              Datum & tijd
               <input
-                type="date"
+                type="datetime-local"
                 className="form-input"
                 value={form.datum}
                 onChange={(e) => setForm({ ...form, datum: e.target.value })}
@@ -412,13 +564,88 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
               </select>
             </label>
             <label className="form-label financieel-span-2">
+              Dossier (opdracht)
+              <select
+                className="form-input"
+                value={form.opdrachtId}
+                onChange={(e) => kiesDossier(e.target.value)}
+              >
+                <option value="">— Geen dossier gekozen —</option>
+                {gefilterdeDossiers.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {opdrachtDossierLabel(o)} ({statusLabel(o.status)})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="form-label financieel-span-2">
+              Opgehaald / afgehandeld door (medewerker)
+              <select
+                className="form-input"
+                value={form.afgehandeldDoorUserId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  const u = medewerkerOpties.find((m) => m.id === id);
+                  setForm({
+                    ...form,
+                    afgehandeldDoorUserId: id,
+                    afgehandeldDoorNaam: u?.name || ""
+                  });
+                }}
+              >
+                <option value="">— Geen medewerker gekozen —</option>
+                {medewerkerOpties.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                    {!u.active ? " (inactief)" : ""}
+                    {u.role === "EIGENAAR" ? " · eigenaar" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="form-label financieel-span-2">
+              Of typ een naam handmatig
+              <input
+                className="form-input"
+                list="financieel-afgehandeld-door"
+                placeholder="Voor- en achternaam"
+                value={form.afgehandeldDoorNaam}
+                onChange={(e) => {
+                  const naam = e.target.value;
+                  const match = team.find(
+                    (u) => u.name.trim().toLowerCase() === naam.trim().toLowerCase()
+                  );
+                  setForm({
+                    ...form,
+                    afgehandeldDoorNaam: naam,
+                    afgehandeldDoorUserId: match?.id || ""
+                  });
+                }}
+              />
+              <datalist id="financieel-afgehandeld-door">
+                {medewerkerOpties.map((u) => (
+                  <option key={u.id} value={u.name} />
+                ))}
+              </datalist>
+            </label>
+            <label className="form-label financieel-span-2">
               {form.type === "INKOMST"
                 ? "Klant (betaler / nog te betalen)"
                 : "Klant (ontvanger / nog uit te betalen)"}
               <select
                 className="form-input"
                 value={form.klantNaam}
-                onChange={(e) => setForm({ ...form, klantNaam: e.target.value })}
+                onChange={(e) => {
+                  const klantNaam = e.target.value;
+                  const opdrachtPast =
+                    !form.opdrachtId ||
+                    opdrachtenById.get(form.opdrachtId)?.klantNaam.trim() === klantNaam.trim();
+                  setForm({
+                    ...form,
+                    klantNaam,
+                    opdrachtId: opdrachtPast ? form.opdrachtId : ""
+                  });
+                }}
               >
                 <option value="">— Geen klant gekozen —</option>
                 {klantOpties.map((naam) => (
@@ -435,7 +662,20 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                 list="financieel-klanten"
                 placeholder="Bijv. achternaam of bedrijf"
                 value={form.klantNaam}
-                onChange={(e) => setForm({ ...form, klantNaam: e.target.value })}
+                onChange={(e) => {
+                  const klantNaam = e.target.value;
+                  const opdrachtPast =
+                    !form.opdrachtId ||
+                    opdrachtenById
+                      .get(form.opdrachtId)
+                      ?.klantNaam.trim()
+                      .toLowerCase() === klantNaam.trim().toLowerCase();
+                  setForm({
+                    ...form,
+                    klantNaam,
+                    opdrachtId: opdrachtPast ? form.opdrachtId : ""
+                  });
+                }}
               />
               <datalist id="financieel-klanten">
                 {klantOpties.map((naam) => (
@@ -522,6 +762,8 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                   <th>Datum</th>
                   <th>Type</th>
                   <th>Klant</th>
+                  <th>Dossier</th>
+                  <th>Afgehandeld door</th>
                   <th>Omschrijving</th>
                   <th>Categorie</th>
                   <th>Bedrag</th>
@@ -532,7 +774,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
               <tbody>
                 {zichtbaar.map((p) => (
                   <tr key={p.id}>
-                    <td>{new Date(p.datum).toLocaleDateString("nl-NL")}</td>
+                    <td>{formatDatumTijd(p.datum)}</td>
                     <td>
                       <span
                         className={
@@ -543,6 +785,8 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                       </span>
                     </td>
                     <td>{p.klantNaam || "—"}</td>
+                    <td>{dossierLabelVoorPost(p)}</td>
+                    <td>{p.afgehandeldDoorNaam || "—"}</td>
                     <td>
                       <div>{p.omschrijving}</div>
                       {p.referentie && <span className="muted">{p.referentie}</span>}

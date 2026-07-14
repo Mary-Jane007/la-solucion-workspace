@@ -159,7 +159,7 @@ async function migrate() {
     `
     create table if not exists financiele_posten (
       id text primary key,
-      datum date not null,
+      datum timestamptz not null,
       type text not null check (type in ('INKOMST','UITGAVE')),
       omschrijving text not null,
       bedrag numeric(12,2) not null check (bedrag >= 0),
@@ -174,6 +174,25 @@ async function migrate() {
     create index if not exists idx_financiele_posten_datum on financiele_posten(datum desc);
     create index if not exists idx_financiele_posten_type on financiele_posten(type);
     alter table financiele_posten add column if not exists klant_naam text;
+    alter table financiele_posten add column if not exists opdracht_id text;
+    alter table financiele_posten add column if not exists afgehandeld_door_user_id text;
+    alter table financiele_posten add column if not exists afgehandeld_door_naam text;
+    create index if not exists idx_financiele_posten_opdracht on financiele_posten(opdracht_id);
+    -- Bestaande date-kolom upgraden naar datum+tijd.
+    do $$
+    begin
+      if exists (
+        select 1
+        from information_schema.columns
+        where table_name = 'financiele_posten'
+          and column_name = 'datum'
+          and data_type = 'date'
+      ) then
+        alter table financiele_posten
+          alter column datum type timestamptz
+          using (datum::timestamp);
+      end if;
+    end $$;
     `,
     []
   );

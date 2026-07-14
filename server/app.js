@@ -735,8 +735,20 @@ const financieelSchema = z.object({
   categorie: z.string().optional().nullable(),
   referentie: z.string().optional().nullable(),
   klantNaam: z.string().optional().nullable(),
+  opdrachtId: z.string().optional().nullable(),
+  afgehandeldDoorUserId: z.string().optional().nullable(),
+  afgehandeldDoorNaam: z.string().optional().nullable(),
   status: z.enum(["OPEN", "BETAALD"]),
   notities: z.string().optional().nullable()
+}).superRefine((data, ctx) => {
+  const t = Date.parse(data.datum);
+  if (Number.isNaN(t)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["datum"],
+      message: "Ongeldige datum/tijd."
+    });
+  }
 });
 
 app.post("/api/admin/financieel", authRequired, requireOwner, async (req, res) => {

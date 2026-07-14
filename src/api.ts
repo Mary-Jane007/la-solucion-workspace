@@ -22,6 +22,21 @@ export async function fetchMe(): Promise<Gebruiker> {
   return data as Gebruiker;
 }
 
+export type AdminGebruiker = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  active: boolean;
+};
+
+export async function fetchAdminUsers(): Promise<AdminGebruiker[]> {
+  const res = await apiFetch("/api/admin/users");
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Kon teamleden niet ophalen.");
+  return (data.users || []) as AdminGebruiker[];
+}
+
 export async function fetchOpdrachten(): Promise<Opdracht[]> {
   const res = await apiFetch("/api/opdrachten");
   const data = await res.json();
@@ -116,6 +131,9 @@ export interface FinancieelPost {
   categorie?: string;
   referentie?: string;
   klantNaam?: string;
+  opdrachtId?: string | null;
+  afgehandeldDoorUserId?: string | null;
+  afgehandeldDoorNaam?: string;
   status: FinancieelStatus;
   notities?: string;
   createdAt?: string;
