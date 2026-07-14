@@ -75,7 +75,7 @@ export function OpdrachtDialoog({
           .map((o) => `• ${o.klantNaam} – ${o.omschrijving} (${statusLabel(o.status)})`)
           .join("\n");
         const bevestigd = window.confirm(
-          `Let op: er bestaan al ${matchesBijOpslaan.length} opdracht(en) voor deze klant:\n\n${voorbeelden}${
+          `Let op: er bestaan al ${matchesBijOpslaan.length} opdracht(en) met een herkenbaar gelijke klantnaam:\n\n${voorbeelden}${
             matchesBijOpslaan.length > 3 ? "\n• …" : ""
           }\n\nToch een nieuwe opdracht maken?`
         );
@@ -187,7 +187,8 @@ export function OpdrachtDialoog({
                   <strong>{waarschuwingTitel}</strong>
                   <p>
                     Er {overeenkomstigeOpdrachten.length === 1 ? "bestaat" : "bestaan"} al{" "}
-                    {overeenkomstigeOpdrachten.length} opdracht(en) met deze klantnaam.
+                    {overeenkomstigeOpdrachten.length} opdracht(en) met een herkenbaar gelijke
+                    klantnaam.
                   </p>
                   <ul>
                     {overeenkomstigeOpdrachten.slice(0, 4).map((o) => (
