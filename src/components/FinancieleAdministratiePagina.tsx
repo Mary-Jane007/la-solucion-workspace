@@ -55,6 +55,7 @@ type FormState = {
   afgehandeldDoorNaam: string;
   status: FinancieelStatus;
   notities: string;
+  
 };
 
 interface Props {
