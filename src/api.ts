@@ -139,6 +139,9 @@ export interface FinancieelPost {
   afgehandeldDoorNaam?: string;
   betalingswijze?: FinancieelBetalingswijze | null;
   bank?: string;
+  geldBijUserId?: string | null;
+  geldBijNaam?: string;
+  wisselkoers?: number | null;
   status: FinancieelStatus;
   notities?: string;
   createdAt?: string;

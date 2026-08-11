@@ -741,6 +741,9 @@ const financieelSchema = z.object({
   afgehandeldDoorNaam: z.string().optional().nullable(),
   betalingswijze: z.enum(["OPGEHAALD", "OVERGEMAAKT", "GESTORT"]).optional().nullable(),
   bank: z.string().optional().nullable(),
+  geldBijUserId: z.string().optional().nullable(),
+  geldBijNaam: z.string().optional().nullable(),
+  wisselkoers: z.number().finite().nonnegative().optional().nullable(),
   status: z.enum(["OPEN", "BETAALD"]),
   notities: z.string().optional().nullable()
 }).superRefine((data, ctx) => {
@@ -759,6 +762,7 @@ app.post("/api/admin/financieel", authRequired, requireOwner, async (req, res) =
     if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
     const body = { ...(req.body || {}) };
     if (!body.valuta) body.valuta = "EUR";
+    if (body.wisselkoers === "" || body.wisselkoers === undefined) body.wisselkoers = null;
     const parsed = financieelSchema.safeParse(body);
     if (!parsed.success) return res.status(400).json({ error: parseZodError(parsed.error) });
     const post = await createFinancielePost(parsed.data);
@@ -774,6 +778,7 @@ app.put("/api/admin/financieel/:id", authRequired, requireOwner, async (req, res
     if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
     const body = { ...(req.body || {}) };
     if (!body.valuta) body.valuta = "EUR";
+    if (body.wisselkoers === "" || body.wisselkoers === undefined) body.wisselkoers = null;
     const parsed = financieelSchema.safeParse(body);
     if (!parsed.success) return res.status(400).json({ error: parseZodError(parsed.error) });
     const post = await updateFinancielePost(req.params.id, parsed.data);

@@ -15,6 +15,13 @@ function normalizeBetalingswijze(waarde) {
   return ["OPGEHAALD", "OVERGEMAAKT", "GESTORT"].includes(v) ? v : null;
 }
 
+function normalizeWisselkoers(waarde) {
+  if (waarde === null || waarde === undefined || waarde === "") return null;
+  const n = Number(waarde);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return n;
+}
+
 function rowToPost(row) {
   const datum =
     row.datum instanceof Date
@@ -22,6 +29,10 @@ function rowToPost(row) {
       : row.datum
         ? String(row.datum)
         : null;
+  const wisselkoers =
+    row.wisselkoers === null || row.wisselkoers === undefined
+      ? null
+      : Number(row.wisselkoers);
   return {
     id: row.id,
     datum,
@@ -29,6 +40,7 @@ function rowToPost(row) {
     omschrijving: row.omschrijving,
     bedrag: Number(row.bedrag),
     valuta: normalizeValuta(row.valuta),
+    wisselkoers: Number.isFinite(wisselkoers) ? wisselkoers : null,
     categorie: row.categorie || "",
     referentie: row.referentie || "",
     klantNaam: row.klant_naam || "",
@@ -37,6 +49,8 @@ function rowToPost(row) {
     afgehandeldDoorNaam: row.afgehandeld_door_naam || "",
     betalingswijze: normalizeBetalingswijze(row.betalingswijze),
     bank: row.bank || "",
+    geldBijUserId: row.geld_bij_user_id || null,
+    geldBijNaam: row.geld_bij_naam || "",
     status: row.status,
     notities: row.notities || "",
     createdAt: row.created_at,
@@ -55,6 +69,7 @@ async function listFinancielePosten() {
       omschrijving,
       bedrag,
       valuta,
+      wisselkoers,
       categorie,
       referentie,
       klant_naam,
@@ -63,6 +78,8 @@ async function listFinancielePosten() {
       afgehandeld_door_naam,
       betalingswijze,
       bank,
+      geld_bij_user_id,
+      geld_bij_naam,
       status,
       notities,
       created_at,
@@ -80,16 +97,19 @@ async function createFinancielePost(input) {
   const id = uuidv4();
   const valuta = normalizeValuta(input.valuta);
   const betalingswijze = normalizeBetalingswijze(input.betalingswijze);
+  const wisselkoers = normalizeWisselkoers(input.wisselkoers);
   const res = await query(
     `
     insert into financiele_posten
-      (id, datum, type, omschrijving, bedrag, valuta, categorie, referentie, klant_naam, opdracht_id,
-       afgehandeld_door_user_id, afgehandeld_door_naam, betalingswijze, bank, status, notities)
+      (id, datum, type, omschrijving, bedrag, valuta, wisselkoers, categorie, referentie, klant_naam, opdracht_id,
+       afgehandeld_door_user_id, afgehandeld_door_naam, betalingswijze, bank,
+       geld_bij_user_id, geld_bij_naam, status, notities)
     values
-      ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
     returning
-      id, datum, type, omschrijving, bedrag, valuta, categorie, referentie, klant_naam, opdracht_id,
-      afgehandeld_door_user_id, afgehandeld_door_naam, betalingswijze, bank, status, notities,
+      id, datum, type, omschrijving, bedrag, valuta, wisselkoers, categorie, referentie, klant_naam, opdracht_id,
+      afgehandeld_door_user_id, afgehandeld_door_naam, betalingswijze, bank,
+      geld_bij_user_id, geld_bij_naam, status, notities,
       created_at, updated_at
     `,
     [
@@ -99,6 +119,7 @@ async function createFinancielePost(input) {
       input.omschrijving,
       input.bedrag,
       valuta,
+      wisselkoers,
       input.categorie || "",
       input.referentie || "",
       input.klantNaam || "",
@@ -107,6 +128,8 @@ async function createFinancielePost(input) {
       input.afgehandeldDoorNaam || "",
       betalingswijze,
       input.bank || "",
+      input.geldBijUserId || null,
+      input.geldBijNaam || "",
       input.status,
       input.notities || ""
     ]
@@ -118,6 +141,7 @@ async function updateFinancielePost(id, input) {
   if (!hasDb()) throw new Error("Database niet geconfigureerd.");
   const valuta = normalizeValuta(input.valuta);
   const betalingswijze = normalizeBetalingswijze(input.betalingswijze);
+  const wisselkoers = normalizeWisselkoers(input.wisselkoers);
   const res = await query(
     `
     update financiele_posten set
@@ -126,21 +150,25 @@ async function updateFinancielePost(id, input) {
       omschrijving = $4,
       bedrag = $5,
       valuta = $6,
-      categorie = $7,
-      referentie = $8,
-      klant_naam = $9,
-      opdracht_id = $10,
-      afgehandeld_door_user_id = $11,
-      afgehandeld_door_naam = $12,
-      betalingswijze = $13,
-      bank = $14,
-      status = $15,
-      notities = $16,
+      wisselkoers = $7,
+      categorie = $8,
+      referentie = $9,
+      klant_naam = $10,
+      opdracht_id = $11,
+      afgehandeld_door_user_id = $12,
+      afgehandeld_door_naam = $13,
+      betalingswijze = $14,
+      bank = $15,
+      geld_bij_user_id = $16,
+      geld_bij_naam = $17,
+      status = $18,
+      notities = $19,
       updated_at = now()
     where id = $1
     returning
-      id, datum, type, omschrijving, bedrag, valuta, categorie, referentie, klant_naam, opdracht_id,
-      afgehandeld_door_user_id, afgehandeld_door_naam, betalingswijze, bank, status, notities,
+      id, datum, type, omschrijving, bedrag, valuta, wisselkoers, categorie, referentie, klant_naam, opdracht_id,
+      afgehandeld_door_user_id, afgehandeld_door_naam, betalingswijze, bank,
+      geld_bij_user_id, geld_bij_naam, status, notities,
       created_at, updated_at
     `,
     [
@@ -150,6 +178,7 @@ async function updateFinancielePost(id, input) {
       input.omschrijving,
       input.bedrag,
       valuta,
+      wisselkoers,
       input.categorie || "",
       input.referentie || "",
       input.klantNaam || "",
@@ -158,6 +187,8 @@ async function updateFinancielePost(id, input) {
       input.afgehandeldDoorNaam || "",
       betalingswijze,
       input.bank || "",
+      input.geldBijUserId || null,
+      input.geldBijNaam || "",
       input.status,
       input.notities || ""
     ]

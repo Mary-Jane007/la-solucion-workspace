@@ -357,6 +357,7 @@ export function exportFinancieelPostenCsv(
     "Datum",
     "Type",
     "Valuta",
+    "Wisselkoers",
     "Klant",
     "Dossier",
     "Omschrijving",
@@ -367,12 +368,14 @@ export function exportFinancieelPostenCsv(
     "Betalingswijze",
     "Bank",
     "Afgehandeld door",
+    "Bij wie is het geld",
     "Notities"
   ];
   const rows = posten.map((p) => [
     p.datum.includes("T") ? formatDatumTijd(p.datum) : p.datum.slice(0, 10),
     p.type === "INKOMST" ? "Inkomst" : "Uitgave",
     normalizeValuta(p.valuta),
+    p.wisselkoers == null ? "" : String(p.wisselkoers).replace(".", ","),
     p.klantNaam || "",
     dossierLabelVoorPost(p, opdrachtenById),
     p.omschrijving,
@@ -383,6 +386,7 @@ export function exportFinancieelPostenCsv(
     p.betalingswijze ? BETALINGSWIJZE_LABELS[p.betalingswijze] : "",
     p.bank || "",
     p.afgehandeldDoorNaam || "",
+    p.geldBijNaam || "",
     p.notities || ""
   ]);
   downloadCsv(`financieel-posten-${vandaagIso()}.csv`, headers, rows);
@@ -486,23 +490,27 @@ export function exportFinancieelPdf(
       "Datum",
       "Type",
       "Valuta",
+      "Wisselkoers",
       "Klant",
       "Dossier",
       "Omschrijving",
       "Bedrag",
       "Status",
-      "Betaling"
+      "Betaling",
+      "Bij wie"
     ],
     posten.map((p) => [
       formatDatumTijd(p.datum),
       p.type === "INKOMST" ? "Inkomst" : "Uitgave",
       normalizeValuta(p.valuta),
+      p.wisselkoers == null ? "—" : String(p.wisselkoers).replace(".", ","),
       p.klantNaam || "—",
       dossierLabelVoorPost(p, opdrachtenById) || "—",
       p.omschrijving,
       formatGeld(p.bedrag, p.valuta),
       postStatusLabel(p),
-      betalingsLabel(p) || "—"
+      betalingsLabel(p) || "—",
+      p.geldBijNaam || "—"
     ])
   );
 

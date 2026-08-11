@@ -45,6 +45,7 @@ type FormState = {
   omschrijving: string;
   bedrag: string;
   valuta: FinancieelValuta;
+  wisselkoers: string;
   categorie: string;
   referentie: string;
   klantNaam: string;
@@ -53,9 +54,10 @@ type FormState = {
   bank: string;
   afgehandeldDoorUserId: string;
   afgehandeldDoorNaam: string;
+  geldBijUserId: string;
+  geldBijNaam: string;
   status: FinancieelStatus;
   notities: string;
-  
 };
 
 interface Props {
@@ -69,6 +71,7 @@ function leegFormulier(valuta: FinancieelValuta = "EUR"): FormState {
     omschrijving: "",
     bedrag: "",
     valuta,
+    wisselkoers: "",
     categorie: "",
     referentie: "",
     klantNaam: "",
@@ -77,6 +80,8 @@ function leegFormulier(valuta: FinancieelValuta = "EUR"): FormState {
     bank: "",
     afgehandeldDoorUserId: "",
     afgehandeldDoorNaam: "",
+    geldBijUserId: "",
+    geldBijNaam: "",
     status: "OPEN",
     notities: ""
   };
@@ -315,6 +320,10 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       omschrijving: post.omschrijving,
       bedrag: String(post.bedrag),
       valuta: normalizeValuta(post.valuta),
+      wisselkoers:
+        post.wisselkoers === null || post.wisselkoers === undefined
+          ? ""
+          : String(post.wisselkoers).replace(".", ","),
       categorie: post.categorie || "",
       referentie: post.referentie || "",
       klantNaam: post.klantNaam || "",
@@ -323,6 +332,8 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       bank: post.bank || "",
       afgehandeldDoorUserId: post.afgehandeldDoorUserId || "",
       afgehandeldDoorNaam: post.afgehandeldDoorNaam || "",
+      geldBijUserId: post.geldBijUserId || "",
+      geldBijNaam: post.geldBijNaam || "",
       status: post.status,
       notities: post.notities || ""
     });
@@ -349,6 +360,15 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       return;
     }
 
+    let wisselkoers: number | null = null;
+    if (form.wisselkoers.trim()) {
+      wisselkoers = Number(String(form.wisselkoers).replace(",", "."));
+      if (!Number.isFinite(wisselkoers) || wisselkoers < 0) {
+        setFout("Vul een geldige wisselkoers in (of laat leeg).");
+        return;
+      }
+    }
+
     let datumIso: string;
     try {
       datumIso = dateTimeLocalNaarIso(form.datum);
@@ -365,12 +385,17 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
     const wijze = form.betalingswijze || null;
     const medewerkerNaam =
       wijze === "OPGEHAALD" || !wijze ? medewerker?.name || handmatigeNaam : "";
+    const geldBijPersoon = form.geldBijUserId
+      ? team.find((u) => u.id === form.geldBijUserId)
+      : undefined;
+    const geldBijNaam = geldBijPersoon?.name || form.geldBijNaam.trim();
     const payload = {
       datum: datumIso,
       type: form.type,
       omschrijving: form.omschrijving.trim(),
       bedrag,
       valuta: normalizeValuta(form.valuta),
+      wisselkoers,
       categorie: form.categorie.trim(),
       referentie: form.referentie.trim(),
       klantNaam: (gekozen?.klantNaam || form.klantNaam).trim(),
@@ -380,6 +405,8 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       afgehandeldDoorNaam: medewerkerNaam,
       betalingswijze: wijze,
       bank: toontBank ? form.bank.trim() : "",
+      geldBijUserId: form.geldBijUserId || null,
+      geldBijNaam,
       status: form.status,
       notities: form.notities.trim()
     };
@@ -635,6 +662,16 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
               </select>
             </label>
             <label className="form-label">
+              Wisselkoers
+              <input
+                className="form-input"
+                inputMode="decimal"
+                placeholder="bijv. 40,5"
+                value={form.wisselkoers}
+                onChange={(e) => setForm({ ...form, wisselkoers: e.target.value })}
+              />
+            </label>
+            <label className="form-label">
               Status
               <select
                 className="form-input"
@@ -774,6 +811,56 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                 </datalist>
               </label>
             )}
+            <label className="form-label">
+              Bij wie is het geld?
+              <select
+                className="form-input"
+                value={form.geldBijUserId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  const u = medewerkerOpties.find((m) => m.id === id);
+                  setForm({
+                    ...form,
+                    geldBijUserId: id,
+                    geldBijNaam: u?.name || ""
+                  });
+                }}
+              >
+                <option value="">— Niet gekozen —</option>
+                {medewerkerOpties.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                    {!u.active ? " (inactief)" : ""}
+                    {u.role === "EIGENAAR" ? " · eigenaar" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="form-label">
+              Of typ een naam
+              <input
+                className="form-input"
+                list="financieel-geld-bij"
+                placeholder="Naam van de persoon"
+                value={form.geldBijNaam}
+                onChange={(e) => {
+                  const naam = e.target.value;
+                  const match = team.find(
+                    (u) => u.name.trim().toLowerCase() === naam.trim().toLowerCase()
+                  );
+                  setForm({
+                    ...form,
+                    geldBijNaam: naam,
+                    geldBijUserId: match?.id || ""
+                  });
+                }}
+              />
+              <datalist id="financieel-geld-bij">
+                {medewerkerOpties.map((u) => (
+                  <option key={u.id} value={u.name} />
+                ))}
+              </datalist>
+            </label>
             <label className="form-label financieel-span-2">
               {form.type === "INKOMST"
                 ? "Klant (betaler / nog te betalen)"
@@ -923,6 +1010,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                   <th>Klant</th>
                   <th>Dossier</th>
                   <th>Betaling</th>
+                  <th>Bij wie</th>
                   <th>Omschrijving</th>
                   <th>Categorie</th>
                   <th>Bedrag</th>
@@ -943,10 +1031,19 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                         {p.type === "INKOMST" ? "Inkomst" : "Uitgave"}
                       </span>
                     </td>
-                    <td>{normalizeValuta(p.valuta)}</td>
+                    <td>
+                      {normalizeValuta(p.valuta)}
+                      {p.wisselkoers != null && Number.isFinite(p.wisselkoers) && (
+                        <>
+                          <br />
+                          <span className="muted">koers {String(p.wisselkoers).replace(".", ",")}</span>
+                        </>
+                      )}
+                    </td>
                     <td>{p.klantNaam || "—"}</td>
                     <td>{dossierLabelVoorPost(p)}</td>
                     <td>{betalingsLabel(p) || "—"}</td>
+                    <td>{p.geldBijNaam || "—"}</td>
                     <td>
                       <div>{p.omschrijving}</div>
                       {p.referentie && <span className="muted">{p.referentie}</span>}

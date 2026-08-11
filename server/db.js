@@ -181,6 +181,9 @@ async function migrate() {
     alter table financiele_posten add column if not exists valuta text;
     alter table financiele_posten add column if not exists betalingswijze text;
     alter table financiele_posten add column if not exists bank text;
+    alter table financiele_posten add column if not exists geld_bij_user_id text;
+    alter table financiele_posten add column if not exists geld_bij_naam text;
+    alter table financiele_posten add column if not exists wisselkoers numeric(18,6);
     update financiele_posten set valuta = 'EUR' where valuta is null or valuta = '';
     alter table financiele_posten alter column valuta set default 'EUR';
     -- Check constraint (idempotent): bestaande constraint negeren als hij al bestaat.
