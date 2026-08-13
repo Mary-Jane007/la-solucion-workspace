@@ -34,7 +34,8 @@ import {
   opdrachtDossierLabel,
   SaldoCijfers,
   SURINAAME_BANKEN,
-  VALUTA_LABELS
+  VALUTA_LABELS,
+  typeLabel
 } from "../financieelUtils";
 import { groepeerPerKlant, statusLabel } from "../opdrachtenUtils";
 import { Opdracht } from "../types";
@@ -497,6 +498,12 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                   </span>
                 </div>
                 <div className="metric-badge">
+                  <span className="metric-label">Kasgeld</span>
+                  <span className="metric-value financieel-inkomst">
+                    {formatGeld(totalen.kasgeld, totalen.valuta)}
+                  </span>
+                </div>
+                <div className="metric-badge">
                   <span className="metric-label">Uitgaven</span>
                   <span className="metric-value financieel-uitgave">
                     {formatGeld(totalen.uitgaven, totalen.valuta)}
@@ -630,10 +637,18 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
               <select
                 className="form-input"
                 value={form.type}
-                onChange={(e) => setForm({ ...form, type: e.target.value as FinancieelType })}
+                onChange={(e) => {
+                  const type = e.target.value as FinancieelType;
+                  setForm({
+                    ...form,
+                    type,
+                    status: type === "KASGELD" ? "BETAALD" : form.status
+                  });
+                }}
               >
                 <option value="INKOMST">Inkomst</option>
                 <option value="UITGAVE">Uitgave</option>
+                <option value="KASGELD">Kasgeld (al in kas)</option>
               </select>
             </label>
             <label className="form-label">
@@ -677,8 +692,11 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                 className="form-input"
                 value={form.status}
                 onChange={(e) => setForm({ ...form, status: e.target.value as FinancieelStatus })}
+                disabled={form.type === "KASGELD"}
               >
-                {form.type === "INKOMST" ? (
+                {form.type === "KASGELD" ? (
+                  <option value="BETAALD">In kas</option>
+                ) : form.type === "INKOMST" ? (
                   <>
                     <option value="OPEN">Nog te betalen door klant</option>
                     <option value="BETAALD">Betaald door klant</option>
@@ -862,9 +880,11 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
               </datalist>
             </label>
             <label className="form-label financieel-span-2">
-              {form.type === "INKOMST"
-                ? "Klant (betaler / nog te betalen)"
-                : "Klant (ontvanger / nog uit te betalen)"}
+              {form.type === "KASGELD"
+                ? "Klant (optioneel)"
+                : form.type === "INKOMST"
+                  ? "Klant (betaler / nog te betalen)"
+                  : "Klant (ontvanger / nog uit te betalen)"}
               <select
                 className="form-input"
                 value={form.klantNaam}
@@ -992,6 +1012,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
             <option value="ALLE">Alles</option>
             <option value="INKOMST">Alleen inkomsten</option>
             <option value="UITGAVE">Alleen uitgaven</option>
+            <option value="KASGELD">Alleen kasgeld</option>
           </select>
         </div>
 
@@ -1025,10 +1046,12 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                     <td>
                       <span
                         className={
-                          p.type === "INKOMST" ? "financieel-pill inkomst" : "financieel-pill uitgave"
+                          p.type === "UITGAVE"
+                            ? "financieel-pill uitgave"
+                            : "financieel-pill inkomst"
                         }
                       >
-                        {p.type === "INKOMST" ? "Inkomst" : "Uitgave"}
+                        {typeLabel(p.type)}
                       </span>
                     </td>
                     <td>
@@ -1049,17 +1072,19 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                       {p.referentie && <span className="muted">{p.referentie}</span>}
                     </td>
                     <td>{p.categorie || "—"}</td>
-                    <td className={p.type === "INKOMST" ? "financieel-inkomst" : "financieel-uitgave"}>
+                    <td className={p.type === "UITGAVE" ? "financieel-uitgave" : "financieel-inkomst"}>
                       {formatGeld(p.bedrag, p.valuta)}
                     </td>
                     <td>
-                      {p.status === "BETAALD"
-                        ? p.type === "INKOMST"
-                          ? "Betaald door klant"
-                          : "Uitbetaald"
-                        : p.type === "INKOMST"
-                          ? "Klant moet nog betalen"
-                          : "Wij moeten nog betalen"}
+                      {p.type === "KASGELD"
+                        ? "In kas"
+                        : p.status === "BETAALD"
+                          ? p.type === "INKOMST"
+                            ? "Betaald door klant"
+                            : "Uitbetaald"
+                          : p.type === "INKOMST"
+                            ? "Klant moet nog betalen"
+                            : "Wij moeten nog betalen"}
                     </td>
                     <td className="financieel-row-actions">
                       <button type="button" className="btn-secondary" onClick={() => startBewerk(p)}>

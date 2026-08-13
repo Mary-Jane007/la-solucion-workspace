@@ -729,7 +729,7 @@ app.get("/api/admin/financieel", authRequired, requireOwner, async (req, res) =>
 
 const financieelSchema = z.object({
   datum: z.string().min(10),
-  type: z.enum(["INKOMST", "UITGAVE"]),
+  type: z.enum(["INKOMST", "UITGAVE", "KASGELD"]),
   omschrijving: z.string().min(1),
   bedrag: z.number().finite().nonnegative(),
   valuta: z.enum(["EUR", "USD", "SRD", "XCG"]),

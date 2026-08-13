@@ -72,6 +72,7 @@ export type DossierSaldo = SaldoCijfers & {
 export type FinancieelTotalen = {
   valuta: FinancieelValuta;
   inkomsten: number;
+  kasgeld: number;
   uitgaven: number;
   saldo: number;
   teOntvangen: number;
@@ -164,6 +165,8 @@ function leegSaldo(): SaldoCijfers {
 
 function telPostOp(entry: SaldoCijfers, p: FinancieelPost): SaldoCijfers {
   const next = { ...entry };
+  // Kasgeld is geen klantbetaling — telt niet mee in klant-/dossiersaldo.
+  if (p.type === "KASGELD") return next;
   if (p.type === "INKOMST") {
     if (p.status === "OPEN") next.teOntvangen += p.bedrag;
     else next.ontvangen += p.bedrag;
@@ -175,12 +178,20 @@ function telPostOp(entry: SaldoCijfers, p: FinancieelPost): SaldoCijfers {
   return next;
 }
 
+export function typeLabel(type: FinancieelPost["type"] | string): string {
+  if (type === "INKOMST") return "Inkomst";
+  if (type === "UITGAVE") return "Uitgave";
+  if (type === "KASGELD") return "Kasgeld";
+  return String(type || "");
+}
+
 export function berekenTotalenPerValuta(posten: FinancieelPost[]): FinancieelTotalen[] {
   const map = new Map<FinancieelValuta, FinancieelTotalen>();
   for (const code of FINANCIEEL_VALUTAS) {
     map.set(code, {
       valuta: code,
       inkomsten: 0,
+      kasgeld: 0,
       uitgaven: 0,
       saldo: 0,
       teOntvangen: 0,
@@ -194,6 +205,8 @@ export function berekenTotalenPerValuta(posten: FinancieelPost[]): FinancieelTot
     if (p.type === "INKOMST") {
       t.inkomsten += p.bedrag;
       if (p.status === "OPEN") t.teOntvangen += p.bedrag;
+    } else if (p.type === "KASGELD") {
+      t.kasgeld += p.bedrag;
     } else {
       t.uitgaven += p.bedrag;
       if (p.status === "OPEN") t.teBetalen += p.bedrag;
@@ -201,11 +214,16 @@ export function berekenTotalenPerValuta(posten: FinancieelPost[]): FinancieelTot
   }
 
   for (const t of map.values()) {
-    t.saldo = t.inkomsten - t.uitgaven;
+    t.saldo = t.inkomsten + t.kasgeld - t.uitgaven;
   }
 
   return FINANCIEEL_VALUTAS.map((v) => map.get(v)!).filter(
-    (t) => t.inkomsten > 0 || t.uitgaven > 0 || t.teOntvangen > 0 || t.teBetalen > 0
+    (t) =>
+      t.inkomsten > 0 ||
+      t.kasgeld > 0 ||
+      t.uitgaven > 0 ||
+      t.teOntvangen > 0 ||
+      t.teBetalen > 0
   );
 }
 
@@ -284,6 +302,7 @@ export function berekenDossierSaldi(
 }
 
 export function postStatusLabel(p: FinancieelPost): string {
+  if (p.type === "KASGELD") return "In kas";
   if (p.status === "BETAALD") {
     return p.type === "INKOMST" ? "Betaald door klant" : "Uitbetaald";
   }
@@ -373,7 +392,7 @@ export function exportFinancieelPostenCsv(
   ];
   const rows = posten.map((p) => [
     p.datum.includes("T") ? formatDatumTijd(p.datum) : p.datum.slice(0, 10),
-    p.type === "INKOMST" ? "Inkomst" : "Uitgave",
+    typeLabel(p.type),
     normalizeValuta(p.valuta),
     p.wisselkoers == null ? "" : String(p.wisselkoers).replace(".", ","),
     p.klantNaam || "",
@@ -501,7 +520,7 @@ export function exportFinancieelPdf(
     ],
     posten.map((p) => [
       formatDatumTijd(p.datum),
-      p.type === "INKOMST" ? "Inkomst" : "Uitgave",
+      typeLabel(p.type),
       normalizeValuta(p.valuta),
       p.wisselkoers == null ? "—" : String(p.wisselkoers).replace(".", ","),
       p.klantNaam || "—",

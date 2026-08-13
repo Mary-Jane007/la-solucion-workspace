@@ -160,7 +160,7 @@ async function migrate() {
     create table if not exists financiele_posten (
       id text primary key,
       datum timestamptz not null,
-      type text not null check (type in ('INKOMST','UITGAVE')),
+      type text not null check (type in ('INKOMST','UITGAVE','KASGELD')),
       omschrijving text not null,
       bedrag numeric(12,2) not null check (bedrag >= 0),
       valuta text not null default 'EUR',
@@ -186,6 +186,11 @@ async function migrate() {
     alter table financiele_posten add column if not exists wisselkoers numeric(18,6);
     update financiele_posten set valuta = 'EUR' where valuta is null or valuta = '';
     alter table financiele_posten alter column valuta set default 'EUR';
+    -- Type KASGELD toestaan (bestaande check vervangen).
+    alter table financiele_posten drop constraint if exists financiele_posten_type_check;
+    alter table financiele_posten
+      add constraint financiele_posten_type_check
+      check (type in ('INKOMST','UITGAVE','KASGELD'));
     -- Check constraint (idempotent): bestaande constraint negeren als hij al bestaat.
     do $$
     begin
