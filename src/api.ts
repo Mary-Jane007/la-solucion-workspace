@@ -131,6 +131,7 @@ export interface FinancieelGebruik {
   soort: FinancieelGebruikSoort;
   bedrag: number;
   waaraan: string;
+  bank?: string;
   toelichting?: string;
 }
 

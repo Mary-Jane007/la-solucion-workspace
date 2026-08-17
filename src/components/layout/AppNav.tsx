@@ -13,6 +13,8 @@ interface Props {
   onNieuweOpdracht: () => void;
   onThemaWissel: () => void;
   onLogout: () => void;
+  onVernieuw?: () => void;
+  vernieuwen?: boolean;
 }
 
 type NavItem = {
@@ -79,7 +81,9 @@ export function AppNav({
   onNavigeer,
   onNieuweOpdracht,
   onThemaWissel,
-  onLogout
+  onLogout,
+  onVernieuw,
+  vernieuwen = false
 }: Props) {
   const groepen = NAV_GROEPEN.filter((g) => !g.alleenEigenaar || isEigenaar);
 
@@ -126,6 +130,16 @@ export function AppNav({
       })}
 
       <div className="sidebar-nav-utilities">
+        {onVernieuw && (
+          <button
+            type="button"
+            className="sidebar-nav-utility"
+            onClick={onVernieuw}
+            disabled={vernieuwen}
+          >
+            {vernieuwen ? "Bezig met vernieuwen…" : "Vernieuwen"}
+          </button>
+        )}
         <button
           type="button"
           className="sidebar-nav-utility"

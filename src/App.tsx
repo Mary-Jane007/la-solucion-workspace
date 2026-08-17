@@ -21,7 +21,7 @@ import { ContactPagina } from "./components/ContactPagina";
 import { AppLayout } from "./components/layout/AppLayout";
 import { Gebruiker, Opdracht, Rol } from "./types";
 import { clearToken, fetchMe, fetchOpdrachten, fetchPrullenbak, getToken } from "./api";
-import { AppPagina, isEigenaarPagina } from "./appPages";
+import { AppPagina, APP_VERNIEUW_EVENT, isEigenaarPagina } from "./appPages";
 import { getOpgeslagenThema, pasThemaToe, Thema, wisselThema } from "./theme";
 import { useOpdrachtenWerkruimte } from "./hooks/useOpdrachtenWerkruimte";
 import { badgeIdsVoorPagina } from "./badgeItems";
@@ -133,6 +133,7 @@ function IngelogdeApp({
       const prullenbak = await fetchPrullenbak();
       onPrullenbakIdsWijzig(prullenbak.map((o) => o.id));
     }
+    window.dispatchEvent(new Event(APP_VERNIEUW_EVENT));
   };
 
   return (
@@ -146,6 +147,7 @@ function IngelogdeApp({
       onNieuweOpdracht={handleNieuweOpdracht}
       onThemaWissel={handleThemaWissel}
       onLogout={onLogout}
+      onVernieuw={vernieuwOpdrachten}
     >
       {huidigePagina === "home" && (
         <Dashboard

@@ -363,7 +363,7 @@ export function OpdrachtDialoog({
 
           <footer className="modal-footer">
             {fout && (
-              <span className="help-text" style={{ color: "#fecaca", marginRight: "auto" }}>
+              <span className="help-text page-error" style={{ marginRight: "auto" }}>
                 {fout}
               </span>
             )}

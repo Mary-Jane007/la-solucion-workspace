@@ -756,6 +756,7 @@ const financieelSchema = z.object({
         soort: z.enum(["AF", "ERBIJ"]),
         bedrag: z.number().finite().positive(),
         waaraan: z.string().optional().nullable(),
+        bank: z.string().optional().nullable(),
         toelichting: z.string().optional().nullable()
       })
     )
@@ -899,8 +900,35 @@ async function startServer() {
         "Map 'dist' ontbreekt. Voer eerst 'npm run build' uit (maakt de frontend-build aan)."
       );
     }
-    app.use(express.static(distPath));
-    app.get("*", (_req, res) => {
+    app.use(
+      express.static(distPath, {
+        index: false,
+        etag: true,
+        setHeaders(res, filePath) {
+          const name = path.basename(filePath);
+          if (
+            name === "index.html" ||
+            name === "version.json" ||
+            name === "manifest.webmanifest"
+          ) {
+            res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+            res.setHeader("Pragma", "no-cache");
+            res.setHeader("Expires", "0");
+            return;
+          }
+          if (/\.[a-f0-9]{8,}\./i.test(name)) {
+            res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+            return;
+          }
+          res.setHeader("Cache-Control", "no-cache");
+        }
+      })
+    );
+    app.get("*", (req, res, next) => {
+      if (req.path.startsWith("/api")) return next();
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
       res.sendFile(path.join(distPath, "index.html"));
     });
   }

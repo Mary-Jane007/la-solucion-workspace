@@ -26,6 +26,9 @@ import {
   FINANCIEEL_VALUTAS,
   financieelPostMatchtZoekterm,
   formatGeld,
+  GEBRUIK_BANKSTORTING,
+  isBankstorting,
+  bankUitWaaraan,
   KlantSaldo,
   klantSaldoSamenvatting,
   naarDateTimeLocal,
@@ -71,6 +74,7 @@ import {
   vorigePeriode
 } from "../financieelDashboardUtils";
 import { groepeerPerKlant, statusLabel } from "../opdrachtenUtils";
+import { APP_VERNIEUW_EVENT } from "../appPages";
 import { Opdracht } from "../types";
 import {
   AnalysesPanel,
@@ -95,6 +99,7 @@ type GebruikFormRij = {
   soort: FinancieelGebruikSoort;
   bedrag: string;
   waaraan: string;
+  bank: string;
   toelichting: string;
 };
 
@@ -140,6 +145,7 @@ function legeGebruikRij(): GebruikFormRij {
     soort: "AF",
     bedrag: "",
     waaraan: "",
+    bank: "",
     toelichting: ""
   };
 }
@@ -316,6 +322,13 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
     void laad();
   }, []);
   useEffect(() => {
+    const onVernieuw = () => {
+      void laad();
+    };
+    window.addEventListener(APP_VERNIEUW_EVENT, onVernieuw);
+    return () => window.removeEventListener(APP_VERNIEUW_EVENT, onVernieuw);
+  }, []);
+  useEffect(() => {
     setDashboardValuta(filterValuta);
   }, [filterValuta]);
 
@@ -462,7 +475,8 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
         datum: naarDateTimeLocal(g.datum),
         soort: g.soort,
         bedrag: String(g.bedrag).replace(".", ","),
-        waaraan: g.waaraan || "",
+        waaraan: isBankstorting(g.waaraan) ? GEBRUIK_BANKSTORTING : g.waaraan || "",
+        bank: g.bank || bankUitWaaraan(g.waaraan),
         toelichting: g.toelichting || ""
       }))
     });
@@ -537,14 +551,19 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       soort: FinancieelGebruikSoort;
       bedrag: number;
       waaraan: string;
+      bank: string;
       toelichting: string;
     }> = [];
     for (const rij of form.gebruikingen) {
-      const heeftInhoud = rij.bedrag.trim() || rij.waaraan.trim() || rij.toelichting.trim();
+      const heeftInhoud = rij.bedrag.trim() || rij.waaraan.trim() || rij.bank.trim() || rij.toelichting.trim();
       if (!heeftInhoud) continue;
       const gebruikBedrag = Number(String(rij.bedrag).replace(",", "."));
       if (!Number.isFinite(gebruikBedrag) || gebruikBedrag <= 0) {
         setFout("Vul bij elke gebruiksregel een geldig bedrag in (of verwijder de lege regel).");
+        return;
+      }
+      if (isBankstorting(rij.waaraan) && !rij.bank.trim()) {
+        setFout("Kies bij een bankstorting welke bank.");
         return;
       }
       let gebruikDatum: string;
@@ -559,7 +578,8 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
         datum: gebruikDatum,
         soort: rij.soort,
         bedrag: gebruikBedrag,
-        waaraan: rij.waaraan.trim(),
+        waaraan: isBankstorting(rij.waaraan) ? GEBRUIK_BANKSTORTING : rij.waaraan.trim(),
+        bank: isBankstorting(rij.waaraan) ? rij.bank.trim() : "",
         toelichting: rij.toelichting.trim()
       });
     }
@@ -976,18 +996,75 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                       </label>
                       <label className="form-label">
                         {rij.soort === "AF" ? "Waaraan besteed?" : "Waar kwam het extra vandaan?"}
-                        <input
+                        <select
                           className="form-input"
-                          list="financieel-gebruik-waaraan"
-                          placeholder={rij.soort === "AF" ? "Taxi, wisselgeld, eten..." : "Fooi, extra kas..."}
-                          value={rij.waaraan}
+                          value={
+                            isBankstorting(rij.waaraan)
+                              ? GEBRUIK_BANKSTORTING
+                              : (UITGAVE_CATEGORIEEN as readonly string[]).includes(rij.waaraan)
+                                ? rij.waaraan
+                              : rij.waaraan
+                                  ? "__anders__"
+                                  : ""
+                          }
                           onChange={(e) => {
+                            const gekozen = e.target.value;
                             const gebruikingen = form.gebruikingen.slice();
-                            gebruikingen[index] = { ...rij, waaraan: e.target.value };
+                            if (gekozen === GEBRUIK_BANKSTORTING) {
+                              gebruikingen[index] = { ...rij, waaraan: GEBRUIK_BANKSTORTING };
+                            } else if (gekozen === "__anders__") {
+                              gebruikingen[index] = { ...rij, waaraan: "Anders", bank: "" };
+                            } else {
+                              gebruikingen[index] = { ...rij, waaraan: gekozen, bank: "" };
+                            }
                             setForm({ ...form, gebruikingen });
                           }}
-                        />
+                        >
+                          <option value="">— Kies —</option>
+                          <option value={GEBRUIK_BANKSTORTING}>Bankstorting</option>
+                          {UITGAVE_CATEGORIEEN.map((categorie) => (
+                            <option key={categorie} value={categorie}>{categorie}</option>
+                          ))}
+                          <option value="__anders__">Anders (zelf invullen)</option>
+                        </select>
                       </label>
+                      {((UITGAVE_CATEGORIEEN as readonly string[]).includes(rij.waaraan) || isBankstorting(rij.waaraan) || !rij.waaraan
+                        ? false
+                        : true) && (
+                        <label className="form-label">
+                          Zelf invullen
+                          <input
+                            className="form-input"
+                            list="financieel-gebruik-waaraan"
+                            placeholder={rij.soort === "AF" ? "Taxi, wisselgeld, eten..." : "Fooi, extra kas..."}
+                            value={rij.waaraan}
+                            onChange={(e) => {
+                              const gebruikingen = form.gebruikingen.slice();
+                              gebruikingen[index] = { ...rij, waaraan: e.target.value, bank: "" };
+                              setForm({ ...form, gebruikingen });
+                            }}
+                          />
+                        </label>
+                      )}
+                      {isBankstorting(rij.waaraan) && (
+                        <label className="form-label">
+                          Welke bank?
+                          <select
+                            className="form-input"
+                            value={rij.bank}
+                            onChange={(e) => {
+                              const gebruikingen = form.gebruikingen.slice();
+                              gebruikingen[index] = { ...rij, bank: e.target.value };
+                              setForm({ ...form, gebruikingen });
+                            }}
+                          >
+                            <option value="">— Kies bank —</option>
+                            {SURINAAME_BANKEN.map((bank) => (
+                              <option key={bank} value={bank}>{bank}</option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
                       <label className="form-label">
                         Wanneer
                         <input
@@ -1028,6 +1105,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                     </div>
                   ))}
                   <datalist id="financieel-gebruik-waaraan">
+                    <option value={GEBRUIK_BANKSTORTING} />
                     {UITGAVE_CATEGORIEEN.map((categorie) => (
                       <option key={categorie} value={categorie} />
                     ))}

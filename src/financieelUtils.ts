@@ -122,6 +122,27 @@ function geldRondCents(bedrag: number): number {
   return Math.round((Number(bedrag) || 0) * 100) / 100;
 }
 
+export const GEBRUIK_BANKSTORTING = "Bankstorting";
+
+export function isBankstorting(waaraan?: string | null): boolean {
+  return (waaraan || "").trim().toLowerCase().startsWith("bankstorting");
+}
+
+export function bankUitWaaraan(waaraan?: string | null): string {
+  const tekst = (waaraan || "").trim();
+  if (!isBankstorting(tekst)) return "";
+  const delen = tekst.split("·").map((d) => d.trim());
+  return delen.length > 1 ? delen.slice(1).join(" · ") : "";
+}
+
+export function gebruikWaaraanTekst(g: { waaraan?: string; bank?: string }): string {
+  const waar = (g.waaraan || "").trim();
+  const bank = (g.bank || "").trim() || bankUitWaaraan(waar);
+  if (isBankstorting(waar) && bank) return `${GEBRUIK_BANKSTORTING} · ${bank}`;
+  if (isBankstorting(waar)) return GEBRUIK_BANKSTORTING;
+  return waar;
+}
+
 export function nieuweGebruikId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
@@ -145,6 +166,7 @@ export function normaliseerGebruikingen(waarde: unknown): FinancieelGebruik[] {
       soort,
       bedrag: geldRondCents(bedrag),
       waaraan: String(item.waaraan || "").trim(),
+      bank: String(item.bank || "").trim() || bankUitWaaraan(String(item.waaraan || "")),
       toelichting: String(item.toelichting || "").trim()
     });
   }
@@ -177,9 +199,9 @@ export function gebruikingenSamenvatting(p: { gebruikingen?: FinancieelGebruik[]
   if (items.length === 0) return "";
   return items
     .map((g) => {
+      const waar = gebruikWaaraanTekst(g);
       const richting = g.soort === "ERBIJ" ? "erbij" : "af";
-      const waar = g.waaraan ? ` · ${g.waaraan}` : "";
-      return `${richting} ${g.bedrag}${waar}`;
+      return waar ? `${richting} ${g.bedrag} · ${waar}` : `${richting} ${g.bedrag}`;
     })
     .join("; ");
 }

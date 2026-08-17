@@ -8,6 +8,7 @@ import {
   geldNaarPersoon,
   geldVanPersoon,
   gebruikingenSamenvatting,
+  gebruikWaaraanTekst,
   normaliseerGebruikingen,
   normalizeValuta,
   postStatusLabel,
@@ -1485,7 +1486,7 @@ function followOpsVanPost(p: FinancieelPost, valuta: FinancieelValuta): FollowOp
   for (const g of normaliseerGebruikingen(p.gebruikingen)) {
     const at = new Date(g.datum);
     const wanneer = Number.isNaN(at.getTime()) ? postDatum(p) : at;
-    const waar = g.waaraan || g.toelichting || p.omschrijving;
+    const waar = gebruikWaaraanTekst(g) || g.toelichting || p.omschrijving;
     if (g.soort === "AF") {
       ops.push({
         at: wanneer,

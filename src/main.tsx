@@ -3,12 +3,19 @@ import ReactDOM from "react-dom/client";
 import { App } from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { getOpgeslagenThema, pasThemaToe } from "./theme";
+import { startAppVersieBewaking } from "./appVersion";
 import "./styles.css";
 
 try {
   pasThemaToe(getOpgeslagenThema());
 } catch {
   // thema mag opstarten nooit blokkeren
+}
+
+try {
+  startAppVersieBewaking();
+} catch {
+  // versiecheck mag opstarten nooit blokkeren
 }
 
 const rootEl = document.getElementById("root");

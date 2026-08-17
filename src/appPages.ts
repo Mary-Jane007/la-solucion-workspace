@@ -1,3 +1,5 @@
+export const APP_VERNIEUW_EVENT = "la-solucion-vernieuw";
+
 export type AppPagina =
   | "home"
   | "bord"
