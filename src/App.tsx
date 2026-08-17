@@ -12,6 +12,7 @@ import { DocumentenPagina } from "./components/DocumentenPagina";
 import { ActiviteitPagina } from "./components/ActiviteitPagina";
 import { PrullenbakPagina } from "./components/PrullenbakPagina";
 import { FinancieleAdministratiePagina } from "./components/FinancieleAdministratiePagina";
+import { MedewerkerFinancieelPagina } from "./components/MedewerkerFinancieelPagina";
 import { TeamPagina } from "./components/TeamPagina";
 import { ExportPagina } from "./components/ExportPagina";
 import { ProfielPagina } from "./components/ProfielPagina";
@@ -20,8 +21,8 @@ import { HelpPagina } from "./components/HelpPagina";
 import { ContactPagina } from "./components/ContactPagina";
 import { AppLayout } from "./components/layout/AppLayout";
 import { Gebruiker, Opdracht, Rol } from "./types";
-import { clearToken, fetchMe, fetchOpdrachten, fetchPrullenbak, getToken } from "./api";
-import { AppPagina, APP_VERNIEUW_EVENT, isEigenaarPagina } from "./appPages";
+import { clearToken, fetchFinancieelInzendingen, fetchMe, fetchOpdrachten, fetchPrullenbak, getToken } from "./api";
+import { AppPagina, APP_VERNIEUW_EVENT, FINANCIEEL_INZENDING_EVENT, isEigenaarPagina } from "./appPages";
 import { getOpgeslagenThema, pasThemaToe, Thema, wisselThema } from "./theme";
 import { useOpdrachtenWerkruimte } from "./hooks/useOpdrachtenWerkruimte";
 import { badgeIdsVoorPagina } from "./badgeItems";
@@ -62,6 +63,7 @@ function IngelogdeApp({
 }) {
   const [huidigePagina, setHuidigePagina] = useState<AppPagina>("home");
   const [badgeGezienTick, setBadgeGezienTick] = useState(0);
+  const [financieelOngelezen, setFinancieelOngelezen] = useState(0);
   const isEigenaar = gebruiker.rol === Rol.Eigenaar;
 
   const werkruimte = useOpdrachtenWerkruimte({
@@ -97,16 +99,50 @@ function IngelogdeApp({
         leesGezieneIds(lijst, gebruiker.id)
       );
     }
+    if (isEigenaar && financieelOngelezen > 0) {
+      badges.financieel = financieelOngelezen;
+    }
     return badges;
-  }, [badgeContext, gebruiker.id, badgeGezienTick]);
+  }, [badgeContext, gebruiker.id, badgeGezienTick, isEigenaar, financieelOngelezen]);
+
+  useEffect(() => {
+    if (!isEigenaar) {
+      setFinancieelOngelezen(0);
+      return;
+    }
+    let stop = false;
+    const laadOngelezen = async () => {
+      try {
+        const data = await fetchFinancieelInzendingen();
+        if (!stop) setFinancieelOngelezen(data.ongelezen);
+      } catch {
+        /* badge is extra; fout hier niet blokkeren */
+      }
+    };
+    void laadOngelezen();
+    const onVernieuw = () => void laadOngelezen();
+    window.addEventListener(APP_VERNIEUW_EVENT, onVernieuw);
+    window.addEventListener(FINANCIEEL_INZENDING_EVENT, onVernieuw);
+    const interval = window.setInterval(laadOngelezen, 30000);
+    return () => {
+      stop = true;
+      window.clearInterval(interval);
+      window.removeEventListener(APP_VERNIEUW_EVENT, onVernieuw);
+      window.removeEventListener(FINANCIEEL_INZENDING_EVENT, onVernieuw);
+    };
+  }, [isEigenaar]);
 
   const handleBadgeGezien = useCallback(() => {
     setBadgeGezienTick((n) => n + 1);
   }, []);
 
   const handleNavigeer = (pagina: AppPagina) => {
+    if (pagina === "kas-doorgeven" && isEigenaar) {
+      setHuidigePagina("financieel");
+      return;
+    }
     if (isEigenaarPagina(pagina) && !isEigenaar) {
-      setHuidigePagina("home");
+      setHuidigePagina(pagina === "financieel" ? "kas-doorgeven" : "home");
       return;
     }
     if ((BADGE_PAGINAS as string[]).includes(pagina)) {
@@ -156,6 +192,7 @@ function IngelogdeApp({
           userId={gebruiker.id}
           onNieuweOpdracht={handleNieuweOpdracht}
           onGezien={handleBadgeGezien}
+          onNavigeer={handleNavigeer}
         />
       )}
       {huidigePagina === "bord" && (
@@ -185,7 +222,9 @@ function IngelogdeApp({
         <MeldingenPagina
           werkruimte={werkruimte}
           userId={gebruiker.id}
+          isEigenaar={isEigenaar}
           onGezien={handleBadgeGezien}
+          onNavigeer={handleNavigeer}
         />
       )}
       {huidigePagina === "deadlines" && (
@@ -231,6 +270,9 @@ function IngelogdeApp({
       {huidigePagina === "team" && isEigenaar && <TeamPagina />}
       {huidigePagina === "financieel" && isEigenaar && (
         <FinancieleAdministratiePagina opdrachten={opdrachten} />
+      )}
+      {huidigePagina === "kas-doorgeven" && !isEigenaar && (
+        <MedewerkerFinancieelPagina gebruiker={gebruiker} />
       )}
       {huidigePagina === "export" && isEigenaar && <ExportPagina werkruimte={werkruimte} />}
       {huidigePagina === "profiel" && <ProfielPagina gebruiker={gebruiker} />}

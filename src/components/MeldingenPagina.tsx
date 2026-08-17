@@ -3,11 +3,15 @@ import { berekenMeldingen } from "../opdrachtenUtils";
 import { OpdrachtenWerkruimte } from "../hooks/useOpdrachtenWerkruimte";
 import { useLijstGezienStatus } from "../hooks/useLijstGezienStatus";
 import { meldingenItemIds } from "../badgeItems";
+import { AppPagina } from "../appPages";
+import { EigenaarFinancieelNotificaties } from "./EigenaarFinancieelNotificaties";
 
 interface Props {
   werkruimte: OpdrachtenWerkruimte;
   userId: string;
+  isEigenaar?: boolean;
   onGezien: () => void;
+  onNavigeer?: (pagina: AppPagina) => void;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -17,7 +21,13 @@ const TYPE_LABELS: Record<string, string> = {
   "te-laat": "Te laat"
 };
 
-export function MeldingenPagina({ werkruimte, userId, onGezien }: Props) {
+export function MeldingenPagina({
+  werkruimte,
+  userId,
+  isEigenaar = false,
+  onGezien,
+  onNavigeer
+}: Props) {
   const { zichtbareOpdrachten, openOpdracht } = werkruimte;
   const meldingen = useMemo(() => berekenMeldingen(zichtbareOpdrachten), [zichtbareOpdrachten]);
   const itemIds = useMemo(() => meldingenItemIds(zichtbareOpdrachten), [zichtbareOpdrachten]);
@@ -29,7 +39,14 @@ export function MeldingenPagina({ werkruimte, userId, onGezien }: Props) {
   );
 
   return (
-    <section className="card page-card">
+    <div className="info-stack">
+      {isEigenaar && onNavigeer && (
+        <EigenaarFinancieelNotificaties
+          onOpenFinancieel={() => onNavigeer("financieel")}
+          toonLeeg
+        />
+      )}
+      <section className="card page-card">
       <div className="section-header">
         <h2>Actie vereist</h2>
         <p className="muted">{meldingen.length} melding{meldingen.length === 1 ? "" : "en"}.</p>
@@ -64,5 +81,6 @@ export function MeldingenPagina({ werkruimte, userId, onGezien }: Props) {
         </ul>
       )}
     </section>
+    </div>
   );
 }

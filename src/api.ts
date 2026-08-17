@@ -15,6 +15,21 @@ async function apiFetch(path: string, init?: RequestInit) {
   return fetch(path, { cache: "no-store", ...init, headers });
 }
 
+async function readApiJson(res: Response): Promise<Record<string, unknown>> {
+  const text = await res.text();
+  const trimmed = text.trim();
+  if (!trimmed || trimmed.startsWith("<")) {
+    throw new Error(
+      "De server is niet bijgewerkt of niet bereikbaar. Vernieuw de pagina en probeer het opnieuw."
+    );
+  }
+  try {
+    return JSON.parse(trimmed) as Record<string, unknown>;
+  } catch {
+    throw new Error("Ongeldig antwoord van de server.");
+  }
+}
+
 export async function fetchMe(): Promise<Gebruiker> {
   const res = await apiFetch("/api/auth/me");
   const data = await res.json();
@@ -204,5 +219,70 @@ export async function deleteFinancieelPost(id: string): Promise<void> {
     const data = await res.json().catch(() => ({}));
     throw new Error((data as { error?: string }).error || "Kon financiële post niet verwijderen.");
   }
+}
+
+export type FinancieelInzendingStatus = "NIEUW" | "GEZIEN" | "VERWERKT";
+
+export interface FinancieelInzending {
+  id: string;
+  createdAt: string;
+  vanUserId: string;
+  vanNaam: string;
+  datum: string;
+  type: FinancieelType;
+  omschrijving: string;
+  bedrag: number;
+  valuta: FinancieelValuta;
+  wisselkoers?: number | null;
+  categorie?: string;
+  referentie?: string;
+  klantNaam?: string;
+  betalingswijze?: FinancieelBetalingswijze | null;
+  bank?: string;
+  geldBijNaam?: string;
+  geldVanNaam?: string;
+  waaraan?: string;
+  notities?: string;
+  status: FinancieelInzendingStatus;
+}
+
+export async function fetchFinancieelInzendingen(): Promise<{
+  inzendingen: FinancieelInzending[];
+  ongelezen: number;
+}> {
+  const res = await apiFetch("/api/financieel-inzendingen");
+  const data = await readApiJson(res);
+  if (!res.ok) throw new Error(String(data.error || "Kon financiële inzendingen niet ophalen."));
+  return {
+    inzendingen: (data.inzendingen || []) as FinancieelInzending[],
+    ongelezen: Number(data.ongelezen) || 0
+  };
+}
+
+export async function createFinancieelInzending(
+  inzending: Omit<FinancieelInzending, "id" | "createdAt" | "vanUserId" | "vanNaam" | "status">
+): Promise<FinancieelInzending> {
+  const res = await apiFetch("/api/financieel-inzendingen", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(inzending)
+  });
+  const data = await readApiJson(res);
+  if (!res.ok) throw new Error(String(data.error || "Kon financiële info niet versturen."));
+  return data.inzending as FinancieelInzending;
+}
+
+export async function updateFinancieelInzendingStatus(
+  id: string,
+  status: FinancieelInzendingStatus
+): Promise<FinancieelInzending> {
+  const res = await apiFetch(`/api/financieel-inzendingen/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status })
+  });
+  const data = await readApiJson(res);
+  if (!res.ok) throw new Error(String(data.error || "Kon inzending niet bijwerken."));
+  return data.inzending as FinancieelInzending;
 }
 

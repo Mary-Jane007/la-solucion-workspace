@@ -861,6 +861,8 @@ export function RapportagesPanel({
   onExportPosten,
   onExportKlant,
   onExportDossier,
+  onExportExcel,
+  onExportWord,
   onExportPdf,
   disabled
 }: {
@@ -870,6 +872,8 @@ export function RapportagesPanel({
   onExportPosten: () => void;
   onExportKlant: () => void;
   onExportDossier: () => void;
+  onExportExcel: () => void;
+  onExportWord: () => void;
   onExportPdf: () => void;
   disabled: boolean;
 }) {
@@ -878,20 +882,40 @@ export function RapportagesPanel({
       <section className="card page-card">
         <div className="section-header">
           <h2>Rapportages & export</h2>
-          <p className="muted">CSV/Excel-vriendelijk en PDF via printen.</p>
+          <p className="muted">
+            Volledig financieel dossier: overzicht, dagboek, alle vulvakken en gebruiksregels.
+          </p>
         </div>
         <div className="financieel-export-actions">
-          <button type="button" className="btn-primary" disabled={disabled} onClick={onExportPosten}>
-            CSV / Excel posten
+          <button type="button" className="btn-primary" disabled={disabled} onClick={onExportExcel}>
+            Excel (volledig)
+          </button>
+          <button type="button" className="btn-primary" disabled={disabled} onClick={onExportWord}>
+            Word (volledig)
+          </button>
+          <button type="button" className="btn-primary" disabled={disabled} onClick={onExportPdf}>
+            PDF / afdrukken
+          </button>
+        </div>
+        <p className="muted" style={{ marginTop: 10 }}>
+          Excel opent als werkboek met tabbladen. Word als document. Bij PDF: kies in het
+          printdialoog “Opslaan als PDF”.
+        </p>
+      </section>
+      <section className="card page-card">
+        <div className="section-header">
+          <h2>Losse tabellen (CSV)</h2>
+          <p className="muted">Alleen één tabel, handig om verder te filteren.</p>
+        </div>
+        <div className="financieel-export-actions">
+          <button type="button" className="btn-secondary" disabled={disabled} onClick={onExportPosten}>
+            CSV dagboek
           </button>
           <button type="button" className="btn-secondary" disabled={disabled} onClick={onExportKlant}>
             CSV klantbetalingen
           </button>
           <button type="button" className="btn-secondary" disabled={disabled} onClick={onExportDossier}>
             CSV dossiers
-          </button>
-          <button type="button" className="btn-secondary" disabled={disabled} onClick={onExportPdf}>
-            PDF / afdrukken
           </button>
         </div>
       </section>

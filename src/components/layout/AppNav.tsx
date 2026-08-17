@@ -2,7 +2,8 @@ import { AppPagina } from "../../appPages";
 import { BadgeLijst } from "../../meldingenStatus";
 import { Thema } from "../../theme";
 
-export type NavBadges = Partial<Record<BadgeLijst, number>>;
+export type NavBadgeKey = BadgeLijst | "financieel";
+export type NavBadges = Partial<Record<NavBadgeKey, number>>;
 
 interface Props {
   huidigePagina: AppPagina;
@@ -20,7 +21,7 @@ interface Props {
 type NavItem = {
   id: AppPagina;
   label: string;
-  badgeKey?: BadgeLijst;
+  badgeKey?: NavBadgeKey;
   alleenEigenaar?: boolean;
   alleenMedewerker?: boolean;
 };
@@ -40,7 +41,8 @@ const NAV_GROEPEN: NavGroep[] = [
       { id: "kalender", label: "Kalender", badgeKey: "kalender" },
       { id: "mijn-opdrachten", label: "Mijn opdrachten", badgeKey: "mijn-opdrachten" },
       { id: "meldingen", label: "Meldingen", badgeKey: "meldingen" },
-      { id: "deadlines", label: "Deadlines", badgeKey: "deadlines" }
+      { id: "deadlines", label: "Deadlines", badgeKey: "deadlines" },
+      { id: "kas-doorgeven", label: "Kas doorgeven", alleenMedewerker: true }
     ]
   },
   {
@@ -52,7 +54,7 @@ const NAV_GROEPEN: NavGroep[] = [
       { id: "documenten", label: "Documenten", badgeKey: "documenten", alleenEigenaar: true },
       { id: "activiteit", label: "Activiteit", badgeKey: "activiteit", alleenEigenaar: true },
       { id: "team", label: "Team", alleenEigenaar: true },
-      { id: "financieel", label: "Financiën", alleenEigenaar: true },
+      { id: "financieel", label: "Financiën", badgeKey: "financieel", alleenEigenaar: true },
       { id: "prullenbak", label: "Prullenbak", badgeKey: "prullenbak", alleenEigenaar: true },
       { id: "export", label: "Export", alleenEigenaar: true }
     ]

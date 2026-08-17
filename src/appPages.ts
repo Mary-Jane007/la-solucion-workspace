@@ -1,4 +1,5 @@
 export const APP_VERNIEUW_EVENT = "la-solucion-vernieuw";
+export const FINANCIEEL_INZENDING_EVENT = "la-solucion-financieel-inzending";
 
 export type AppPagina =
   | "home"
@@ -14,6 +15,7 @@ export type AppPagina =
   | "prullenbak"
   | "team"
   | "financieel"
+  | "kas-doorgeven"
   | "export"
   | "profiel"
   | "instellingen"
@@ -50,7 +52,7 @@ export const PAGINA_INFO: Record<AppPagina, { titel: string; ondertitel: string 
   },
   meldingen: {
     titel: "Meldingen",
-    ondertitel: "P1-taken, deadlines en opdrachten die aandacht vragen."
+    ondertitel: "P1-taken, deadlines en financiële info van medewerkers."
   },
   deadlines: {
     titel: "Deadlines",
@@ -83,6 +85,10 @@ export const PAGINA_INFO: Record<AppPagina, { titel: string; ondertitel: string 
   financieel: {
     titel: "Financiële administratie",
     ondertitel: "Inkomsten, uitgaven en openstaande posten — alleen voor de eigenaar."
+  },
+  "kas-doorgeven": {
+    titel: "Kas doorgeven",
+    ondertitel: "Vul financiële info in en verstuur naar de eigenaar."
   },
   export: {
     titel: "Export",

@@ -10,7 +10,10 @@ import {
   FinancieelStatus,
   FinancieelType,
   FinancieelValuta,
-  updateFinancieelPost
+  updateFinancieelPost,
+  fetchFinancieelInzendingen,
+  FinancieelInzending,
+  updateFinancieelInzendingStatus
 } from "../api";
 import {
   berekenDossierSaldi,
@@ -20,9 +23,9 @@ import {
   dateTimeLocalNaarIso,
   DossierSaldo,
   exportDossierSaldiCsv,
-  exportFinancieelPdf,
   exportFinancieelPostenCsv,
   exportKlantSaldiCsv,
+
   FINANCIEEL_VALUTAS,
   financieelPostMatchtZoekterm,
   formatGeld,
@@ -44,6 +47,11 @@ import {
   SURINAAME_BANKEN,
   VALUTA_LABELS
 } from "../financieelUtils";
+import {
+  exportFinancieelExcel,
+  exportFinancieelPdf,
+  exportFinancieelWord
+} from "../financieelExport";
 import {
   berekenAging,
   berekenCashflow,
@@ -77,7 +85,7 @@ import {
   vorigePeriode
 } from "../financieelDashboardUtils";
 import { groepeerPerKlant, statusLabel } from "../opdrachtenUtils";
-import { APP_VERNIEUW_EVENT } from "../appPages";
+import { APP_VERNIEUW_EVENT, FINANCIEEL_INZENDING_EVENT } from "../appPages";
 import { Opdracht } from "../types";
 import {
   AnalysesPanel,
@@ -95,6 +103,7 @@ import {
   VandaagPanel,
   WinstVerliesPanel
 } from "./financieel/FinancieelDashboardPanels";
+import { FinancieelInzendingenPanel } from "./financieel/FinancieelInzendingenPanel";
 
 type GebruikFormRij = {
   id: string;
@@ -258,6 +267,8 @@ function SaldoTabel({
 export function FinancieleAdministratiePagina({ opdrachten }: Props) {
   const initValuta = standaardValutaLaden();
   const [posten, setPosten] = useState<FinancieelPost[]>([]);
+  const [inzendingen, setInzendingen] = useState<FinancieelInzending[]>([]);
+  const [inzendingBezigId, setInzendingBezigId] = useState<string | null>(null);
   const [team, setTeam] = useState<Array<{ id: string; name: string; role: string; active: boolean }>>([]);
   const [form, setForm] = useState<FormState>(() => leegFormulier(initValuta));
   const [bewerkId, setBewerkId] = useState<string | null>(null);
@@ -313,9 +324,14 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
     try {
       setLaden(true);
       setFout(null);
-      const [postenLijst, users] = await Promise.all([fetchFinancieel(), fetchAdminUsers()]);
+      const [postenLijst, users, inzendingData] = await Promise.all([
+        fetchFinancieel(),
+        fetchAdminUsers(),
+        fetchFinancieelInzendingen()
+      ]);
       setPosten(postenLijst);
       setTeam(users);
+      setInzendingen(inzendingData.inzendingen);
     } catch (error) {
       setFout(error instanceof Error ? error.message : "Kon financiële gegevens niet laden.");
     } finally {
@@ -332,6 +348,19 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
     };
     window.addEventListener(APP_VERNIEUW_EVENT, onVernieuw);
     return () => window.removeEventListener(APP_VERNIEUW_EVENT, onVernieuw);
+  }, []);
+  useEffect(() => {
+    const onInzending = () => {
+      void fetchFinancieelInzendingen()
+        .then((data) => setInzendingen(data.inzendingen))
+        .catch(() => undefined);
+    };
+    window.addEventListener(FINANCIEEL_INZENDING_EVENT, onInzending);
+    const interval = window.setInterval(onInzending, 30000);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener(FINANCIEEL_INZENDING_EVENT, onInzending);
+    };
   }, []);
   useEffect(() => {
     setDashboardValuta(filterValuta);
@@ -497,6 +526,61 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
         toelichting: g.toelichting || ""
       }))
     });
+    window.setTimeout(() => formulierRef.current?.scrollIntoView({ behavior: "smooth" }), 0);
+  };
+  const markeerInzending = async (id: string, status: FinancieelInzending["status"]) => {
+    try {
+      setInzendingBezigId(id);
+      setFout(null);
+      const updated = await updateFinancieelInzendingStatus(id, status);
+      setInzendingen((huidig) => huidig.map((item) => (item.id === id ? updated : item)));
+      window.dispatchEvent(new Event(FINANCIEEL_INZENDING_EVENT));
+    } catch (error) {
+      setFout(error instanceof Error ? error.message : "Kon inzending niet bijwerken.");
+    } finally {
+      setInzendingBezigId(null);
+    }
+  };
+  const neemOverInzending = (item: FinancieelInzending) => {
+    const waaraan = isBankstorting(item.waaraan)
+      ? GEBRUIK_BANKSTORTING
+      : isOverdrachtMedewerker(item.waaraan)
+        ? GEBRUIK_OVERDRACHT_MEDEWERKER
+        : item.waaraan || "";
+    setBewerkId(null);
+    setForm({
+      ...leegFormulier(normalizeValuta(item.valuta)),
+      datum: naarDateTimeLocal(item.datum),
+      type: item.type,
+      omschrijving: item.omschrijving,
+      bedrag: String(item.bedrag).replace(".", ","),
+      valuta: normalizeValuta(item.valuta),
+      wisselkoers: item.wisselkoers == null ? "" : String(item.wisselkoers).replace(".", ","),
+      categorie: item.categorie || "",
+      referentie: item.referentie || "",
+      klantNaam: item.klantNaam || "",
+      betalingswijze: item.betalingswijze || "",
+      bank: item.bank || "",
+      afgehandeldDoorUserId: item.vanUserId,
+      afgehandeldDoorNaam: item.vanNaam,
+      geldBijNaam: item.geldBijNaam || "",
+      geldVanNaam: item.geldVanNaam || "",
+      notities: item.notities || "",
+      gebruikingen: waaraan
+        ? [
+            {
+              ...legeGebruikRij(),
+              bedrag: String(item.bedrag).replace(".", ","),
+              waaraan,
+              bank: item.bank || "",
+              medewerker: isOverdrachtMedewerker(waaraan) ? item.geldBijNaam || "" : "",
+              toelichting: item.omschrijving
+            }
+          ]
+        : []
+    });
+    setTab("dagboek");
+    if (item.status === "NIEUW") void markeerInzending(item.id, "GEZIEN");
     window.setTimeout(() => formulierRef.current?.scrollIntoView({ behavior: "smooth" }), 0);
   };
   const kiesDossier = (opdrachtId: string) => {
@@ -698,6 +782,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
   const toonFormulier =
     tab === "dagboek" || tab === "inkomsten" || tab === "uitgaven" || tab === "followmoney" || bewerkId !== null;
   const categorieOpties = form.type === "UITGAVE" ? UITGAVE_CATEGORIEEN : INKOMST_DIENSTEN;
+  const nieuweInzendingen = inzendingen.filter((item) => item.status === "NIEUW").length;
 
   return (
     <div className="fin-dashboard">
@@ -711,7 +796,10 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
               onClick={() => setTab(item.id)}
               title={item.hint}
             >
-              {item.label}
+              <span>{item.label}</span>
+              {item.id === "inzendingen" && nieuweInzendingen > 0 && (
+                <span className="sidebar-nav-badge">{nieuweInzendingen > 99 ? "99+" : nieuweInzendingen}</span>
+              )}
             </button>
           ))}
         </nav>
@@ -749,8 +837,29 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
         {fout && <p className="muted page-error">{fout}</p>}
         {laden && <section className="card page-card"><p className="muted">Financiële gegevens laden...</p></section>}
 
+        {!laden && tab === "overzicht" && nieuweInzendingen > 0 && (
+          <section className="card page-card fin-inzending-banner">
+            <div>
+              <h2>Nieuwe inzendingen van medewerkers</h2>
+              <p className="muted">
+                {nieuweInzendingen} nieuwe financiële {nieuweInzendingen === 1 ? "melding" : "meldingen"} om te bekijken.
+              </p>
+            </div>
+            <button type="button" className="btn-primary" onClick={() => setTab("inzendingen")}>
+              Bekijken
+            </button>
+          </section>
+        )}
         {!laden && tab === "overzicht" && (
           <OverzichtPanel kpis={kpis} gezondheid={gezondheid} signaleringen={signaleringen} dag={dagVerslag} tijdreeks={tijdreeks} onOpenTab={(id) => setTab(id as FinancieelTabId)} />
+        )}
+        {!laden && tab === "inzendingen" && (
+          <FinancieelInzendingenPanel
+            inzendingen={inzendingen}
+            onMarkeer={(id, status) => void markeerInzending(id, status)}
+            onNeemOver={neemOverInzending}
+            bezigId={inzendingBezigId}
+          />
         )}
         {!laden && tab === "vandaag" && <VandaagPanel dag={dagVerslag} valuta={dashboardValuta} />}
         {!laden && tab === "followmoney" && (
@@ -823,6 +932,8 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
             onExportPosten={() => exportFinancieelPostenCsv(posten, opdrachtenById)}
             onExportKlant={() => exportKlantSaldiCsv(posten)}
             onExportDossier={() => exportDossierSaldiCsv(posten, opdrachtenById)}
+            onExportExcel={() => exportFinancieelExcel(posten, opdrachtenById)}
+            onExportWord={() => exportFinancieelWord(posten, opdrachtenById)}
             onExportPdf={() => exportFinancieelPdf(posten, opdrachtenById)}
             disabled={laden || posten.length === 0}
           />

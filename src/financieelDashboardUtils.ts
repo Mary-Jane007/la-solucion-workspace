@@ -21,6 +21,7 @@ import { Opdracht } from "./types";
 
 export type FinancieelTabId =
   | "overzicht"
+  | "inzendingen"
   | "vandaag"
   | "inkomsten"
   | "uitgaven"
@@ -38,6 +39,7 @@ export type FinancieelTabId =
 
 export const FINANCIEEL_TABS: Array<{ id: FinancieelTabId; label: string; hint: string }> = [
   { id: "overzicht", label: "Overzicht", hint: "KPI’s en gezondheid" },
+  { id: "inzendingen", label: "Inzendingen", hint: "Info van medewerkers" },
   { id: "vandaag", label: "Vandaag", hint: "Dagelijks verslag" },
   { id: "followmoney", label: "Follow the money", hint: "Geldspoor per dag" },
   { id: "dagboek", label: "Dagboek", hint: "Alle transacties" },

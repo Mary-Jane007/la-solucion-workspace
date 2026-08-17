@@ -233,6 +233,37 @@ async function migrate() {
     `,
     []
   );
+
+  await query(
+    `
+    create table if not exists financiele_inzendingen (
+      id text primary key,
+      created_at timestamptz not null default now(),
+      van_user_id text not null,
+      van_naam text not null,
+      datum timestamptz not null,
+      type text not null check (type in ('INKOMST','UITGAVE','KASGELD','OVERDRACHT')),
+      omschrijving text not null,
+      bedrag numeric(12,2) not null check (bedrag >= 0),
+      valuta text not null default 'EUR',
+      wisselkoers numeric(18,6),
+      categorie text,
+      referentie text,
+      klant_naam text,
+      betalingswijze text,
+      bank text,
+      geld_bij_naam text,
+      geld_van_naam text,
+      waaraan text,
+      notities text,
+      status text not null default 'NIEUW' check (status in ('NIEUW','GEZIEN','VERWERKT'))
+    );
+    create index if not exists idx_financiele_inzendingen_status on financiele_inzendingen(status);
+    create index if not exists idx_financiele_inzendingen_van on financiele_inzendingen(van_user_id);
+    create index if not exists idx_financiele_inzendingen_created on financiele_inzendingen(created_at desc);
+    `,
+    []
+  );
 }
 
 module.exports = {

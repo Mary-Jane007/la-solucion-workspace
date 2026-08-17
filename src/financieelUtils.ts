@@ -1,4 +1,4 @@
-import {
+﻿import {
   FinancieelBetalingswijze,
   FinancieelGebruik,
   FinancieelGebruikSoort,
@@ -703,8 +703,10 @@ export function exportFinancieelPostenCsv(
     "Betalingswijze",
     "Bank",
     "Afgehandeld door",
+    "Geld van",
     "Bij wie is het geld",
-    "Notities"
+    "Notities",
+    "ID"
   ];
   const rows = posten.map((p) => [
     p.datum.includes("T") ? formatDatumTijd(p.datum) : p.datum.slice(0, 10),
@@ -725,8 +727,10 @@ export function exportFinancieelPostenCsv(
     p.betalingswijze ? BETALINGSWIJZE_LABELS[p.betalingswijze] : "",
     p.bank || "",
     p.afgehandeldDoorNaam || "",
+    p.geldVanNaam || "",
     p.geldBijNaam || "",
-    p.notities || ""
+    p.notities || "",
+    p.id
   ]);
   downloadCsv(`financieel-posten-${vandaagIso()}.csv`, headers, rows);
 }
@@ -784,190 +788,4 @@ export function exportDossierSaldiCsv(
     s.statusLabel
   ]);
   downloadCsv(`financieel-dossiersaldi-${vandaagIso()}.csv`, headers, rows);
-}
-
-function htmlEscape(waarde: string): string {
-  return waarde
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function tabelHtml(headers: string[], rows: string[][]): string {
-  const head = headers.map((h) => `<th>${htmlEscape(h)}</th>`).join("");
-  const body = rows
-    .map((row) => `<tr>${row.map((c) => `<td>${htmlEscape(c)}</td>`).join("")}</tr>`)
-    .join("");
-  return `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
-}
-
-/** Opent een printvenster; kies “Opslaan als PDF” in het printdialoog. */
-export function exportFinancieelPdf(
-  posten: FinancieelPost[],
-  opdrachtenById: Map<string, Opdracht>
-) {
-  const klantSaldi = berekenKlantSaldi(posten);
-  const dossierSaldi = berekenDossierSaldi(posten, opdrachtenById);
-  const geldBij = berekenGeldBijTotalen(posten);
-  const totalen = berekenTotalenPerValuta(posten);
-
-  const totalenHtml = totalen.length
-    ? `<ul>${totalen
-        .map(
-          (t) =>
-            `<li><strong>${htmlEscape(VALUTA_LABELS[t.valuta])}</strong>: inkomsten ${htmlEscape(
-              formatGeld(t.inkomsten, t.valuta)
-            )}, uitgaven ${htmlEscape(formatGeld(t.uitgaven, t.valuta))}, saldo ${htmlEscape(
-              formatGeld(t.saldo, t.valuta)
-            )}</li>`
-        )
-        .join("")}</ul>`
-    : "<p>Geen totalen.</p>";
-
-  const postenTabel = tabelHtml(
-    [
-      "Datum",
-      "Type",
-      "Valuta",
-      "Wisselkoers",
-      "Klant",
-      "Dossier",
-      "Omschrijving",
-      "Origineel",
-      "Restant",
-      "Status",
-      "Betaling",
-      "Bij wie"
-    ],
-    posten.map((p) => [
-      formatDatumTijd(p.datum),
-      typeLabel(p.type),
-      normalizeValuta(p.valuta),
-      p.wisselkoers == null ? "—" : String(p.wisselkoers).replace(".", ","),
-      p.klantNaam || "—",
-      dossierLabelVoorPost(p, opdrachtenById) || "—",
-      p.omschrijving,
-      formatGeld(p.bedrag, p.valuta),
-      formatGeld(restantBedrag(p), p.valuta),
-      postStatusLabel(p),
-      betalingsLabel(p) || "—",
-      p.geldBijNaam || "—"
-    ])
-  );
-
-  const geldBijTabel = tabelHtml(
-    ["Bij wie", "Valuta", "Inkomsten", "Kasgeld", "Uitgaven", "Totaal", "Posten"],
-    geldBij.map((s) => [
-      s.naam,
-      s.valuta,
-      formatGeld(s.inkomsten, s.valuta),
-      formatGeld(s.kasgeld, s.valuta),
-      formatGeld(s.uitgaven, s.valuta),
-      formatGeld(s.totaal, s.valuta),
-      String(s.aantalPosten)
-    ])
-  );
-
-  const klantTabel = tabelHtml(
-    [
-      "Klant",
-      "Valuta",
-      "Nog te betalen (klant)",
-      "Al betaald",
-      "Nog te betalen (wij)",
-      "Uitbetaald",
-      "Netto",
-      "Status"
-    ],
-    klantSaldi.map((s) => [
-      s.klantNaam,
-      s.valuta,
-      formatGeld(s.teOntvangen, s.valuta),
-      formatGeld(s.ontvangen, s.valuta),
-      formatGeld(s.teBetalen, s.valuta),
-      formatGeld(s.uitbetaald, s.valuta),
-      formatGeld(s.netto, s.valuta),
-      s.statusLabel
-    ])
-  );
-
-  const dossierTabel = tabelHtml(
-    [
-      "Dossier",
-      "Valuta",
-      "Nog te betalen (klant)",
-      "Al betaald",
-      "Nog te betalen (wij)",
-      "Uitbetaald",
-      "Netto",
-      "Status"
-    ],
-    dossierSaldi.map((s) => [
-      s.dossierLabel,
-      s.valuta,
-      formatGeld(s.teOntvangen, s.valuta),
-      formatGeld(s.ontvangen, s.valuta),
-      formatGeld(s.teBetalen, s.valuta),
-      formatGeld(s.uitbetaald, s.valuta),
-      formatGeld(s.netto, s.valuta),
-      s.statusLabel
-    ])
-  );
-
-  const html = `<!doctype html>
-<html lang="nl">
-<head>
-  <meta charset="utf-8" />
-  <title>Financiële export – La-Solución</title>
-  <style>
-    body { font-family: Georgia, "Times New Roman", serif; color: #10203a; margin: 24px; }
-    h1 { font-size: 22px; margin: 0 0 4px; }
-    h2 { font-size: 16px; margin: 28px 0 10px; border-bottom: 1px solid #ccd5e3; padding-bottom: 4px; }
-    p { margin: 0 0 8px; color: #44506a; font-size: 13px; }
-    .meta { margin-bottom: 20px; }
-    table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 8px; }
-    th, td { border: 1px solid #c9d3e2; padding: 5px 6px; text-align: left; vertical-align: top; }
-    th { background: #eef3fa; }
-    ul { margin: 8px 0; padding-left: 18px; font-size: 13px; }
-    @media print {
-      body { margin: 12mm; }
-      h2 { break-after: avoid; }
-      table { break-inside: auto; }
-      tr { break-inside: avoid; }
-    }
-  </style>
-</head>
-<body>
-  <h1>La-Solución – Financiële administratie</h1>
-  <div class="meta">
-    <p>Exportdatum: ${htmlEscape(new Date().toLocaleString("nl-NL"))}</p>
-    <p>Posten: <strong>${posten.length}</strong></p>
-    ${totalenHtml}
-  </div>
-  <h2>Geld bij personen</h2>
-  ${geldBij.length ? geldBijTabel : "<p>Geen bedragen bij personen.</p>"}
-  <h2>Klantsaldo’s</h2>
-  ${klantSaldi.length ? klantTabel : "<p>Geen klantsaldo’s.</p>"}
-  <h2>Dossiersaldo’s</h2>
-  ${dossierSaldi.length ? dossierTabel : "<p>Geen dossiersaldo’s.</p>"}
-  <h2>Alle posten</h2>
-  ${posten.length ? postenTabel : "<p>Geen posten.</p>"}
-  <script>
-    window.onload = function () {
-      window.focus();
-      window.print();
-    };
-  </script>
-</body>
-</html>`;
-
-  const win = window.open("", "_blank");
-  if (!win) {
-    window.alert("Pop-up geblokkeerd. Sta pop-ups toe om de PDF-export te openen.");
-    return;
-  }
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
 }

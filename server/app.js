@@ -52,6 +52,12 @@ const {
   updateFinancielePost,
   deleteFinancielePost
 } = require("./financieStore");
+const {
+  listInzendingen,
+  countNieuweInzendingen,
+  createInzending,
+  updateInzendingStatus
+} = require("./financieInzendingStore");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -819,6 +825,89 @@ app.delete("/api/admin/financieel/:id", authRequired, requireOwner, async (req, 
   }
 });
 
+const inzendingSchema = z.object({
+  datum: z.string().min(10),
+  type: z.enum(["INKOMST", "UITGAVE", "KASGELD", "OVERDRACHT"]),
+  omschrijving: z.string().min(1),
+  bedrag: z.number().finite().nonnegative(),
+  valuta: z.enum(["EUR", "USD", "SRD", "XCG"]).optional(),
+  wisselkoers: z.number().finite().nonnegative().optional().nullable(),
+  categorie: z.string().optional().nullable(),
+  referentie: z.string().optional().nullable(),
+  klantNaam: z.string().optional().nullable(),
+  betalingswijze: z.enum(["OPGEHAALD", "OVERGEMAAKT", "GESTORT"]).optional().nullable(),
+  bank: z.string().optional().nullable(),
+  geldBijNaam: z.string().optional().nullable(),
+  geldVanNaam: z.string().optional().nullable(),
+  waaraan: z.string().optional().nullable(),
+  notities: z.string().optional().nullable()
+}).superRefine((data, ctx) => {
+  if (Number.isNaN(Date.parse(data.datum))) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["datum"],
+      message: "Ongeldige datum/tijd."
+    });
+  }
+});
+
+app.get("/api/financieel-inzendingen", authRequired, async (req, res) => {
+  try {
+    if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
+    const isOwner = req.user?.rol === "EIGENAAR";
+    const inzendingen = await listInzendingen({
+      alleenUserId: isOwner ? null : req.user.id
+    });
+    const ongelezen = isOwner ? await countNieuweInzendingen() : 0;
+    return res.json({ inzendingen, ongelezen });
+  } catch (err) {
+    console.error("Fout bij GET /api/financieel-inzendingen:", err);
+    return res.status(500).json({ error: "Interne serverfout." });
+  }
+});
+
+app.post("/api/financieel-inzendingen", authRequired, async (req, res) => {
+  try {
+    if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
+    const body = { ...(req.body || {}) };
+    if (!body.valuta) body.valuta = "EUR";
+    if (body.wisselkoers === "" || body.wisselkoers === undefined) body.wisselkoers = null;
+    if (body.betalingswijze === "") body.betalingswijze = null;
+    if (typeof body.bedrag === "string") {
+      body.bedrag = Number(String(body.bedrag).replace(",", "."));
+    }
+    const parsed = inzendingSchema.safeParse(body);
+    if (!parsed.success) return res.status(400).json({ error: parseZodError(parsed.error) });
+    const user = await getUserById(req.user.id);
+    if (!user) return res.status(404).json({ error: "Gebruiker niet gevonden." });
+    const inzending = await createInzending({
+      ...parsed.data,
+      vanUserId: user.id,
+      vanNaam: user.name
+    });
+    return res.status(201).json({ inzending });
+  } catch (err) {
+    console.error("Fout bij POST /api/financieel-inzendingen:", err);
+    return res.status(500).json({ error: "Interne serverfout." });
+  }
+});
+
+app.patch("/api/financieel-inzendingen/:id", authRequired, requireOwner, async (req, res) => {
+  try {
+    if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
+    const status = String(req.body?.status || "").toUpperCase();
+    if (!["NIEUW", "GEZIEN", "VERWERKT"].includes(status)) {
+      return res.status(400).json({ error: "Ongeldige status." });
+    }
+    const inzending = await updateInzendingStatus(req.params.id, status);
+    if (!inzending) return res.status(404).json({ error: "Inzending niet gevonden." });
+    return res.json({ inzending });
+  } catch (err) {
+    console.error("Fout bij PATCH /api/financieel-inzendingen:", err);
+    return res.status(500).json({ error: "Interne serverfout." });
+  }
+});
+
 app.get("/api/admin/users", authRequired, requireOwner, (req, res) => {
   (async () => {
     try {
@@ -874,6 +963,10 @@ app.get("/api/health", async (_req, res) => {
     console.error("Health check DB-fout:", err);
     res.status(503).json({ ok: false, error: "Database niet bereikbaar." });
   }
+});
+
+app.use("/api", (req, res) => {
+  res.status(404).json({ error: `Onbekend API-eindpunt: ${req.method} ${req.path}` });
 });
 
 app.use((err, req, res, next) => {

@@ -4,12 +4,16 @@ import { OpdrachtenWerkruimte } from "../hooks/useOpdrachtenWerkruimte";
 import { useLijstGezienStatus } from "../hooks/useLijstGezienStatus";
 import { homeItemIds } from "../badgeItems";
 
+import { EigenaarFinancieelNotificaties } from "./EigenaarFinancieelNotificaties";
+import { AppPagina } from "../appPages";
+
 interface Props {
   werkruimte: OpdrachtenWerkruimte;
   isEigenaar: boolean;
   userId: string;
   onNieuweOpdracht: () => void;
   onGezien: () => void;
+  onNavigeer?: (pagina: AppPagina) => void;
 }
 
 export function Dashboard({
@@ -17,7 +21,8 @@ export function Dashboard({
   isEigenaar,
   userId,
   onNieuweOpdracht,
-  onGezien
+  onGezien,
+  onNavigeer
 }: Props) {
   const { zichtbareOpdrachten, openOpdracht, opdrachtFout } = werkruimte;
 
@@ -49,11 +54,14 @@ export function Dashboard({
   };
 
   return (
-    <>
+    <div className="info-stack">
       {opdrachtFout && (
-        <div className="card" style={{ marginBottom: 12 }}>
+        <div className="card">
           <p className="muted page-error">{opdrachtFout}</p>
         </div>
+      )}
+      {isEigenaar && onNavigeer && (
+        <EigenaarFinancieelNotificaties onOpenFinancieel={() => onNavigeer("financieel")} />
       )}
       <div className="dashboard-grid">
         <section className="card metric-card metric-main">
@@ -140,6 +148,6 @@ export function Dashboard({
           )}
         </section>
       </div>
-    </>
+    </div>
   );
 }

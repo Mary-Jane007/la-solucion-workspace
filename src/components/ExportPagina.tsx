@@ -4,10 +4,14 @@ import {
   berekenDossierSaldi,
   berekenKlantSaldi,
   exportDossierSaldiCsv,
-  exportFinancieelPdf,
   exportFinancieelPostenCsv,
   exportKlantSaldiCsv
 } from "../financieelUtils";
+import {
+  exportFinancieelExcel,
+  exportFinancieelPdf,
+  exportFinancieelWord
+} from "../financieelExport";
 import { exportOpdrachtenCsv } from "../opdrachtenUtils";
 import { OpdrachtenWerkruimte } from "../hooks/useOpdrachtenWerkruimte";
 import { Opdracht } from "../types";
@@ -83,48 +87,71 @@ export function ExportPagina({ werkruimte }: Props) {
         <div className="section-header">
           <h2>Financiën exporteren</h2>
           <p className="muted">
-            Posten, klantsaldo’s en dossiersaldo’s voor boekhouding. PDF via printvenster (“Opslaan
-            als PDF”).
+            Volledig dossier voor Excel, Word en PDF: overzicht, dagboek en alle vulvakken.
           </p>
         </div>
         {financieelFout && <p className="muted page-error">{financieelFout}</p>}
         {financieelLaden ? (
           <p className="muted">Financiële gegevens laden...</p>
         ) : (
-          <div className="financieel-export-actions">
-            <button
-              type="button"
-              className="btn-primary"
-              disabled={posten.length === 0}
-              onClick={() => exportFinancieelPostenCsv(posten, opdrachtenById)}
-            >
-              CSV posten ({posten.length})
-            </button>
-            <button
-              type="button"
-              className="btn-secondary"
-              disabled={klantSaldiCount === 0}
-              onClick={() => exportKlantSaldiCsv(posten)}
-            >
-              CSV klantsaldo’s ({klantSaldiCount})
-            </button>
-            <button
-              type="button"
-              className="btn-secondary"
-              disabled={dossierSaldiCount === 0}
-              onClick={() => exportDossierSaldiCsv(posten, opdrachtenById)}
-            >
-              CSV dossiersaldo’s ({dossierSaldiCount})
-            </button>
-            <button
-              type="button"
-              className="btn-secondary"
-              disabled={posten.length === 0}
-              onClick={() => exportFinancieelPdf(posten, opdrachtenById)}
-            >
-              PDF / afdrukken
-            </button>
-          </div>
+          <>
+            <div className="financieel-export-actions">
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={posten.length === 0}
+                onClick={() => exportFinancieelExcel(posten, opdrachtenById)}
+              >
+                Excel (volledig)
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={posten.length === 0}
+                onClick={() => exportFinancieelWord(posten, opdrachtenById)}
+              >
+                Word (volledig)
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={posten.length === 0}
+                onClick={() => exportFinancieelPdf(posten, opdrachtenById)}
+              >
+                PDF / afdrukken
+              </button>
+            </div>
+            <p className="muted" style={{ marginTop: 10 }}>
+              Excel: werkboek met tabbladen. Word: document. PDF: kies “Opslaan als PDF” in het
+              printdialoog.
+            </p>
+            <div className="financieel-export-actions" style={{ marginTop: 12 }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={posten.length === 0}
+                onClick={() => exportFinancieelPostenCsv(posten, opdrachtenById)}
+              >
+                CSV dagboek ({posten.length})
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={klantSaldiCount === 0}
+                onClick={() => exportKlantSaldiCsv(posten)}
+              >
+                CSV klantsaldo’s ({klantSaldiCount})
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={dossierSaldiCount === 0}
+                onClick={() => exportDossierSaldiCsv(posten, opdrachtenById)}
+              >
+                CSV dossiersaldo’s ({dossierSaldiCount})
+              </button>
+            </div>
+          </>
         )}
       </section>
     </div>
