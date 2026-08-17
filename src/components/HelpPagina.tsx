@@ -41,9 +41,9 @@ export function HelpPagina() {
         <h2>Kas doorgeven (medewerkers)</h2>
         <p className="muted">
           Ingelogde medewerkers zien <strong>Kas doorgeven</strong> in het menu. Vul daar de
-          financiële velden in en verstuur naar de eigenaar. De volledige pagina{" "}
-          <strong>Financiën</strong> is alleen zichtbaar voor de eigenaar; die krijgt een melding
-          op Home, bij Meldingen en een teller bij Financiën.
+          financiële velden in, voeg eventueel foto’s (bon of kas) toe, en verstuur naar de eigenaar.
+          De volledige pagina <strong>Financiën</strong> is alleen zichtbaar voor de eigenaar; die
+          krijgt een melding op Home, bij Meldingen en een teller bij Financiën.
         </p>
       </section>
     </div>

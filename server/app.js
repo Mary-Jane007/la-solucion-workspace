@@ -56,7 +56,9 @@ const {
   listInzendingen,
   countNieuweInzendingen,
   createInzending,
-  updateInzendingStatus
+  updateInzendingStatus,
+  getInzendingById,
+  getInzendingBijlageById
 } = require("./financieInzendingStore");
 
 const app = express();
@@ -151,15 +153,17 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
+const uploadStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, uploadDir),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || "");
+    const safeExt = ext.slice(0, 10);
+    cb(null, `${uuidv4()}${safeExt}`);
+  }
+});
+
 const upload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, uploadDir),
-    filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname || "");
-      const safeExt = ext.slice(0, 10);
-      cb(null, `${uuidv4()}${safeExt}`);
-    }
-  }),
+  storage: uploadStorage,
   limits: {
     fileSize: 15 * 1024 * 1024 // 15MB
   },
@@ -175,6 +179,48 @@ const upload = multer({
     return cb(new Error("Bestandstype niet toegestaan."));
   }
 });
+
+const INZENDING_IMG_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/heic",
+  "image/heif"
+]);
+const INZENDING_IMG_EXTS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".heif"]);
+
+const uploadInzendingImg = multer({
+  storage: uploadStorage,
+  limits: {
+    fileSize: 8 * 1024 * 1024,
+    files: 5
+  },
+  fileFilter: (_req, file, cb) => {
+    const mime = String(file.mimetype || "").toLowerCase();
+    const ext = path.extname(file.originalname || "").toLowerCase();
+    if (INZENDING_IMG_TYPES.has(mime) || mime.startsWith("image/") || INZENDING_IMG_EXTS.has(ext)) {
+      return cb(null, true);
+    }
+    return cb(new Error("Alleen afbeeldingen zijn toegestaan (JPG, PNG, WEBP)."));
+  }
+});
+
+function parseInzendingUpload(req, res, next) {
+  const ct = String(req.headers["content-type"] || "").toLowerCase();
+  if (!ct.includes("multipart/form-data")) return next();
+  uploadInzendingImg.array("bestanden", 5)(req, res, (err) => {
+    if (err) {
+      const teGroot = err.code === "LIMIT_FILE_SIZE";
+      return res.status(400).json({
+        error: teGroot
+          ? "Afbeelding is te groot (max. 8 MB per foto)."
+          : err.message || "Upload mislukt."
+      });
+    }
+    next();
+  });
+}
 
 function generateToken(user) {
   return jwt.sign(
@@ -866,7 +912,7 @@ app.get("/api/financieel-inzendingen", authRequired, async (req, res) => {
   }
 });
 
-app.post("/api/financieel-inzendingen", authRequired, async (req, res) => {
+app.post("/api/financieel-inzendingen", authRequired, parseInzendingUpload, async (req, res) => {
   try {
     if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
     const body = { ...(req.body || {}) };
@@ -876,18 +922,51 @@ app.post("/api/financieel-inzendingen", authRequired, async (req, res) => {
     if (typeof body.bedrag === "string") {
       body.bedrag = Number(String(body.bedrag).replace(",", "."));
     }
+    if (typeof body.wisselkoers === "string" && body.wisselkoers.trim()) {
+      body.wisselkoers = Number(String(body.wisselkoers).replace(",", "."));
+    }
     const parsed = inzendingSchema.safeParse(body);
     if (!parsed.success) return res.status(400).json({ error: parseZodError(parsed.error) });
     const user = await getUserById(req.user.id);
     if (!user) return res.status(404).json({ error: "Gebruiker niet gevonden." });
-    const inzending = await createInzending({
-      ...parsed.data,
-      vanUserId: user.id,
-      vanNaam: user.name
-    });
+    const files = Array.isArray(req.files) ? req.files : [];
+    const inzending = await createInzending(
+      {
+        ...parsed.data,
+        vanUserId: user.id,
+        vanNaam: user.name
+      },
+      files
+    );
     return res.status(201).json({ inzending });
   } catch (err) {
     console.error("Fout bij POST /api/financieel-inzendingen:", err);
+    return res.status(500).json({ error: "Interne serverfout." });
+  }
+});
+
+app.get("/api/financieel-inzendingen/bestanden/:id/download", authRequired, async (req, res) => {
+  try {
+    if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
+    const bijlage = await getInzendingBijlageById(req.params.id);
+    if (!bijlage) return res.status(404).json({ error: "Afbeelding niet gevonden." });
+    const inzending = await getInzendingById(bijlage.inzendingId);
+    if (!inzending) return res.status(404).json({ error: "Inzending niet gevonden." });
+    const isOwner = req.user?.rol === "EIGENAAR";
+    const isSender = String(inzending.vanUserId) === String(req.user.id);
+    if (!isOwner && !isSender) {
+      return res.status(403).json({ error: "Geen toegang tot deze afbeelding." });
+    }
+    const filePath = path.join(uploadDir, bijlage.opslagNaam);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Bestand ontbreekt." });
+    res.setHeader("Content-Type", bijlage.mimeType || "application/octet-stream");
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${encodeURIComponent(bijlage.origineleNaam)}"`
+    );
+    return res.sendFile(filePath);
+  } catch (err) {
+    console.error("Fout bij download inzending-afbeelding:", err);
     return res.status(500).json({ error: "Interne serverfout." });
   }
 });

@@ -19,7 +19,10 @@ export function inzendingSamenvatting(item: FinancieelInzending): string {
     item.omschrijving,
     item.waaraan ? `Besteed: ${item.waaraan}` : "",
     item.geldBijNaam ? `Nu bij ${item.geldBijNaam}` : "",
-    item.geldVanNaam ? `Van ${item.geldVanNaam}` : ""
+    item.geldVanNaam ? `Van ${item.geldVanNaam}` : "",
+    item.bijlagen?.length
+      ? `${item.bijlagen.length} foto${item.bijlagen.length === 1 ? "" : "’s"}`
+      : ""
   ]
     .filter(Boolean)
     .join(" · ");

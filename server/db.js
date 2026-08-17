@@ -264,6 +264,23 @@ async function migrate() {
     `,
     []
   );
+
+  await query(
+    `
+    create table if not exists financiele_inzending_bestanden (
+      id text primary key,
+      inzending_id text not null references financiele_inzendingen(id) on delete cascade,
+      originele_naam text not null,
+      opslag_naam text not null unique,
+      mime_type text not null,
+      grootte int not null,
+      created_at timestamptz not null default now()
+    );
+    create index if not exists idx_fin_inzending_bestanden_inzending
+      on financiele_inzending_bestanden(inzending_id);
+    `,
+    []
+  );
 }
 
 module.exports = {

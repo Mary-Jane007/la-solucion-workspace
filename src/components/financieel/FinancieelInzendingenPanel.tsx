@@ -1,5 +1,6 @@
 import { FinancieelInzending } from "../../api";
 import { inzendingSamenvatting, inzendingVelden, INZENDING_STATUS_LABEL } from "../../financieelInzendingUtils";
+import { InzendingBijlagen } from "./InzendingBijlagen";
 
 export function FinancieelInzendingenPanel({
   inzendingen,
@@ -56,6 +57,7 @@ export function FinancieelInzendingenPanel({
                     </div>
                   ))}
                 </dl>
+                <InzendingBijlagen bijlagen={item.bijlagen} />
                 <div className="financieel-row-actions">
                   {nieuw && (
                     <button

@@ -24,6 +24,14 @@ import {
   VALUTA_LABELS
 } from "../financieelUtils";
 import { Gebruiker } from "../types";
+import { InzendingBijlagen } from "./financieel/InzendingBijlagen";
+
+interface Props {
+  gebruiker: Gebruiker;
+}
+
+const MAX_FOTOS = 5;
+const MAX_FOTO_BYTES = 8 * 1024 * 1024;
 
 interface Props {
   gebruiker: Gebruiker;
@@ -50,6 +58,7 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
   const [geldVanNaam, setGeldVanNaam] = useState("");
   const [waaraan, setWaaraan] = useState("");
   const [notities, setNotities] = useState("");
+  const [fotos, setFotos] = useState<File[]>([]);
   const [inzendingen, setInzendingen] = useState<FinancieelInzending[]>([]);
   const [bezig, setBezig] = useState(false);
   const [laden, setLaden] = useState(true);
@@ -91,6 +100,35 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
     setGeldVanNaam("");
     setWaaraan("");
     setNotities("");
+    setFotos([]);
+  };
+
+  const fotoPreviews = useMemo(
+    () => fotos.map((file) => ({ naam: file.name, url: URL.createObjectURL(file) })),
+    [fotos]
+  );
+  useEffect(() => {
+    return () => {
+      for (const preview of fotoPreviews) URL.revokeObjectURL(preview.url);
+    };
+  }, [fotoPreviews]);
+
+  const handleFotos = (lijst: FileList | null) => {
+    if (!lijst?.length) return;
+    const gekozen = Array.from(lijst);
+    const teGroot = gekozen.find((file) => file.size > MAX_FOTO_BYTES);
+    if (teGroot) {
+      setFout(`“${teGroot.name}” is groter dan 8 MB.`);
+      return;
+    }
+    setFotos((huidig) => {
+      const samen = [...huidig, ...gekozen];
+      if (samen.length > MAX_FOTOS) {
+        setFout(`Je kunt maximaal ${MAX_FOTOS} foto’s meesturen.`);
+        return samen.slice(0, MAX_FOTOS);
+      }
+      return samen;
+    });
   };
 
   const handleSubmit = async (event: FormEvent) => {
@@ -115,22 +153,25 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
       setBezig(true);
       setFout(null);
       setSucces(null);
-      const created = await createFinancieelInzending({
-        datum: datumIso,
-        type,
-        omschrijving: omschrijving.trim(),
-        bedrag: bedragNr,
-        valuta,
-        categorie: categorie.trim(),
-        referentie: referentie.trim(),
-        klantNaam: klantNaam.trim(),
-        betalingswijze: betalingswijze || null,
-        bank: toontBank ? bank.trim() : "",
-        geldBijNaam: geldBijNaam.trim() || gebruiker.naam,
-        geldVanNaam: geldVanNaam.trim(),
-        waaraan: waaraan.trim(),
-        notities: notities.trim()
-      });
+      const created = await createFinancieelInzending(
+        {
+          datum: datumIso,
+          type,
+          omschrijving: omschrijving.trim(),
+          bedrag: bedragNr,
+          valuta,
+          categorie: categorie.trim(),
+          referentie: referentie.trim(),
+          klantNaam: klantNaam.trim(),
+          betalingswijze: betalingswijze || null,
+          bank: toontBank ? bank.trim() : "",
+          geldBijNaam: geldBijNaam.trim() || gebruiker.naam,
+          geldVanNaam: geldVanNaam.trim(),
+          waaraan: waaraan.trim(),
+          notities: notities.trim()
+        },
+        fotos
+      );
       setInzendingen((huidig) => [created, ...huidig]);
       resetForm();
       setSucces("Verzonden naar de eigenaar. Je krijgt hier de status te zien.");
@@ -324,6 +365,43 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
                 onChange={(e) => setNotities(e.target.value)}
               />
             </label>
+            <div className="form-label financieel-span-2">
+              Foto’s bijvoegen
+              <input
+                type="file"
+                className="form-input"
+                accept="image/*"
+                multiple
+                onChange={(e) => {
+                  handleFotos(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+              <span className="help-text">
+                Bon, screenshot of kasfoto. JPG/PNG/WEBP, max. {MAX_FOTOS} stuks, 8 MB per foto.
+              </span>
+              {fotoPreviews.length > 0 && (
+                <div className="inzending-fotos inzending-fotos-preview">
+                  {fotoPreviews.map((foto, index) => (
+                    <figure key={`${foto.naam}-${index}`} className="inzending-foto">
+                      <img src={foto.url} alt={foto.naam} />
+                      <figcaption>
+                        <span>{foto.naam}</span>
+                        <button
+                          type="button"
+                          className="link-btn"
+                          onClick={() =>
+                            setFotos((huidig) => huidig.filter((_, i) => i !== index))
+                          }
+                        >
+                          Verwijderen
+                        </button>
+                      </figcaption>
+                    </figure>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           <div className="financieel-form-actions">
             <button type="submit" className="btn-primary" disabled={bezig}>
@@ -356,6 +434,7 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
                 <span className="page-list-meta">
                   {formatDatumTijd(item.datum)} · verzonden {formatDatumTijd(item.createdAt)}
                 </span>
+                <InzendingBijlagen bijlagen={item.bijlagen} />
               </li>
             ))}
           </ul>

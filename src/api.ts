@@ -12,6 +12,9 @@ async function apiFetch(path: string, init?: RequestInit) {
   const token = getToken();
   const headers = new Headers(init?.headers || {});
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  if (init?.body instanceof FormData) {
+    headers.delete("Content-Type");
+  }
   return fetch(path, { cache: "no-store", ...init, headers });
 }
 
@@ -223,6 +226,13 @@ export async function deleteFinancieelPost(id: string): Promise<void> {
 
 export type FinancieelInzendingStatus = "NIEUW" | "GEZIEN" | "VERWERKT";
 
+export interface FinancieelInzendingBijlage {
+  id: string;
+  origineleNaam: string;
+  mimeType: string;
+  grootte: number;
+}
+
 export interface FinancieelInzending {
   id: string;
   createdAt: string;
@@ -244,6 +254,7 @@ export interface FinancieelInzending {
   waaraan?: string;
   notities?: string;
   status: FinancieelInzendingStatus;
+  bijlagen?: FinancieelInzendingBijlage[];
 }
 
 export async function fetchFinancieelInzendingen(): Promise<{
@@ -260,16 +271,55 @@ export async function fetchFinancieelInzendingen(): Promise<{
 }
 
 export async function createFinancieelInzending(
-  inzending: Omit<FinancieelInzending, "id" | "createdAt" | "vanUserId" | "vanNaam" | "status">
+  inzending: Omit<FinancieelInzending, "id" | "createdAt" | "vanUserId" | "vanNaam" | "status" | "bijlagen">,
+  bestanden: File[] = []
 ): Promise<FinancieelInzending> {
+  const form = new FormData();
+  form.append("datum", inzending.datum);
+  form.append("type", inzending.type);
+  form.append("omschrijving", inzending.omschrijving);
+  form.append("bedrag", String(inzending.bedrag));
+  form.append("valuta", inzending.valuta);
+  if (inzending.wisselkoers != null) form.append("wisselkoers", String(inzending.wisselkoers));
+  if (inzending.categorie) form.append("categorie", inzending.categorie);
+  if (inzending.referentie) form.append("referentie", inzending.referentie);
+  if (inzending.klantNaam) form.append("klantNaam", inzending.klantNaam);
+  if (inzending.betalingswijze) form.append("betalingswijze", inzending.betalingswijze);
+  if (inzending.bank) form.append("bank", inzending.bank);
+  if (inzending.geldBijNaam) form.append("geldBijNaam", inzending.geldBijNaam);
+  if (inzending.geldVanNaam) form.append("geldVanNaam", inzending.geldVanNaam);
+  if (inzending.waaraan) form.append("waaraan", inzending.waaraan);
+  if (inzending.notities) form.append("notities", inzending.notities);
+  for (const file of bestanden) form.append("bestanden", file);
   const res = await apiFetch("/api/financieel-inzendingen", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(inzending)
+    body: form
   });
   const data = await readApiJson(res);
   if (!res.ok) throw new Error(String(data.error || "Kon financiële info niet versturen."));
   return data.inzending as FinancieelInzending;
+}
+
+export async function downloadInzendingBijlage(bijlageId: string, bestandsnaam = "foto"): Promise<void> {
+  const blob = await fetchInzendingBijlageBlob(bijlageId);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = bestandsnaam;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+export async function fetchInzendingBijlageBlob(bijlageId: string): Promise<Blob> {
+  const res = await apiFetch(`/api/financieel-inzendingen/bestanden/${bijlageId}/download`);
+  if (!res.ok) {
+    const data = await readApiJson(res).catch(() => ({ error: "Download mislukt." }));
+    throw new Error(String(data.error || "Download mislukt."));
+  }
+  return res.blob();
 }
 
 export async function updateFinancieelInzendingStatus(
