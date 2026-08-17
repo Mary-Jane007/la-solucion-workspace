@@ -747,7 +747,20 @@ const financieelSchema = z.object({
   geldVanNaam: z.string().optional().nullable(),
   wisselkoers: z.number().finite().nonnegative().optional().nullable(),
   status: z.enum(["OPEN", "BETAALD"]),
-  notities: z.string().optional().nullable()
+  notities: z.string().optional().nullable(),
+  gebruikingen: z
+    .array(
+      z.object({
+        id: z.string().optional(),
+        datum: z.string().min(8),
+        soort: z.enum(["AF", "ERBIJ"]),
+        bedrag: z.number().finite().positive(),
+        waaraan: z.string().optional().nullable(),
+        toelichting: z.string().optional().nullable()
+      })
+    )
+    .optional()
+    .nullable()
 }).superRefine((data, ctx) => {
   const t = Date.parse(data.datum);
   if (Number.isNaN(t)) {

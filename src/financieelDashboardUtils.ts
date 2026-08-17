@@ -7,6 +7,8 @@ import {
   formatGeld,
   geldNaarPersoon,
   geldVanPersoon,
+  gebruikingenSamenvatting,
+  normaliseerGebruikingen,
   normalizeValuta,
   postStatusLabel,
   typeLabel
@@ -1299,6 +1301,7 @@ export function postZoekTekst(p: FinancieelPost, dossier = ""): string {
     p.referentie,
     p.notities,
     p.bank,
+    gebruikingenSamenvatting(p),
     typeLabel(p.type),
     postStatusLabel(p),
     betalingsLabel(p),
@@ -1363,20 +1366,53 @@ function bumpFollowSaldo(saldi: Map<string, FollowSaldo>, wie: { naam: string; u
   saldi.set(key, cur);
 }
 
-function applyFollowSaldo(saldi: Map<string, FollowSaldo>, p: FinancieelPost) {
+function applyFollowSaldo(saldi: Map<string, FollowSaldo>, p: FinancieelPost, bedrag = p.bedrag) {
+  const amount = geldRond(bedrag);
+  if (amount === 0) return;
   if (p.type === "INKOMST" || p.type === "KASGELD") {
     const naar = geldNaarPersoon(p);
-    if (naar) bumpFollowSaldo(saldi, naar, p.bedrag);
+    if (naar) bumpFollowSaldo(saldi, naar, amount);
   } else if (p.type === "UITGAVE") {
     const van = geldVanPersoon(p);
-    if (van) bumpFollowSaldo(saldi, van, -p.bedrag);
+    if (van) bumpFollowSaldo(saldi, van, -amount);
   } else if (p.type === "OVERDRACHT") {
     const van = geldVanPersoon(p);
     const naar = geldNaarPersoon(p);
-    if (van) bumpFollowSaldo(saldi, van, -p.bedrag);
-    if (naar) bumpFollowSaldo(saldi, naar, p.bedrag);
+    if (van) bumpFollowSaldo(saldi, van, -amount);
+    if (naar) bumpFollowSaldo(saldi, naar, amount);
   }
 }
+
+function followPersoonDeltas(p: FinancieelPost, bedrag: number): Array<{ key: string; naam: string; delta: number }> {
+  const amount = geldRond(bedrag);
+  if (amount === 0) return [];
+  const uit: Array<{ key: string; naam: string; delta: number }> = [];
+  if (p.type === "INKOMST" || p.type === "KASGELD") {
+    const naar = geldNaarPersoon(p);
+    if (naar) uit.push({ key: followSleutel(naar.naam, naar.userId), naam: naar.naam, delta: amount });
+  } else if (p.type === "UITGAVE") {
+    const van = geldVanPersoon(p);
+    if (van) uit.push({ key: followSleutel(van.naam, van.userId), naam: van.naam, delta: -amount });
+  } else if (p.type === "OVERDRACHT") {
+    const van = geldVanPersoon(p);
+    const naar = geldNaarPersoon(p);
+    if (van) uit.push({ key: followSleutel(van.naam, van.userId), naam: van.naam, delta: -amount });
+    if (naar) uit.push({ key: followSleutel(naar.naam, naar.userId), naam: naar.naam, delta: amount });
+  }
+  return uit;
+}
+
+type FollowOp = {
+  at: Date;
+  post: FinancieelPost;
+  bedrag: number;
+  id: string;
+  titel: string;
+  uitleg: string;
+  soort: FollowMoneyEvent["soort"];
+  bedragLabel: string;
+  besteedCategorie: string | null;
+};
 
 export function lokaleDatumIso(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -1393,23 +1429,109 @@ export function verschuifDag(iso: string, delta: number): string {
   return lokaleDatumIso(d);
 }
 
+function followOpsVanPost(p: FinancieelPost, valuta: FinancieelValuta): FollowOp[] {
+  const ops: FollowOp[] = [];
+  const naar = geldNaarPersoon(p);
+  const van = geldVanPersoon(p);
+  if (p.type === "INKOMST" || p.type === "KASGELD") {
+    ops.push({
+      at: postDatum(p),
+      post: p,
+      bedrag: p.bedrag,
+      id: p.id,
+      soort: "binnen",
+      titel: p.type === "KASGELD" ? "Kasgeld erbij" : "Geld ontvangen",
+      uitleg: [
+        p.klantNaam ? `Van klant ${p.klantNaam}` : "Bron onbekend",
+        naar ? `nu bij ${naar.naam}` : null,
+        p.omschrijving
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      bedragLabel: `+${formatGeld(p.bedrag, valuta)}`,
+      besteedCategorie: null
+    });
+  } else if (p.type === "UITGAVE") {
+    const cat = (p.categorie || "").trim() || "Overige";
+    ops.push({
+      at: postDatum(p),
+      post: p,
+      bedrag: p.bedrag,
+      id: p.id,
+      soort: "uit",
+      titel: `Besteed · ${cat}`,
+      uitleg: [van ? `Uit kas van ${van.naam}` : "Uit kas onbekend", p.omschrijving]
+        .filter(Boolean)
+        .join(" · "),
+      bedragLabel: `−${formatGeld(p.bedrag, valuta)}`,
+      besteedCategorie: cat
+    });
+  } else if (p.type === "OVERDRACHT") {
+    ops.push({
+      at: postDatum(p),
+      post: p,
+      bedrag: p.bedrag,
+      id: p.id,
+      soort: "overdracht",
+      titel: "Overdracht",
+      uitleg: `${van?.naam || "Onbekend"} → ${naar?.naam || "Onbekend"}${
+        p.omschrijving ? ` · ${p.omschrijving}` : ""
+      }`,
+      bedragLabel: formatGeld(p.bedrag, valuta),
+      besteedCategorie: null
+    });
+  }
+
+  for (const g of normaliseerGebruikingen(p.gebruikingen)) {
+    const at = new Date(g.datum);
+    const wanneer = Number.isNaN(at.getTime()) ? postDatum(p) : at;
+    const waar = g.waaraan || g.toelichting || p.omschrijving;
+    if (g.soort === "AF") {
+      ops.push({
+        at: wanneer,
+        post: p,
+        bedrag: -g.bedrag,
+        id: `${p.id}:${g.id}`,
+        soort: "uit",
+        titel: `Afgetrokken van origineel · ${waar || "onbekend"}`,
+        uitleg: `Van post “${p.omschrijving}” (${formatGeld(p.bedrag, valuta)} blijft het origineel)`,
+        bedragLabel: `−${formatGeld(g.bedrag, valuta)}`,
+        besteedCategorie: p.type === "UITGAVE" ? null : waar || "Overige"
+      });
+    } else {
+      ops.push({
+        at: wanneer,
+        post: p,
+        bedrag: g.bedrag,
+        id: `${p.id}:${g.id}`,
+        soort: p.type === "UITGAVE" ? "uit" : p.type === "OVERDRACHT" ? "overdracht" : "binnen",
+        titel: `Extra bij origineel · ${waar || "onbekend"}`,
+        uitleg: `Bij post “${p.omschrijving}” (${formatGeld(p.bedrag, valuta)} blijft het origineel)`,
+        bedragLabel: `+${formatGeld(g.bedrag, valuta)}`,
+        besteedCategorie: p.type === "UITGAVE" ? waar || p.categorie || "Overige" : null
+      });
+    }
+  }
+  return ops;
+}
+
 export function berekenFollowTheMoney(
   allePosten: FinancieelPost[],
   dagIso: string,
   valuta: FinancieelValuta
 ): FollowMoneyDag {
   const dag = parseLokaleDatum(dagIso);
-  const inValuta = allePosten
+  const ops = allePosten
     .filter((p) => normalizeValuta(p.valuta) === valuta && isCashBeweging(p))
-    .sort((a, b) => postDatum(a).getTime() - postDatum(b).getTime());
+    .flatMap((p) => followOpsVanPost(p, valuta))
+    .sort((a, b) => a.at.getTime() - b.at.getTime());
 
   const opening = new Map<string, FollowSaldo>();
-  const dagPosten: FinancieelPost[] = [];
+  const dagOps: FollowOp[] = [];
 
-  for (const p of inValuta) {
-    const d = postDatum(p);
-    if (d < startVanDag(dag)) applyFollowSaldo(opening, p);
-    else if (isZelfdeLokaleDag(d, dag)) dagPosten.push(p);
+  for (const op of ops) {
+    if (op.at < startVanDag(dag)) applyFollowSaldo(opening, op.post, op.bedrag);
+    else if (isZelfdeLokaleDag(op.at, dag)) dagOps.push(op);
   }
 
   const running = new Map([...opening.entries()].map(([k, v]) => [k, { ...v }]));
@@ -1421,76 +1543,37 @@ export function berekenFollowTheMoney(
   let totaalBesteed = 0;
   let totaalOverdracht = 0;
 
-  for (const p of dagPosten) {
-    const d = postDatum(p);
-    const tijd = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-    if (p.type === "INKOMST" || p.type === "KASGELD") {
-      const naar = geldNaarPersoon(p);
-      gebeurtenissen.push({
-        id: p.id,
-        tijd,
-        soort: "binnen",
-        titel: p.type === "KASGELD" ? "Kasgeld erbij" : "Geld ontvangen",
-        uitleg: [
-          p.klantNaam ? `Van klant ${p.klantNaam}` : "Bron onbekend",
-          naar ? `nu bij ${naar.naam}` : null,
-          p.omschrijving
-        ]
-          .filter(Boolean)
-          .join(" · "),
-        bedragLabel: `+${formatGeld(p.bedrag, valuta)}`,
-        post: p
-      });
-      totaalOntvangen = geldRond(totaalOntvangen + p.bedrag);
-      if (naar) {
-        const k = followSleutel(naar.naam, naar.userId);
-        binnenPer.set(k, geldRond((binnenPer.get(k) || 0) + p.bedrag));
-      }
-    } else if (p.type === "UITGAVE") {
-      const van = geldVanPersoon(p);
-      const cat = (p.categorie || "").trim() || "Overige";
-      gebeurtenissen.push({
-        id: p.id,
-        tijd,
-        soort: "uit",
-        titel: `Besteed · ${cat}`,
-        uitleg: [van ? `Uit kas van ${van.naam}` : "Uit kas onbekend", p.omschrijving]
-          .filter(Boolean)
-          .join(" · "),
-        bedragLabel: `−${formatGeld(p.bedrag, valuta)}`,
-        post: p
-      });
-      totaalBesteed = geldRond(totaalBesteed + p.bedrag);
-      if (van) {
-        const k = followSleutel(van.naam, van.userId);
-        uitPer.set(k, geldRond((uitPer.get(k) || 0) + p.bedrag));
-      }
-      besteedMap.set(cat, geldRond((besteedMap.get(cat) || 0) + p.bedrag));
-    } else if (p.type === "OVERDRACHT") {
-      const van = geldVanPersoon(p);
-      const naar = geldNaarPersoon(p);
-      gebeurtenissen.push({
-        id: p.id,
-        tijd,
-        soort: "overdracht",
-        titel: "Overdracht",
-        uitleg: `${van?.naam || "Onbekend"} → ${naar?.naam || "Onbekend"}${
-          p.omschrijving ? ` · ${p.omschrijving}` : ""
-        }`,
-        bedragLabel: formatGeld(p.bedrag, valuta),
-        post: p
-      });
-      totaalOverdracht = geldRond(totaalOverdracht + p.bedrag);
-      if (van) {
-        const k = followSleutel(van.naam, van.userId);
-        uitPer.set(k, geldRond((uitPer.get(k) || 0) + p.bedrag));
-      }
-      if (naar) {
-        const k = followSleutel(naar.naam, naar.userId);
-        binnenPer.set(k, geldRond((binnenPer.get(k) || 0) + p.bedrag));
+  for (const op of dagOps) {
+    const tijd = `${String(op.at.getHours()).padStart(2, "0")}:${String(op.at.getMinutes()).padStart(2, "0")}`;
+    gebeurtenissen.push({
+      id: op.id,
+      tijd,
+      soort: op.soort,
+      titel: op.titel,
+      uitleg: op.uitleg,
+      bedragLabel: op.bedragLabel,
+      post: op.post
+    });
+    if (op.post.type === "INKOMST" || op.post.type === "KASGELD") {
+      if (op.bedrag > 0) totaalOntvangen = geldRond(totaalOntvangen + op.bedrag);
+      else totaalBesteed = geldRond(totaalBesteed - op.bedrag);
+    } else if (op.post.type === "UITGAVE") {
+      totaalBesteed = geldRond(totaalBesteed + op.bedrag);
+    } else if (op.post.type === "OVERDRACHT") {
+      totaalOverdracht = geldRond(totaalOverdracht + Math.abs(op.bedrag));
+    }
+    if (op.besteedCategorie && op.bedrag !== 0) {
+      const cat = op.besteedCategorie;
+      const extra = op.bedrag < 0 ? -op.bedrag : op.bedrag;
+      if (op.soort === "uit" || op.besteedCategorie) {
+        besteedMap.set(cat, geldRond((besteedMap.get(cat) || 0) + extra));
       }
     }
-    applyFollowSaldo(running, p);
+    for (const delta of followPersoonDeltas(op.post, op.bedrag)) {
+      if (delta.delta > 0) binnenPer.set(delta.key, geldRond((binnenPer.get(delta.key) || 0) + delta.delta));
+      else if (delta.delta < 0) uitPer.set(delta.key, geldRond((uitPer.get(delta.key) || 0) - delta.delta));
+    }
+    applyFollowSaldo(running, op.post, op.bedrag);
   }
 
   const keys = new Set([...opening.keys(), ...running.keys(), ...binnenPer.keys(), ...uitPer.keys()]);
@@ -1519,10 +1602,11 @@ export function berekenFollowTheMoney(
     gebeurtenissen,
     besteed: [...besteedMap.entries()]
       .map(([categorie, bedrag]) => ({ categorie, bedrag }))
+      .filter((b) => b.bedrag > 0)
       .sort((a, b) => b.bedrag - a.bedrag),
     totaalBegin: geldRond(personen.reduce((s, p) => s + p.beginsaldo, 0)),
     totaalOntvangen,
-    totaalBesteed,
+    totaalBesteed: Math.max(0, totaalBesteed),
     totaalOverdracht,
     totaalOver: geldRond(personen.reduce((s, p) => s + p.over, 0))
   };

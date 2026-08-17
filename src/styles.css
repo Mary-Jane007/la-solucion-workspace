@@ -1838,6 +1838,42 @@ textarea.form-input {
   grid-column: 1 / -1;
 }
 
+.financieel-gebruik-blok {
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px dashed color-mix(in srgb, currentColor 18%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.financieel-gebruik-blok h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.financieel-gebruik-rij {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  align-items: end;
+  padding: 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, currentColor 5%, transparent);
+}
+
+.financieel-gebruik-acties {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.financieel-gebruik-restant {
+  margin: 0;
+}
+
 .financieel-form-actions {
   display: flex;
   justify-content: flex-end;

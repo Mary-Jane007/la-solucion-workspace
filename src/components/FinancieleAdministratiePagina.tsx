@@ -5,6 +5,7 @@ import {
   fetchAdminUsers,
   fetchFinancieel,
   FinancieelBetalingswijze,
+  FinancieelGebruikSoort,
   FinancieelPost,
   FinancieelStatus,
   FinancieelType,
@@ -29,8 +30,10 @@ import {
   klantSaldoSamenvatting,
   naarDateTimeLocal,
   normalizeValuta,
+  nieuweGebruikId,
   nuDateTimeLocal,
   opdrachtDossierLabel,
+  restantBedrag,
   SaldoCijfers,
   SURINAAME_BANKEN,
   VALUTA_LABELS
@@ -86,6 +89,15 @@ import {
   WinstVerliesPanel
 } from "./financieel/FinancieelDashboardPanels";
 
+type GebruikFormRij = {
+  id: string;
+  datum: string;
+  soort: FinancieelGebruikSoort;
+  bedrag: string;
+  waaraan: string;
+  toelichting: string;
+};
+
 type FormState = {
   datum: string;
   type: FinancieelType;
@@ -107,6 +119,7 @@ type FormState = {
   geldVanNaam: string;
   status: FinancieelStatus;
   notities: string;
+  gebruikingen: GebruikFormRij[];
 };
 
 interface Props {
@@ -118,6 +131,17 @@ function extraZoekvelden(p: FinancieelPost, opdrachtenById: Map<string, Opdracht
   const opdracht = opdrachtenById.get(p.opdrachtId);
   if (!opdracht) return ["Dossier verwijderd"];
   return [opdrachtDossierLabel(opdracht), opdracht.klantNaam, opdracht.omschrijving || ""];
+}
+
+function legeGebruikRij(): GebruikFormRij {
+  return {
+    id: nieuweGebruikId(),
+    datum: nuDateTimeLocal(),
+    soort: "AF",
+    bedrag: "",
+    waaraan: "",
+    toelichting: ""
+  };
 }
 
 function leegFormulier(valuta: FinancieelValuta = "EUR"): FormState {
@@ -141,7 +165,8 @@ function leegFormulier(valuta: FinancieelValuta = "EUR"): FormState {
     geldVanUserId: "",
     geldVanNaam: "",
     status: "OPEN",
-    notities: ""
+    notities: "",
+    gebruikingen: []
   };
 }
 
@@ -431,7 +456,15 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       geldVanUserId: post.geldVanUserId || "",
       geldVanNaam: post.geldVanNaam || "",
       status: post.status,
-      notities: post.notities || ""
+      notities: post.notities || "",
+      gebruikingen: (post.gebruikingen || []).map((g) => ({
+        id: g.id,
+        datum: naarDateTimeLocal(g.datum),
+        soort: g.soort,
+        bedrag: String(g.bedrag).replace(".", ","),
+        waaraan: g.waaraan || "",
+        toelichting: g.toelichting || ""
+      }))
     });
     window.setTimeout(() => formulierRef.current?.scrollIntoView({ behavior: "smooth" }), 0);
   };
@@ -498,6 +531,38 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       setFout("Vul een omschrijving en een geldig bedrag in.");
       return;
     }
+    const gebruikingen: Array<{
+      id: string;
+      datum: string;
+      soort: FinancieelGebruikSoort;
+      bedrag: number;
+      waaraan: string;
+      toelichting: string;
+    }> = [];
+    for (const rij of form.gebruikingen) {
+      const heeftInhoud = rij.bedrag.trim() || rij.waaraan.trim() || rij.toelichting.trim();
+      if (!heeftInhoud) continue;
+      const gebruikBedrag = Number(String(rij.bedrag).replace(",", "."));
+      if (!Number.isFinite(gebruikBedrag) || gebruikBedrag <= 0) {
+        setFout("Vul bij elke gebruiksregel een geldig bedrag in (of verwijder de lege regel).");
+        return;
+      }
+      let gebruikDatum: string;
+      try {
+        gebruikDatum = dateTimeLocalNaarIso(rij.datum || form.datum);
+      } catch {
+        setFout("Vul bij elke gebruiksregel een geldige datum in.");
+        return;
+      }
+      gebruikingen.push({
+        id: rij.id || nieuweGebruikId(),
+        datum: gebruikDatum,
+        soort: rij.soort,
+        bedrag: gebruikBedrag,
+        waaraan: rij.waaraan.trim(),
+        toelichting: rij.toelichting.trim()
+      });
+    }
     const payload = {
       datum: datumIso,
       type: form.type,
@@ -519,7 +584,8 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       geldVanUserId: form.geldVanUserId || null,
       geldVanNaam,
       status: form.type === "OVERDRACHT" || form.type === "KASGELD" ? "BETAALD" : form.status,
-      notities: form.notities.trim()
+      notities: form.notities.trim(),
+      gebruikingen
     };
     try {
       setBezig(true);
@@ -872,6 +938,130 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                   <datalist id="financieel-categorieen">{categorieOpties.map((categorie) => <option key={categorie} value={categorie} />)}</datalist>
                 </label>
                 <label className="form-label">Referentie<input className="form-input" placeholder="Factuurnummer" value={form.referentie} onChange={(e) => setForm({ ...form, referentie: e.target.value })} /></label>
+                <div className="financieel-span-2 financieel-gebruik-blok">
+                  <div className="section-header">
+                    <h3>Van dit bedrag gebruikt</h3>
+                    <p className="muted">Het originele bedrag blijft staan. Hier vul je in wat eraf ging of erbij kwam, en waaraan.</p>
+                  </div>
+                  {form.gebruikingen.map((rij, index) => (
+                    <div key={rij.id} className="financieel-gebruik-rij">
+                      <label className="form-label">
+                        Wat gebeurde er?
+                        <select
+                          className="form-input"
+                          value={rij.soort}
+                          onChange={(e) => {
+                            const gebruikingen = form.gebruikingen.slice();
+                            gebruikingen[index] = { ...rij, soort: e.target.value as FinancieelGebruikSoort };
+                            setForm({ ...form, gebruikingen });
+                          }}
+                        >
+                          <option value="AF">Afgetrokken / besteed</option>
+                          <option value="ERBIJ">Erbij gekomen</option>
+                        </select>
+                      </label>
+                      <label className="form-label">
+                        Bedrag
+                        <input
+                          className="form-input"
+                          inputMode="decimal"
+                          placeholder="0,00"
+                          value={rij.bedrag}
+                          onChange={(e) => {
+                            const gebruikingen = form.gebruikingen.slice();
+                            gebruikingen[index] = { ...rij, bedrag: e.target.value };
+                            setForm({ ...form, gebruikingen });
+                          }}
+                        />
+                      </label>
+                      <label className="form-label">
+                        {rij.soort === "AF" ? "Waaraan besteed?" : "Waar kwam het extra vandaan?"}
+                        <input
+                          className="form-input"
+                          list="financieel-gebruik-waaraan"
+                          placeholder={rij.soort === "AF" ? "Taxi, wisselgeld, eten..." : "Fooi, extra kas..."}
+                          value={rij.waaraan}
+                          onChange={(e) => {
+                            const gebruikingen = form.gebruikingen.slice();
+                            gebruikingen[index] = { ...rij, waaraan: e.target.value };
+                            setForm({ ...form, gebruikingen });
+                          }}
+                        />
+                      </label>
+                      <label className="form-label">
+                        Wanneer
+                        <input
+                          type="datetime-local"
+                          className="form-input"
+                          value={rij.datum}
+                          onChange={(e) => {
+                            const gebruikingen = form.gebruikingen.slice();
+                            gebruikingen[index] = { ...rij, datum: e.target.value };
+                            setForm({ ...form, gebruikingen });
+                          }}
+                        />
+                      </label>
+                      <label className="form-label financieel-span-2">
+                        Toelichting
+                        <input
+                          className="form-input"
+                          value={rij.toelichting}
+                          onChange={(e) => {
+                            const gebruikingen = form.gebruikingen.slice();
+                            gebruikingen[index] = { ...rij, toelichting: e.target.value };
+                            setForm({ ...form, gebruikingen });
+                          }}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="btn-ghost"
+                        onClick={() =>
+                          setForm({
+                            ...form,
+                            gebruikingen: form.gebruikingen.filter((g) => g.id !== rij.id)
+                          })
+                        }
+                      >
+                        Regel weg
+                      </button>
+                    </div>
+                  ))}
+                  <datalist id="financieel-gebruik-waaraan">
+                    {UITGAVE_CATEGORIEEN.map((categorie) => (
+                      <option key={categorie} value={categorie} />
+                    ))}
+                  </datalist>
+                  <div className="financieel-gebruik-acties">
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => setForm({ ...form, gebruikingen: [...form.gebruikingen, legeGebruikRij()] })}
+                    >
+                      Regel toevoegen
+                    </button>
+                    <p className="muted financieel-gebruik-restant">
+                      Origineel {formatGeld(Number(String(form.bedrag).replace(",", ".")) || 0, form.valuta)}
+                      {" · "}
+                      restant{" "}
+                      <strong>
+                        {formatGeld(
+                          restantBedrag({
+                            bedrag: Number(String(form.bedrag).replace(",", ".")) || 0,
+                            gebruikingen: form.gebruikingen.map((rij) => ({
+                              id: rij.id,
+                              datum: rij.datum,
+                              soort: rij.soort,
+                              bedrag: Number(String(rij.bedrag).replace(",", ".")) || 0,
+                              waaraan: rij.waaraan
+                            }))
+                          }),
+                          form.valuta
+                        )}
+                      </strong>
+                    </p>
+                  </div>
+                </div>
                 <label className="form-label financieel-span-2">Notities<textarea className="form-input" rows={2} value={form.notities} onChange={(e) => setForm({ ...form, notities: e.target.value })} /></label>
               </div>
               <div className="financieel-form-actions">

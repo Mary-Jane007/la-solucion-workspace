@@ -188,6 +188,7 @@ async function migrate() {
     alter table financiele_posten alter column valuta set default 'EUR';
     alter table financiele_posten add column if not exists geld_van_user_id text;
     alter table financiele_posten add column if not exists geld_van_naam text;
+    alter table financiele_posten add column if not exists gebruikingen jsonb not null default '[]'::jsonb;
     -- Type OVERDRACHT toestaan (geld van A naar B).
     alter table financiele_posten drop constraint if exists financiele_posten_type_check;
     alter table financiele_posten

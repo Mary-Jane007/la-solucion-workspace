@@ -25,9 +25,38 @@ function normalizeWisselkoers(waarde) {
 const POST_SELECT = `
       id, datum, type, omschrijving, bedrag, valuta, wisselkoers, categorie, referentie, klant_naam, opdracht_id,
       afgehandeld_door_user_id, afgehandeld_door_naam, betalingswijze, bank,
-      geld_bij_user_id, geld_bij_naam, geld_van_user_id, geld_van_naam, status, notities,
+      geld_bij_user_id, geld_bij_naam, geld_van_user_id, geld_van_naam, status, notities, gebruikingen,
       created_at, updated_at
 `;
+
+function normalizeGebruikingen(waarde) {
+  let list = waarde;
+  if (typeof waarde === "string") {
+    try {
+      list = JSON.parse(waarde);
+    } catch {
+      list = [];
+    }
+  }
+  if (!Array.isArray(list)) list = [];
+  return list
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const bedrag = Number(item.bedrag);
+      if (!Number.isFinite(bedrag) || bedrag <= 0) return null;
+      const soort = String(item.soort || "").toUpperCase() === "ERBIJ" ? "ERBIJ" : "AF";
+      const datum = String(item.datum || "").trim();
+      return {
+        id: String(item.id || uuidv4()),
+        datum: datum || new Date().toISOString(),
+        soort,
+        bedrag: Math.round(bedrag * 100) / 100,
+        waaraan: String(item.waaraan || "").trim(),
+        toelichting: String(item.toelichting || "").trim()
+      };
+    })
+    .filter(Boolean);
+}
 
 function rowToPost(row) {
   const datum =
@@ -62,6 +91,7 @@ function rowToPost(row) {
     geldVanNaam: row.geld_van_naam || "",
     status: row.status,
     notities: row.notities || "",
+    gebruikingen: normalizeGebruikingen(row.gebruikingen),
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -89,7 +119,8 @@ function postValues(id, input) {
     input.geldVanUserId || null,
     input.geldVanNaam || "",
     input.type === "OVERDRACHT" || input.type === "KASGELD" ? "BETAALD" : input.status,
-    input.notities || ""
+    input.notities || "",
+    JSON.stringify(normalizeGebruikingen(input.gebruikingen))
   ];
 }
 
@@ -110,9 +141,9 @@ async function createFinancielePost(input) {
     insert into financiele_posten
       (id, datum, type, omschrijving, bedrag, valuta, wisselkoers, categorie, referentie, klant_naam, opdracht_id,
        afgehandeld_door_user_id, afgehandeld_door_naam, betalingswijze, bank,
-       geld_bij_user_id, geld_bij_naam, geld_van_user_id, geld_van_naam, status, notities)
+       geld_bij_user_id, geld_bij_naam, geld_van_user_id, geld_van_naam, status, notities, gebruikingen)
     values
-      ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+      ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22::jsonb)
     returning ${POST_SELECT}
     `,
     postValues(id, input)
@@ -146,6 +177,7 @@ async function updateFinancielePost(id, input) {
       geld_van_naam = $19,
       status = $20,
       notities = $21,
+      gebruikingen = $22::jsonb,
       updated_at = now()
     where id = $1
     returning ${POST_SELECT}

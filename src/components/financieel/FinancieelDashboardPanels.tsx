@@ -25,9 +25,11 @@ import {
   betalingsLabel,
   formatGeld as formatGeldUtil,
   GeldBijTotaal,
+  gebruikingenSamenvatting,
   KlantSaldo,
   normalizeValuta,
   postStatusLabel,
+  restantBedrag,
   typeLabel,
   VALUTA_LABELS
 } from "../../financieelUtils";
@@ -361,11 +363,13 @@ export function PostenTabel({
             <th>Klant</th>
             <th>Dossier</th>
             <th>Bedrag</th>
+            <th>Restant</th>
             <th>Valuta</th>
             <th>Betaling</th>
             <th>Status</th>
             <th>Referentie</th>
             <th>Opmerking</th>
+            <th>Van dit bedrag</th>
             <th>Afgehandeld</th>
             <th>Gewijzigd</th>
             <th></th>
@@ -404,11 +408,15 @@ export function PostenTabel({
                 <td className={p.type === "UITGAVE" ? "financieel-uitgave" : p.type === "OVERDRACHT" ? "" : "financieel-inkomst"}>
                   {formatGeldUtil(p.bedrag, p.valuta)}
                 </td>
+                <td>
+                  {formatGeldUtil(restantBedrag(p), p.valuta)}
+                </td>
                 <td>{normalizeValuta(p.valuta)}</td>
                 <td>{betalingsLabel(p) || "—"}</td>
                 <td>{postStatusLabel(p)}</td>
                 <td>{p.referentie || "—"}</td>
                 <td>{p.notities || "—"}</td>
+                <td>{gebruikingenSamenvatting(p) || "—"}</td>
                 <td>{p.afgehandeldDoorNaam || "—"}</td>
                 <td>{p.updatedAt ? formatDatumTijd(p.updatedAt) : "—"}</td>
                 <td className="financieel-row-actions">

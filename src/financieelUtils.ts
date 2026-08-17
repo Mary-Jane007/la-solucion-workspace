@@ -1,4 +1,10 @@
-import { FinancieelBetalingswijze, FinancieelPost, FinancieelValuta } from "./api";
+import {
+  FinancieelBetalingswijze,
+  FinancieelGebruik,
+  FinancieelGebruikSoort,
+  FinancieelPost,
+  FinancieelValuta
+} from "./api";
 import { Opdracht } from "./types";
 
 export const FINANCIEEL_VALUTAS: FinancieelValuta[] = ["EUR", "USD", "SRD", "XCG"];
@@ -110,6 +116,72 @@ export function naarDateTimeLocal(waarde: string | Date): string {
 
 export function nuDateTimeLocal(): string {
   return naarDateTimeLocal(new Date());
+}
+
+function geldRondCents(bedrag: number): number {
+  return Math.round((Number(bedrag) || 0) * 100) / 100;
+}
+
+export function nieuweGebruikId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `g-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+export function normaliseerGebruikingen(waarde: unknown): FinancieelGebruik[] {
+  if (!Array.isArray(waarde)) return [];
+  const uit: FinancieelGebruik[] = [];
+  for (const raw of waarde) {
+    if (!raw || typeof raw !== "object") continue;
+    const item = raw as Partial<FinancieelGebruik>;
+    const bedrag = Number(item.bedrag);
+    const soort: FinancieelGebruikSoort = item.soort === "ERBIJ" ? "ERBIJ" : "AF";
+    if (!Number.isFinite(bedrag) || bedrag <= 0) continue;
+    const datum = String(item.datum || "").trim();
+    uit.push({
+      id: String(item.id || nieuweGebruikId()),
+      datum: datum || new Date().toISOString(),
+      soort,
+      bedrag: geldRondCents(bedrag),
+      waaraan: String(item.waaraan || "").trim(),
+      toelichting: String(item.toelichting || "").trim()
+    });
+  }
+  return uit.sort((a, b) => new Date(a.datum).getTime() - new Date(b.datum).getTime());
+}
+
+export function totaalGebruikAf(p: { gebruikingen?: FinancieelGebruik[] }): number {
+  return geldRondCents(
+    normaliseerGebruikingen(p.gebruikingen)
+      .filter((g) => g.soort === "AF")
+      .reduce((s, g) => s + g.bedrag, 0)
+  );
+}
+
+export function totaalGebruikErbij(p: { gebruikingen?: FinancieelGebruik[] }): number {
+  return geldRondCents(
+    normaliseerGebruikingen(p.gebruikingen)
+      .filter((g) => g.soort === "ERBIJ")
+      .reduce((s, g) => s + g.bedrag, 0)
+  );
+}
+
+/** Origineel bedrag plus erbij, minus afgetrokken — het origineel zelf blijft ongewijzigd. */
+export function restantBedrag(p: { bedrag?: number; gebruikingen?: FinancieelGebruik[] }): number {
+  return geldRondCents((Number(p.bedrag) || 0) + totaalGebruikErbij(p) - totaalGebruikAf(p));
+}
+
+export function gebruikingenSamenvatting(p: { gebruikingen?: FinancieelGebruik[] }): string {
+  const items = normaliseerGebruikingen(p.gebruikingen);
+  if (items.length === 0) return "";
+  return items
+    .map((g) => {
+      const richting = g.soort === "ERBIJ" ? "erbij" : "af";
+      const waar = g.waaraan ? ` · ${g.waaraan}` : "";
+      return `${richting} ${g.bedrag}${waar}`;
+    })
+    .join("; ");
 }
 
 /** Opslaan als ISO-string (lokale datetime-local → UTC). */
@@ -333,18 +405,19 @@ export function berekenGeldBijTotalen(posten: FinancieelPost[]): GeldBijTotaal[]
     const valuta = normalizeValuta(p.valuta);
     if (p.type === "INKOMST") {
       const naar = geldNaarPersoon(p);
-      if (naar) bumpPersoon(map, naar, valuta, "inkomsten", p.bedrag);
+      if (naar) bumpPersoon(map, naar, valuta, "inkomsten", restantBedrag(p));
     } else if (p.type === "KASGELD") {
       const naar = geldNaarPersoon(p);
-      if (naar) bumpPersoon(map, naar, valuta, "kasgeld", p.bedrag);
+      if (naar) bumpPersoon(map, naar, valuta, "kasgeld", restantBedrag(p));
     } else if (p.type === "UITGAVE") {
       const van = geldVanPersoon(p);
-      if (van) bumpPersoon(map, van, valuta, "uitgaven", p.bedrag);
+      if (van) bumpPersoon(map, van, valuta, "uitgaven", restantBedrag(p));
     } else if (p.type === "OVERDRACHT") {
       const van = geldVanPersoon(p);
       const naar = geldNaarPersoon(p);
-      if (van) bumpPersoon(map, van, valuta, "gegevenOverdracht", p.bedrag);
-      if (naar) bumpPersoon(map, naar, valuta, "ontvangenOverdracht", p.bedrag);
+      const restant = restantBedrag(p);
+      if (van) bumpPersoon(map, van, valuta, "gegevenOverdracht", restant);
+      if (naar) bumpPersoon(map, naar, valuta, "ontvangenOverdracht", restant);
     }
   }
 
@@ -384,6 +457,7 @@ export function financieelPostMatchtZoekterm(
     p.referentie,
     p.notities,
     p.bank,
+    gebruikingenSamenvatting(p),
     typeLabel(p.type),
     postStatusLabel(p),
     betalingsLabel(p),
@@ -551,6 +625,10 @@ export function exportFinancieelPostenCsv(
     "Categorie",
     "Referentie",
     "Bedrag",
+    "Afgetrokken",
+    "Erbij",
+    "Restant",
+    "Gebruik van dit bedrag",
     "Status",
     "Betalingswijze",
     "Bank",
@@ -569,6 +647,10 @@ export function exportFinancieelPostenCsv(
     p.categorie || "",
     p.referentie || "",
     String(p.bedrag).replace(".", ","),
+    String(totaalGebruikAf(p)).replace(".", ","),
+    String(totaalGebruikErbij(p)).replace(".", ","),
+    String(restantBedrag(p)).replace(".", ","),
+    gebruikingenSamenvatting(p),
     postStatusLabel(p),
     p.betalingswijze ? BETALINGSWIJZE_LABELS[p.betalingswijze] : "",
     p.bank || "",
@@ -682,7 +764,8 @@ export function exportFinancieelPdf(
       "Klant",
       "Dossier",
       "Omschrijving",
-      "Bedrag",
+      "Origineel",
+      "Restant",
       "Status",
       "Betaling",
       "Bij wie"
@@ -696,6 +779,7 @@ export function exportFinancieelPdf(
       dossierLabelVoorPost(p, opdrachtenById) || "—",
       p.omschrijving,
       formatGeld(p.bedrag, p.valuta),
+      formatGeld(restantBedrag(p), p.valuta),
       postStatusLabel(p),
       betalingsLabel(p) || "—",
       p.geldBijNaam || "—"

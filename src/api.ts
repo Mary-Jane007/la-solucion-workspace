@@ -123,6 +123,16 @@ export type FinancieelType = "INKOMST" | "UITGAVE" | "KASGELD" | "OVERDRACHT";
 export type FinancieelStatus = "OPEN" | "BETAALD";
 export type FinancieelValuta = "EUR" | "USD" | "SRD" | "XCG";
 export type FinancieelBetalingswijze = "OPGEHAALD" | "OVERGEMAAKT" | "GESTORT";
+export type FinancieelGebruikSoort = "AF" | "ERBIJ";
+
+export interface FinancieelGebruik {
+  id: string;
+  datum: string;
+  soort: FinancieelGebruikSoort;
+  bedrag: number;
+  waaraan: string;
+  toelichting?: string;
+}
 
 export interface FinancieelPost {
   id: string;
@@ -146,6 +156,7 @@ export interface FinancieelPost {
   wisselkoers?: number | null;
   status: FinancieelStatus;
   notities?: string;
+  gebruikingen?: FinancieelGebruik[];
   createdAt?: string;
   updatedAt?: string;
 }
