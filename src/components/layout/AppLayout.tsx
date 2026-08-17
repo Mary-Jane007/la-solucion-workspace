@@ -1,8 +1,13 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { AppPagina, PAGINA_INFO } from "../../appPages";
 import { Gebruiker } from "../../types";
 import { Thema } from "../../theme";
 import { AppNav, NavBadges } from "./AppNav";
+
+function kanHoveren(): boolean {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return true;
+  return window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+}
 
 interface Props {
   children?: ReactNode;
@@ -31,20 +36,87 @@ export function AppLayout({
 }: Props) {
   const paginaInfo = PAGINA_INFO[huidigePagina];
   const isIngelogd = Boolean(gebruiker);
+  /** Na een paginakeuze: content full screen, menu via knop/hover. */
+  const [autoVerbergen, setAutoVerbergen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const fullscreen = isIngelogd && autoVerbergen;
+  const sidebarOpen = !fullscreen || menuOpen;
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
+
+  const handleNavigeer = (pagina: AppPagina) => {
+    onNavigeer?.(pagina);
+    setAutoVerbergen(true);
+    setMenuOpen(false);
+  };
+
+  const openMenu = () => setMenuOpen(true);
+  const closeMenu = () => setMenuOpen(false);
 
   return (
-    <div className="app-root">
-      <div className="app-shell">
-        <aside className="app-sidebar">
+    <div className={`app-root${fullscreen ? " app-root--fullscreen" : ""}`}>
+      <div
+        className={`app-shell${fullscreen ? " app-shell--fullscreen" : ""}${
+          sidebarOpen ? " app-shell--sidebar-open" : " app-shell--sidebar-closed"
+        }`}
+      >
+        {fullscreen && (
+          <button
+            type="button"
+            className="sidebar-hover-rail"
+            aria-label="Menu tonen"
+            title="Menu tonen"
+            onMouseEnter={openMenu}
+            onFocus={openMenu}
+            onClick={openMenu}
+          />
+        )}
+
+        {fullscreen && menuOpen && (
+          <button
+            type="button"
+            className="sidebar-backdrop"
+            aria-label="Menu sluiten"
+            onClick={closeMenu}
+          />
+        )}
+
+        <aside
+          className="app-sidebar"
+          onMouseEnter={() => {
+            if (fullscreen && kanHoveren()) setMenuOpen(true);
+          }}
+          onMouseLeave={() => {
+            if (fullscreen && kanHoveren()) setMenuOpen(false);
+          }}
+        >
           <div className="sidebar-top">
             <div className="sidebar-header">
-              <div className="logo-3d">
+              <div className="logo-3d" title="Menu">
                 <span className="logo-mark">LS</span>
               </div>
               <div className="sidebar-title">
                 <div className="business-name">La-Solución</div>
                 <div className="business-sub">Adviesbureau</div>
               </div>
+              {fullscreen && (
+                <button
+                  type="button"
+                  className="sidebar-close-btn"
+                  aria-label="Menu sluiten"
+                  onClick={closeMenu}
+                >
+                  ×
+                </button>
+              )}
             </div>
             <p className="sidebar-tagline">
               Wij helpen vreemdelingen en ingezetenen met visa, vergunningen en legalisaties.
@@ -58,7 +130,7 @@ export function AppLayout({
               isEigenaar={isEigenaar}
               thema={thema}
               badges={navBadges}
-              onNavigeer={onNavigeer}
+              onNavigeer={handleNavigeer}
               onNieuweOpdracht={onNieuweOpdracht}
               onThemaWissel={onThemaWissel}
               onLogout={onLogout}
@@ -79,8 +151,23 @@ export function AppLayout({
             {isIngelogd ? (
               <>
                 <div className="topbar-left">
-                  <h1 className="topbar-title">{paginaInfo.titel}</h1>
-                  <p className="topbar-subtitle">{paginaInfo.ondertitel}</p>
+                  {fullscreen && (
+                    <button
+                      type="button"
+                      className="topbar-menu-btn"
+                      aria-label="Menu openen"
+                      aria-expanded={menuOpen}
+                      onClick={() => setMenuOpen((open) => !open)}
+                    >
+                      <span />
+                      <span />
+                      <span />
+                    </button>
+                  )}
+                  <div className="topbar-copy">
+                    <h1 className="topbar-title">{paginaInfo.titel}</h1>
+                    <p className="topbar-subtitle">{paginaInfo.ondertitel}</p>
+                  </div>
                 </div>
                 <div className="topbar-user">
                   <div className="user-pill">
@@ -98,11 +185,13 @@ export function AppLayout({
               </>
             ) : (
               <div className="topbar-left">
-                <h1 className="topbar-title">La-Solución Portal</h1>
-                <p className="topbar-subtitle">
-                  Alle opdrachten, afspraken en documenten van uw klanten overzichtelijk bij
-                  elkaar.
-                </p>
+                <div className="topbar-copy">
+                  <h1 className="topbar-title">La-Solución Portal</h1>
+                  <p className="topbar-subtitle">
+                    Alle opdrachten, afspraken en documenten van uw klanten overzichtelijk bij
+                    elkaar.
+                  </p>
+                </div>
               </div>
             )}
           </header>

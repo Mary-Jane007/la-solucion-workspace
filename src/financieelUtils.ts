@@ -79,6 +79,17 @@ export type FinancieelTotalen = {
   teBetalen: number;
 };
 
+export type GeldBijTotaal = {
+  naam: string;
+  userId: string | null;
+  valuta: FinancieelValuta;
+  inkomsten: number;
+  kasgeld: number;
+  uitgaven: number;
+  totaal: number;
+  aantalPosten: number;
+};
+
 function vandaagIso() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -165,8 +176,7 @@ function leegSaldo(): SaldoCijfers {
 
 function telPostOp(entry: SaldoCijfers, p: FinancieelPost): SaldoCijfers {
   const next = { ...entry };
-  // Kasgeld is geen klantbetaling — telt niet mee in klant-/dossiersaldo.
-  if (p.type === "KASGELD") return next;
+  if (p.type === "KASGELD" || p.type === "OVERDRACHT") return next;
   if (p.type === "INKOMST") {
     if (p.status === "OPEN") next.teOntvangen += p.bedrag;
     else next.ontvangen += p.bedrag;
@@ -182,6 +192,7 @@ export function typeLabel(type: FinancieelPost["type"] | string): string {
   if (type === "INKOMST") return "Inkomst";
   if (type === "UITGAVE") return "Uitgave";
   if (type === "KASGELD") return "Kasgeld";
+  if (type === "OVERDRACHT") return "Overdracht";
   return String(type || "");
 }
 
@@ -207,7 +218,7 @@ export function berekenTotalenPerValuta(posten: FinancieelPost[]): FinancieelTot
       if (p.status === "OPEN") t.teOntvangen += p.bedrag;
     } else if (p.type === "KASGELD") {
       t.kasgeld += p.bedrag;
-    } else {
+    } else if (p.type === "UITGAVE") {
       t.uitgaven += p.bedrag;
       if (p.status === "OPEN") t.teBetalen += p.bedrag;
     }
@@ -225,6 +236,162 @@ export function berekenTotalenPerValuta(posten: FinancieelPost[]): FinancieelTot
       t.teOntvangen > 0 ||
       t.teBetalen > 0
   );
+}
+
+type GeldPersoon = { naam: string; userId: string | null };
+
+function geldPersoon(naam?: string | null, userId?: string | null): GeldPersoon | null {
+  const n = (naam || "").trim();
+  const id = (userId || "").trim() || null;
+  if (!n && !id) return null;
+  return { naam: n || "Onbekend", userId: id };
+}
+
+export function geldVanPersoon(p: FinancieelPost): GeldPersoon | null {
+  const expliciet = geldPersoon(p.geldVanNaam, p.geldVanUserId);
+  if (expliciet) return expliciet;
+  if (p.type === "UITGAVE") {
+    return geldPersoon(p.geldBijNaam, p.geldBijUserId) || geldPersoon(p.afgehandeldDoorNaam, p.afgehandeldDoorUserId);
+  }
+  return null;
+}
+
+export function geldNaarPersoon(p: FinancieelPost): GeldPersoon | null {
+  const expliciet = geldPersoon(p.geldBijNaam, p.geldBijUserId);
+  if (expliciet) return expliciet;
+  if (p.type === "INKOMST" || p.type === "KASGELD") {
+    return geldPersoon(p.afgehandeldDoorNaam, p.afgehandeldDoorUserId);
+  }
+  return null;
+}
+
+function geldBijIdentiteit(p: FinancieelPost): GeldPersoon | null {
+  return geldNaarPersoon(p);
+}
+
+function persoonSleutel(wie: GeldPersoon, valuta: FinancieelValuta): string {
+  return `${wie.userId || wie.naam.toLowerCase()}||${valuta}`;
+}
+
+function bumpPersoon(
+  map: Map<
+    string,
+    {
+      naam: string;
+      userId: string | null;
+      valuta: FinancieelValuta;
+      inkomsten: number;
+      kasgeld: number;
+      uitgaven: number;
+      ontvangenOverdracht: number;
+      gegevenOverdracht: number;
+      aantalPosten: number;
+    }
+  >,
+  wie: GeldPersoon,
+  valuta: FinancieelValuta,
+  veld: "inkomsten" | "kasgeld" | "uitgaven" | "ontvangenOverdracht" | "gegevenOverdracht",
+  bedrag: number
+) {
+  const key = persoonSleutel(wie, valuta);
+  const bestaand = map.get(key) || {
+    naam: wie.naam,
+    userId: wie.userId,
+    valuta,
+    inkomsten: 0,
+    kasgeld: 0,
+    uitgaven: 0,
+    ontvangenOverdracht: 0,
+    gegevenOverdracht: 0,
+    aantalPosten: 0
+  };
+  bestaand[veld] += bedrag;
+  bestaand.aantalPosten += 1;
+  if (!bestaand.naam || bestaand.naam === "Onbekend") bestaand.naam = wie.naam;
+  map.set(key, bestaand);
+}
+
+/** Totaal geld dat nu bij iemand is, per persoon en valuta. */
+export function berekenGeldBijTotalen(posten: FinancieelPost[]): GeldBijTotaal[] {
+  const map = new Map<
+    string,
+    {
+      naam: string;
+      userId: string | null;
+      valuta: FinancieelValuta;
+      inkomsten: number;
+      kasgeld: number;
+      uitgaven: number;
+      ontvangenOverdracht: number;
+      gegevenOverdracht: number;
+      aantalPosten: number;
+    }
+  >();
+
+  for (const p of posten) {
+    if (p.type !== "KASGELD" && p.type !== "OVERDRACHT" && p.status !== "BETAALD") continue;
+    const valuta = normalizeValuta(p.valuta);
+    if (p.type === "INKOMST") {
+      const naar = geldNaarPersoon(p);
+      if (naar) bumpPersoon(map, naar, valuta, "inkomsten", p.bedrag);
+    } else if (p.type === "KASGELD") {
+      const naar = geldNaarPersoon(p);
+      if (naar) bumpPersoon(map, naar, valuta, "kasgeld", p.bedrag);
+    } else if (p.type === "UITGAVE") {
+      const van = geldVanPersoon(p);
+      if (van) bumpPersoon(map, van, valuta, "uitgaven", p.bedrag);
+    } else if (p.type === "OVERDRACHT") {
+      const van = geldVanPersoon(p);
+      const naar = geldNaarPersoon(p);
+      if (van) bumpPersoon(map, van, valuta, "gegevenOverdracht", p.bedrag);
+      if (naar) bumpPersoon(map, naar, valuta, "ontvangenOverdracht", p.bedrag);
+    }
+  }
+
+  return [...map.values()]
+    .map((s) => ({
+      naam: s.naam,
+      userId: s.userId,
+      valuta: s.valuta,
+      inkomsten: s.inkomsten,
+      kasgeld: s.kasgeld,
+      uitgaven: s.uitgaven,
+      aantalPosten: s.aantalPosten,
+      totaal: s.inkomsten + s.kasgeld + s.ontvangenOverdracht - s.uitgaven - s.gegevenOverdracht
+    }))
+    .sort((a, b) => {
+      if (a.totaal !== b.totaal) return b.totaal - a.totaal;
+      const naam = a.naam.localeCompare(b.naam, "nl");
+      if (naam !== 0) return naam;
+      return a.valuta.localeCompare(b.valuta);
+    });
+}
+
+export function financieelPostMatchtZoekterm(
+  p: FinancieelPost,
+  zoekterm: string,
+  extra: string[] = []
+): boolean {
+  const q = zoekterm.trim().toLowerCase();
+  if (!q) return true;
+  const velden = [
+    p.klantNaam,
+    p.geldBijNaam,
+    p.geldVanNaam,
+    p.afgehandeldDoorNaam,
+    p.omschrijving,
+    p.categorie,
+    p.referentie,
+    p.notities,
+    p.bank,
+    typeLabel(p.type),
+    postStatusLabel(p),
+    betalingsLabel(p),
+    normalizeValuta(p.valuta),
+    String(p.bedrag).replace(".", ","),
+    ...extra
+  ];
+  return velden.some((v) => (v || "").toLowerCase().includes(q));
 }
 
 export function berekenKlantSaldi(posten: FinancieelPost[]): KlantSaldo[] {
@@ -303,6 +470,7 @@ export function berekenDossierSaldi(
 
 export function postStatusLabel(p: FinancieelPost): string {
   if (p.type === "KASGELD") return "In kas";
+  if (p.type === "OVERDRACHT") return "Overgedragen";
   if (p.status === "BETAALD") {
     return p.type === "INKOMST" ? "Betaald door klant" : "Uitbetaald";
   }
@@ -489,6 +657,7 @@ export function exportFinancieelPdf(
 ) {
   const klantSaldi = berekenKlantSaldi(posten);
   const dossierSaldi = berekenDossierSaldi(posten, opdrachtenById);
+  const geldBij = berekenGeldBijTotalen(posten);
   const totalen = berekenTotalenPerValuta(posten);
 
   const totalenHtml = totalen.length
@@ -530,6 +699,19 @@ export function exportFinancieelPdf(
       postStatusLabel(p),
       betalingsLabel(p) || "—",
       p.geldBijNaam || "—"
+    ])
+  );
+
+  const geldBijTabel = tabelHtml(
+    ["Bij wie", "Valuta", "Inkomsten", "Kasgeld", "Uitgaven", "Totaal", "Posten"],
+    geldBij.map((s) => [
+      s.naam,
+      s.valuta,
+      formatGeld(s.inkomsten, s.valuta),
+      formatGeld(s.kasgeld, s.valuta),
+      formatGeld(s.uitgaven, s.valuta),
+      formatGeld(s.totaal, s.valuta),
+      String(s.aantalPosten)
     ])
   );
 
@@ -609,6 +791,8 @@ export function exportFinancieelPdf(
     <p>Posten: <strong>${posten.length}</strong></p>
     ${totalenHtml}
   </div>
+  <h2>Geld bij personen</h2>
+  ${geldBij.length ? geldBijTabel : "<p>Geen bedragen bij personen.</p>"}
   <h2>Klantsaldo’s</h2>
   ${klantSaldi.length ? klantTabel : "<p>Geen klantsaldo’s.</p>"}
   <h2>Dossiersaldo’s</h2>

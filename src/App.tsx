@@ -194,7 +194,7 @@ function IngelogdeApp({
         />
       )}
       {huidigePagina === "statistieken" && isEigenaar && (
-        <StatistiekenPagina werkruimte={werkruimte} />
+        <StatistiekenPagina werkruimte={werkruimte} onNavigeer={handleNavigeer} />
       )}
       {huidigePagina === "klanten" && isEigenaar && (
         <KlantenPagina

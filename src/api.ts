@@ -119,7 +119,7 @@ export async function downloadBestand(bestandId: string, bestandsnaam: string): 
   URL.revokeObjectURL(url);
 }
 
-export type FinancieelType = "INKOMST" | "UITGAVE" | "KASGELD";
+export type FinancieelType = "INKOMST" | "UITGAVE" | "KASGELD" | "OVERDRACHT";
 export type FinancieelStatus = "OPEN" | "BETAALD";
 export type FinancieelValuta = "EUR" | "USD" | "SRD" | "XCG";
 export type FinancieelBetalingswijze = "OPGEHAALD" | "OVERGEMAAKT" | "GESTORT";
@@ -141,6 +141,8 @@ export interface FinancieelPost {
   bank?: string;
   geldBijUserId?: string | null;
   geldBijNaam?: string;
+  geldVanUserId?: string | null;
+  geldVanNaam?: string;
   wisselkoers?: number | null;
   status: FinancieelStatus;
   notities?: string;

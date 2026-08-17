@@ -64,7 +64,7 @@ export const PAGINA_INFO: Record<AppPagina, { titel: string; ondertitel: string 
   },
   statistieken: {
     titel: "Statistieken",
-    ondertitel: "Werkdruk, prioriteiten en teamverdeling in cijfers."
+    ondertitel: "Werkdruk, prioriteiten, teamverdeling én financiële kerncijfers."
   },
   activiteit: {
     titel: "Activiteit",
