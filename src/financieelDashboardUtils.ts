@@ -9,6 +9,8 @@ import {
   geldVanPersoon,
   gebruikingenSamenvatting,
   gebruikWaaraanTekst,
+  isOverdrachtMedewerker,
+  medewerkerUitGebruik,
   normaliseerGebruikingen,
   normalizeValuta,
   postStatusLabel,
@@ -1413,6 +1415,8 @@ type FollowOp = {
   soort: FollowMoneyEvent["soort"];
   bedragLabel: string;
   besteedCategorie: string | null;
+  /** Als gezet: gebruik deze saldo-wijzigingen i.p.v. standaard post-logica. */
+  handmatigeDeltas?: Array<{ naam: string; userId: string | null; delta: number }>;
 };
 
 export function lokaleDatumIso(d: Date): string {
@@ -1487,6 +1491,33 @@ function followOpsVanPost(p: FinancieelPost, valuta: FinancieelValuta): FollowOp
     const at = new Date(g.datum);
     const wanneer = Number.isNaN(at.getTime()) ? postDatum(p) : at;
     const waar = gebruikWaaraanTekst(g) || g.toelichting || p.omschrijving;
+    if (g.soort === "AF" && isOverdrachtMedewerker(g.waaraan)) {
+      const medewerker = medewerkerUitGebruik(g) || "Onbekende medewerker";
+      const bron = geldNaarPersoon(p) || geldVanPersoon(p);
+      const deltas: NonNullable<FollowOp["handmatigeDeltas"]> = [];
+      if (bron) deltas.push({ naam: bron.naam, userId: bron.userId, delta: -g.bedrag });
+      deltas.push({ naam: medewerker, userId: null, delta: g.bedrag });
+      ops.push({
+        at: wanneer,
+        post: p,
+        bedrag: g.bedrag,
+        id: `${p.id}:${g.id}`,
+        soort: "overdracht",
+        titel: `Overdracht medewerker · ${medewerker}`,
+        uitleg: [
+          bron ? `Van ${bron.naam}` : null,
+          `naar ${medewerker}`,
+          `van post “${p.omschrijving}”`,
+          g.toelichting || null
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        bedragLabel: formatGeld(g.bedrag, valuta),
+        besteedCategorie: null,
+        handmatigeDeltas: deltas
+      });
+      continue;
+    }
     if (g.soort === "AF") {
       ops.push({
         at: wanneer,
@@ -1531,8 +1562,15 @@ export function berekenFollowTheMoney(
   const dagOps: FollowOp[] = [];
 
   for (const op of ops) {
-    if (op.at < startVanDag(dag)) applyFollowSaldo(opening, op.post, op.bedrag);
-    else if (isZelfdeLokaleDag(op.at, dag)) dagOps.push(op);
+    if (op.at < startVanDag(dag)) {
+      if (op.handmatigeDeltas) {
+        for (const delta of op.handmatigeDeltas) {
+          bumpFollowSaldo(opening, { naam: delta.naam, userId: delta.userId }, delta.delta);
+        }
+      } else {
+        applyFollowSaldo(opening, op.post, op.bedrag);
+      }
+    } else if (isZelfdeLokaleDag(op.at, dag)) dagOps.push(op);
   }
 
   const running = new Map([...opening.entries()].map(([k, v]) => [k, { ...v }]));
@@ -1556,25 +1594,41 @@ export function berekenFollowTheMoney(
       post: op.post
     });
     if (op.post.type === "INKOMST" || op.post.type === "KASGELD") {
-      if (op.bedrag > 0) totaalOntvangen = geldRond(totaalOntvangen + op.bedrag);
-      else totaalBesteed = geldRond(totaalBesteed - op.bedrag);
+      if (op.soort === "overdracht") {
+        totaalOverdracht = geldRond(totaalOverdracht + Math.abs(op.bedrag));
+      } else if (op.bedrag > 0) {
+        totaalOntvangen = geldRond(totaalOntvangen + op.bedrag);
+      } else {
+        totaalBesteed = geldRond(totaalBesteed - op.bedrag);
+      }
     } else if (op.post.type === "UITGAVE") {
-      totaalBesteed = geldRond(totaalBesteed + op.bedrag);
+      if (op.soort === "overdracht") {
+        totaalOverdracht = geldRond(totaalOverdracht + Math.abs(op.bedrag));
+      } else {
+        totaalBesteed = geldRond(totaalBesteed + op.bedrag);
+      }
     } else if (op.post.type === "OVERDRACHT") {
       totaalOverdracht = geldRond(totaalOverdracht + Math.abs(op.bedrag));
     }
-    if (op.besteedCategorie && op.bedrag !== 0) {
+    if (op.besteedCategorie && op.bedrag !== 0 && op.soort !== "overdracht") {
       const cat = op.besteedCategorie;
       const extra = op.bedrag < 0 ? -op.bedrag : op.bedrag;
-      if (op.soort === "uit" || op.besteedCategorie) {
-        besteedMap.set(cat, geldRond((besteedMap.get(cat) || 0) + extra));
+      besteedMap.set(cat, geldRond((besteedMap.get(cat) || 0) + extra));
+    }
+    if (op.handmatigeDeltas) {
+      for (const delta of op.handmatigeDeltas) {
+        const key = followSleutel(delta.naam, delta.userId);
+        if (delta.delta > 0) binnenPer.set(key, geldRond((binnenPer.get(key) || 0) + delta.delta));
+        else if (delta.delta < 0) uitPer.set(key, geldRond((uitPer.get(key) || 0) - delta.delta));
+        bumpFollowSaldo(running, { naam: delta.naam, userId: delta.userId }, delta.delta);
       }
+    } else {
+      for (const delta of followPersoonDeltas(op.post, op.bedrag)) {
+        if (delta.delta > 0) binnenPer.set(delta.key, geldRond((binnenPer.get(delta.key) || 0) + delta.delta));
+        else if (delta.delta < 0) uitPer.set(delta.key, geldRond((uitPer.get(delta.key) || 0) - delta.delta));
+      }
+      applyFollowSaldo(running, op.post, op.bedrag);
     }
-    for (const delta of followPersoonDeltas(op.post, op.bedrag)) {
-      if (delta.delta > 0) binnenPer.set(delta.key, geldRond((binnenPer.get(delta.key) || 0) + delta.delta));
-      else if (delta.delta < 0) uitPer.set(delta.key, geldRond((uitPer.get(delta.key) || 0) - delta.delta));
-    }
-    applyFollowSaldo(running, op.post, op.bedrag);
   }
 
   const keys = new Set([...opening.keys(), ...running.keys(), ...binnenPer.keys(), ...uitPer.keys()]);

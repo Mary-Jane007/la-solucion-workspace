@@ -757,6 +757,7 @@ const financieelSchema = z.object({
         bedrag: z.number().finite().positive(),
         waaraan: z.string().optional().nullable(),
         bank: z.string().optional().nullable(),
+        medewerker: z.string().optional().nullable(),
         toelichting: z.string().optional().nullable()
       })
     )

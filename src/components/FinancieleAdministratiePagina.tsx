@@ -27,8 +27,11 @@ import {
   financieelPostMatchtZoekterm,
   formatGeld,
   GEBRUIK_BANKSTORTING,
+  GEBRUIK_OVERDRACHT_MEDEWERKER,
   isBankstorting,
+  isOverdrachtMedewerker,
   bankUitWaaraan,
+  medewerkerUitWaaraan,
   KlantSaldo,
   klantSaldoSamenvatting,
   naarDateTimeLocal,
@@ -100,6 +103,7 @@ type GebruikFormRij = {
   bedrag: string;
   waaraan: string;
   bank: string;
+  medewerker: string;
   toelichting: string;
 };
 
@@ -146,6 +150,7 @@ function legeGebruikRij(): GebruikFormRij {
     bedrag: "",
     waaraan: "",
     bank: "",
+    medewerker: "",
     toelichting: ""
   };
 }
@@ -475,8 +480,13 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
         datum: naarDateTimeLocal(g.datum),
         soort: g.soort,
         bedrag: String(g.bedrag).replace(".", ","),
-        waaraan: isBankstorting(g.waaraan) ? GEBRUIK_BANKSTORTING : g.waaraan || "",
+        waaraan: isBankstorting(g.waaraan)
+          ? GEBRUIK_BANKSTORTING
+          : isOverdrachtMedewerker(g.waaraan)
+            ? GEBRUIK_OVERDRACHT_MEDEWERKER
+            : g.waaraan || "",
         bank: g.bank || bankUitWaaraan(g.waaraan),
+        medewerker: g.medewerker || medewerkerUitWaaraan(g.waaraan),
         toelichting: g.toelichting || ""
       }))
     });
@@ -552,10 +562,16 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       bedrag: number;
       waaraan: string;
       bank: string;
+      medewerker: string;
       toelichting: string;
     }> = [];
     for (const rij of form.gebruikingen) {
-      const heeftInhoud = rij.bedrag.trim() || rij.waaraan.trim() || rij.bank.trim() || rij.toelichting.trim();
+      const heeftInhoud =
+        rij.bedrag.trim() ||
+        rij.waaraan.trim() ||
+        rij.bank.trim() ||
+        rij.medewerker.trim() ||
+        rij.toelichting.trim();
       if (!heeftInhoud) continue;
       const gebruikBedrag = Number(String(rij.bedrag).replace(",", "."));
       if (!Number.isFinite(gebruikBedrag) || gebruikBedrag <= 0) {
@@ -564,6 +580,14 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       }
       if (isBankstorting(rij.waaraan) && !rij.bank.trim()) {
         setFout("Kies bij een bankstorting welke bank.");
+        return;
+      }
+      if (isOverdrachtMedewerker(rij.waaraan) && !rij.medewerker.trim()) {
+        setFout("Kies of schrijf bij een overdracht naar medewerker de naam.");
+        return;
+      }
+      if (isOverdrachtMedewerker(rij.waaraan) && rij.soort !== "AF") {
+        setFout("Overdracht medewerker kan alleen als ‘Afgetrokken / besteed’ (verplaatsing).");
         return;
       }
       let gebruikDatum: string;
@@ -578,8 +602,13 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
         datum: gebruikDatum,
         soort: rij.soort,
         bedrag: gebruikBedrag,
-        waaraan: isBankstorting(rij.waaraan) ? GEBRUIK_BANKSTORTING : rij.waaraan.trim(),
+        waaraan: isBankstorting(rij.waaraan)
+          ? GEBRUIK_BANKSTORTING
+          : isOverdrachtMedewerker(rij.waaraan)
+            ? GEBRUIK_OVERDRACHT_MEDEWERKER
+            : rij.waaraan.trim(),
         bank: isBankstorting(rij.waaraan) ? rij.bank.trim() : "",
+        medewerker: isOverdrachtMedewerker(rij.waaraan) ? rij.medewerker.trim() : "",
         toelichting: rij.toelichting.trim()
       });
     }
@@ -1001,6 +1030,8 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                           value={
                             isBankstorting(rij.waaraan)
                               ? GEBRUIK_BANKSTORTING
+                              : isOverdrachtMedewerker(rij.waaraan)
+                                ? GEBRUIK_OVERDRACHT_MEDEWERKER
                               : (UITGAVE_CATEGORIEEN as readonly string[]).includes(rij.waaraan)
                                 ? rij.waaraan
                               : rij.waaraan
@@ -1011,24 +1042,50 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                             const gekozen = e.target.value;
                             const gebruikingen = form.gebruikingen.slice();
                             if (gekozen === GEBRUIK_BANKSTORTING) {
-                              gebruikingen[index] = { ...rij, waaraan: GEBRUIK_BANKSTORTING };
+                              gebruikingen[index] = {
+                                ...rij,
+                                waaraan: GEBRUIK_BANKSTORTING,
+                                medewerker: "",
+                                soort: rij.soort
+                              };
+                            } else if (gekozen === GEBRUIK_OVERDRACHT_MEDEWERKER) {
+                              gebruikingen[index] = {
+                                ...rij,
+                                waaraan: GEBRUIK_OVERDRACHT_MEDEWERKER,
+                                bank: "",
+                                soort: "AF"
+                              };
                             } else if (gekozen === "__anders__") {
-                              gebruikingen[index] = { ...rij, waaraan: "Anders", bank: "" };
+                              gebruikingen[index] = {
+                                ...rij,
+                                waaraan: "Anders",
+                                bank: "",
+                                medewerker: ""
+                              };
                             } else {
-                              gebruikingen[index] = { ...rij, waaraan: gekozen, bank: "" };
+                              gebruikingen[index] = {
+                                ...rij,
+                                waaraan: gekozen,
+                                bank: "",
+                                medewerker: ""
+                              };
                             }
                             setForm({ ...form, gebruikingen });
                           }}
                         >
                           <option value="">— Kies —</option>
                           <option value={GEBRUIK_BANKSTORTING}>Bankstorting</option>
+                          <option value={GEBRUIK_OVERDRACHT_MEDEWERKER}>Overdracht medewerker</option>
                           {UITGAVE_CATEGORIEEN.map((categorie) => (
                             <option key={categorie} value={categorie}>{categorie}</option>
                           ))}
                           <option value="__anders__">Anders (zelf invullen)</option>
                         </select>
                       </label>
-                      {((UITGAVE_CATEGORIEEN as readonly string[]).includes(rij.waaraan) || isBankstorting(rij.waaraan) || !rij.waaraan
+                      {((UITGAVE_CATEGORIEEN as readonly string[]).includes(rij.waaraan) ||
+                      isBankstorting(rij.waaraan) ||
+                      isOverdrachtMedewerker(rij.waaraan) ||
+                      !rij.waaraan
                         ? false
                         : true) && (
                         <label className="form-label">
@@ -1040,7 +1097,12 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                             value={rij.waaraan}
                             onChange={(e) => {
                               const gebruikingen = form.gebruikingen.slice();
-                              gebruikingen[index] = { ...rij, waaraan: e.target.value, bank: "" };
+                              gebruikingen[index] = {
+                                ...rij,
+                                waaraan: e.target.value,
+                                bank: "",
+                                medewerker: ""
+                              };
                               setForm({ ...form, gebruikingen });
                             }}
                           />
@@ -1064,6 +1126,27 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                             ))}
                           </select>
                         </label>
+                      )}
+                      {isOverdrachtMedewerker(rij.waaraan) && (
+                        <label className="form-label">
+                          Naar welke medewerker?
+                          <input
+                            className="form-input"
+                            list="financieel-gebruik-medewerker"
+                            placeholder="Kies of typ een naam"
+                            value={rij.medewerker}
+                            onChange={(e) => {
+                              const gebruikingen = form.gebruikingen.slice();
+                              gebruikingen[index] = { ...rij, medewerker: e.target.value };
+                              setForm({ ...form, gebruikingen });
+                            }}
+                          />
+                        </label>
+                      )}
+                      {isOverdrachtMedewerker(rij.waaraan) && (
+                        <p className="muted financieel-span-2">
+                          Dit is een verplaatsing: het bedrag blijft in de kas, maar gaat naar deze medewerker.
+                        </p>
                       )}
                       <label className="form-label">
                         Wanneer
@@ -1106,9 +1189,17 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                   ))}
                   <datalist id="financieel-gebruik-waaraan">
                     <option value={GEBRUIK_BANKSTORTING} />
+                    <option value={GEBRUIK_OVERDRACHT_MEDEWERKER} />
                     {UITGAVE_CATEGORIEEN.map((categorie) => (
                       <option key={categorie} value={categorie} />
                     ))}
+                  </datalist>
+                  <datalist id="financieel-gebruik-medewerker">
+                    {team
+                      .filter((u) => u.active !== false)
+                      .map((u) => (
+                        <option key={u.id} value={u.name} />
+                      ))}
                   </datalist>
                   <div className="financieel-gebruik-acties">
                     <button
@@ -1131,7 +1222,9 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                               datum: rij.datum,
                               soort: rij.soort,
                               bedrag: Number(String(rij.bedrag).replace(",", ".")) || 0,
-                              waaraan: rij.waaraan
+                              waaraan: rij.waaraan,
+                              bank: rij.bank,
+                              medewerker: rij.medewerker
                             }))
                           }),
                           form.valuta

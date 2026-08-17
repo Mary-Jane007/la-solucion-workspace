@@ -123,9 +123,14 @@ function geldRondCents(bedrag: number): number {
 }
 
 export const GEBRUIK_BANKSTORTING = "Bankstorting";
+export const GEBRUIK_OVERDRACHT_MEDEWERKER = "Overdracht medewerker";
 
 export function isBankstorting(waaraan?: string | null): boolean {
   return (waaraan || "").trim().toLowerCase().startsWith("bankstorting");
+}
+
+export function isOverdrachtMedewerker(waaraan?: string | null): boolean {
+  return (waaraan || "").trim().toLowerCase().startsWith("overdracht medewerker");
 }
 
 export function bankUitWaaraan(waaraan?: string | null): string {
@@ -135,11 +140,34 @@ export function bankUitWaaraan(waaraan?: string | null): string {
   return delen.length > 1 ? delen.slice(1).join(" · ") : "";
 }
 
-export function gebruikWaaraanTekst(g: { waaraan?: string; bank?: string }): string {
+export function medewerkerUitWaaraan(waaraan?: string | null): string {
+  const tekst = (waaraan || "").trim();
+  if (!isOverdrachtMedewerker(tekst)) return "";
+  const delen = tekst.split("·").map((d) => d.trim());
+  return delen.length > 1 ? delen.slice(1).join(" · ") : "";
+}
+
+export function medewerkerUitGebruik(g: {
+  waaraan?: string;
+  medewerker?: string;
+}): string {
+  return (g.medewerker || "").trim() || medewerkerUitWaaraan(g.waaraan);
+}
+
+export function gebruikWaaraanTekst(g: {
+  waaraan?: string;
+  bank?: string;
+  medewerker?: string;
+}): string {
   const waar = (g.waaraan || "").trim();
   const bank = (g.bank || "").trim() || bankUitWaaraan(waar);
+  const medewerker = medewerkerUitGebruik(g);
   if (isBankstorting(waar) && bank) return `${GEBRUIK_BANKSTORTING} · ${bank}`;
   if (isBankstorting(waar)) return GEBRUIK_BANKSTORTING;
+  if (isOverdrachtMedewerker(waar) && medewerker) {
+    return `${GEBRUIK_OVERDRACHT_MEDEWERKER} · ${medewerker}`;
+  }
+  if (isOverdrachtMedewerker(waar)) return GEBRUIK_OVERDRACHT_MEDEWERKER;
   return waar;
 }
 
@@ -160,13 +188,16 @@ export function normaliseerGebruikingen(waarde: unknown): FinancieelGebruik[] {
     const soort: FinancieelGebruikSoort = item.soort === "ERBIJ" ? "ERBIJ" : "AF";
     if (!Number.isFinite(bedrag) || bedrag <= 0) continue;
     const datum = String(item.datum || "").trim();
+    const waaraan = String(item.waaraan || "").trim();
     uit.push({
       id: String(item.id || nieuweGebruikId()),
       datum: datum || new Date().toISOString(),
       soort,
       bedrag: geldRondCents(bedrag),
-      waaraan: String(item.waaraan || "").trim(),
-      bank: String(item.bank || "").trim() || bankUitWaaraan(String(item.waaraan || "")),
+      waaraan,
+      bank: String(item.bank || "").trim() || bankUitWaaraan(waaraan),
+      medewerker:
+        String(item.medewerker || "").trim() || medewerkerUitWaaraan(waaraan),
       toelichting: String(item.toelichting || "").trim()
     });
   }
@@ -440,6 +471,14 @@ export function berekenGeldBijTotalen(posten: FinancieelPost[]): GeldBijTotaal[]
       const restant = restantBedrag(p);
       if (van) bumpPersoon(map, van, valuta, "gegevenOverdracht", restant);
       if (naar) bumpPersoon(map, naar, valuta, "ontvangenOverdracht", restant);
+    }
+
+    // Overdracht naar medewerker vanuit gebruiksregels: kas blijft gelijk, geld verplaatst.
+    for (const g of normaliseerGebruikingen(p.gebruikingen)) {
+      if (g.soort !== "AF" || !isOverdrachtMedewerker(g.waaraan)) continue;
+      const naam = medewerkerUitGebruik(g);
+      if (!naam) continue;
+      bumpPersoon(map, { naam, userId: null }, valuta, "ontvangenOverdracht", g.bedrag);
     }
   }
 

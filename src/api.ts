@@ -132,6 +132,8 @@ export interface FinancieelGebruik {
   bedrag: number;
   waaraan: string;
   bank?: string;
+  /** Naam van medewerker bij overdracht vanuit dit bedrag. */
+  medewerker?: string;
   toelichting?: string;
 }
 

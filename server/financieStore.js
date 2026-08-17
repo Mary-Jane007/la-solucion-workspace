@@ -53,6 +53,7 @@ function normalizeGebruikingen(waarde) {
         bedrag: Math.round(bedrag * 100) / 100,
         waaraan: String(item.waaraan || "").trim(),
         bank: String(item.bank || "").trim(),
+        medewerker: String(item.medewerker || "").trim(),
         toelichting: String(item.toelichting || "").trim()
       };
     })
