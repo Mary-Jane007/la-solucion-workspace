@@ -2,6 +2,7 @@ import { FinancieelPost, FinancieelValuta } from "./api";
 import {
   berekenGeldBijTotalen,
   betalingsLabel,
+  huidigKasSaldo,
   FINANCIEEL_VALUTAS,
   formatDatumTijd,
   formatGeld,
@@ -237,6 +238,7 @@ export type DashboardKpis = {
   inkomsten: number;
   uitgaven: number;
   kasgeld: number;
+  inKas: number;
   netto: number;
   openstaand: number;
   ontvangen: number;
@@ -312,10 +314,12 @@ export function berekenDashboardKpis(
   posten: FinancieelPost[],
   vorigePosten: FinancieelPost[],
   valuta: FinancieelValuta,
-  dagenInPeriode: number
+  dagenInPeriode: number,
+  kasPosten: FinancieelPost[] = posten
 ): DashboardKpis {
   const h = basisTotalen(posten);
   const v = basisTotalen(vorigePosten);
+  const inKas = huidigKasSaldo(kasPosten, valuta);
   const dagen = Math.max(1, dagenInPeriode);
   const gemPerDag = geldRond(h.inkomsten / dagen);
   const gemPerKlant = h.klanten > 0 ? geldRond(h.inkomsten / h.klanten) : 0;
@@ -359,6 +363,15 @@ export function berekenDashboardKpis(
       tone: h.netto >= 0 ? "groen" : "rood",
       deltaPct: dNetto,
       deltaLabel: formatDelta(dNetto)
+    },
+    {
+      id: "in-kas",
+      label: "Momenteel in kas",
+      waarde: formatGeld(inKas, valuta),
+      hint: "Contant nu bij medewerkers, na bestedingen en overdrachten",
+      tone: inKas >= 0 ? "blauw" : "rood",
+      deltaPct: null,
+      deltaLabel: null
     },
     {
       id: "open",
@@ -437,6 +450,7 @@ export function berekenDashboardKpis(
     inkomsten: h.inkomsten,
     uitgaven: h.uitgaven,
     kasgeld: h.kasgeld,
+    inKas,
     netto: h.netto,
     openstaand: h.openstaand,
     ontvangen: h.ontvangen,

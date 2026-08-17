@@ -382,8 +382,15 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
   );
   const dagenInPeriode = Math.max(1, Math.ceil((bereik.tot.getTime() - bereik.van.getTime()) / 86400000));
   const kpis = useMemo(
-    () => berekenDashboardKpis(periodePosten, vorigePosten, dashboardValuta, dagenInPeriode),
-    [periodePosten, vorigePosten, dashboardValuta, dagenInPeriode]
+    () =>
+      berekenDashboardKpis(
+        periodePosten,
+        vorigePosten,
+        dashboardValuta,
+        dagenInPeriode,
+        filterOpValuta(posten, dashboardValuta)
+      ),
+    [periodePosten, vorigePosten, dashboardValuta, dagenInPeriode, posten]
   );
   const vorigeKpis = useMemo(
     () => berekenDashboardKpis(vorigePosten, [], dashboardValuta, dagenInPeriode),

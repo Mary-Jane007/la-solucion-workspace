@@ -501,6 +501,15 @@ export function berekenGeldBijTotalen(posten: FinancieelPost[]): GeldBijTotaal[]
     });
 }
 
+/** Contant dat nu bij medewerkers/kas is (restanten + overdrachten, geen openstaande posten). */
+export function huidigKasSaldo(posten: FinancieelPost[], valuta: FinancieelValuta): number {
+  return geldRondCents(
+    berekenGeldBijTotalen(posten)
+      .filter((r) => r.valuta === valuta)
+      .reduce((s, r) => s + r.totaal, 0)
+  );
+}
+
 export function financieelPostMatchtZoekterm(
   p: FinancieelPost,
   zoekterm: string,

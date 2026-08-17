@@ -160,6 +160,12 @@ export function OverzichtPanel({
             </strong>
           </div>
           <div>
+            <span className="muted">In kas</span>
+            <strong className={kpis.inKas >= 0 ? "financieel-inkomst" : "financieel-uitgave"}>
+              {formatGeld(kpis.inKas, kpis.valuta)}
+            </strong>
+          </div>
+          <div>
             <span className="muted">Nog te ontvangen</span>
             <strong>{formatGeld(dag.openstaand, kpis.valuta)}</strong>
           </div>

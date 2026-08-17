@@ -114,7 +114,13 @@ export function StatistiekenPagina({ werkruimte, onNavigeer }: Props) {
       1,
       Math.ceil((bereik.tot.getTime() - bereik.van.getTime()) / 86400000)
     );
-    const kpis = berekenDashboardKpis(periodePosten, vorigePosten, valuta, dagen);
+    const kpis = berekenDashboardKpis(
+      periodePosten,
+      vorigePosten,
+      valuta,
+      dagen,
+      filterOpValuta(posten, valuta)
+    );
     const openstaand = berekenOpenstaandeBetalingen(posten).filter(
       (r) => normalizeValuta(r.post.valuta) === valuta
     );
@@ -181,6 +187,11 @@ export function StatistiekenPagina({ werkruimte, onNavigeer }: Props) {
               label="Nettoresultaat"
               waarde={formatGeld(financieel.kpis.netto, valuta)}
               tone={financieel.kpis.netto >= 0 ? "groen" : "rood"}
+            />
+            <GeldKaart
+              label="Momenteel in kas"
+              waarde={formatGeld(financieel.kpis.inKas, valuta)}
+              tone="blauw"
             />
             <GeldKaart
               label="Nog te ontvangen"
