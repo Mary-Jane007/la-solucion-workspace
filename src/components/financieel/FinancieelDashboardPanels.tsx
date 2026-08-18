@@ -26,6 +26,7 @@ import {
   formatGeld as formatGeldUtil,
   GeldBijTotaal,
   gebruikingenSamenvatting,
+  inkomstKasRegels,
   KlantSaldo,
   normalizeValuta,
   postStatusLabel,
@@ -409,7 +410,14 @@ export function PostenTabel({
                 </td>
                 <td>{p.categorie || "—"}</td>
                 <td>{p.omschrijving}{p.bijlagen?.length ? ` · ${p.bijlagen.length} foto${p.bijlagen.length === 1 ? "" : "’s"}` : ""}</td>
-                <td>{p.klantNaam || "—"}</td>
+                <td>
+                  {p.klantNaam ||
+                    inkomstKasRegels(p)
+                      .map((g) => g.klantNaam)
+                      .filter(Boolean)
+                      .join(", ") ||
+                    "—"}
+                </td>
                 <td>{dossier}</td>
                 <td className={p.type === "UITGAVE" ? "financieel-uitgave" : p.type === "OVERDRACHT" ? "" : "financieel-inkomst"}>
                   {formatGeldUtil(p.bedrag, p.valuta)}

@@ -46,14 +46,19 @@ function normalizeGebruikingen(waarde) {
       if (!Number.isFinite(bedrag) || bedrag <= 0) return null;
       const soort = String(item.soort || "").toUpperCase() === "ERBIJ" ? "ERBIJ" : "AF";
       const datum = String(item.datum || "").trim();
+      const waaraan = String(item.waaraan || "").trim();
+      const genormaliseerdWaaraan = waaraan.toLowerCase().startsWith("inkomst kas")
+        ? "Inkomst kas"
+        : waaraan;
       return {
         id: String(item.id || uuidv4()),
         datum: datum || new Date().toISOString(),
         soort,
         bedrag: Math.round(bedrag * 100) / 100,
-        waaraan: String(item.waaraan || "").trim(),
+        waaraan: genormaliseerdWaaraan,
         bank: String(item.bank || "").trim(),
         medewerker: String(item.medewerker || "").trim(),
+        klantNaam: String(item.klantNaam || "").trim(),
         toelichting: String(item.toelichting || "").trim()
       };
     })

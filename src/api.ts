@@ -164,6 +164,8 @@ export interface FinancieelGebruik {
   bank?: string;
   /** Naam van medewerker bij overdracht vanuit dit bedrag. */
   medewerker?: string;
+  /** Klant bij inkomst die in de kas erbij komt. */
+  klantNaam?: string;
   toelichting?: string;
 }
 

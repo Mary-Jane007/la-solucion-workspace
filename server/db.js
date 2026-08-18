@@ -28,6 +28,12 @@ const pool = DATABASE_URL
     })
   : null;
 
+if (pool) {
+  pool.on("error", (err) => {
+    console.error("Databaseverbinding verbroken (idle); wordt opnieuw geopend bij de volgende query.", err.message);
+  });
+}
+
 async function query(text, params) {
   if (!pool) {
     throw new Error("Database niet geconfigureerd (DATABASE_URL ontbreekt).");

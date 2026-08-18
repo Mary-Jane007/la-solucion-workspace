@@ -10,6 +10,7 @@ import {
   formatGeld,
   gebruikWaaraanTekst,
   huidigKasSaldo,
+  isInkomstKas,
   normaliseerGebruikingen,
   normalizeValuta,
   opdrachtDossierLabel,
@@ -23,6 +24,11 @@ import {
 
 function gebruikingenVanPost(p: FinancieelPost): FinancieelGebruik[] {
   return normaliseerGebruikingen(p.gebruikingen);
+}
+
+function gebruikSoortLabel(g: FinancieelGebruik): string {
+  if (g.soort === "ERBIJ") return isInkomstKas(g.waaraan) ? "Inkomst in kas" : "Erbij";
+  return "Af / besteed";
 }
 
 function htmlEscape(waarde: string): string {
@@ -133,7 +139,7 @@ function dagboekRij(p: FinancieelPost, opdrachtenById: Map<string, Opdracht>): s
   const gebruik = gebruikingenVanPost(p)
     .map((g) => {
       const waar = gebruikWaaraanTekst(g);
-      const richting = g.soort === "ERBIJ" ? "erbij" : "af";
+      const richting = g.soort === "ERBIJ" ? (isInkomstKas(g.waaraan) ? "inkomst in kas" : "erbij") : "af";
       return `${formatDatumTijd(g.datum)} · ${richting} ${geldTekst(g.bedrag, p.valuta)}${
         waar ? ` · ${waar}` : ""
       }${g.toelichting ? ` (${g.toelichting})` : ""}`;
@@ -238,9 +244,10 @@ function bouwRapportHtml(
         formatDatumTijd(g.datum),
         typeLabel(p.type),
         p.omschrijving || "",
-        g.soort === "ERBIJ" ? "Erbij" : "Af / besteed",
+        gebruikSoortLabel(g),
         geldTekst(g.bedrag, p.valuta),
         gebruikWaaraanTekst(g) || "",
+        g.klantNaam || "",
         g.bank || "",
         g.medewerker || "",
         g.toelichting || "",
@@ -254,12 +261,13 @@ function bouwRapportHtml(
       const gebruik = gebruikingenVanPost(p);
       const gebruikTabel = gebruik.length
         ? tabelHtml(
-            ["Datum", "Soort", "Bedrag", "Waaraan / naar wie", "Bank", "Medewerker", "Toelichting"],
+            ["Datum", "Soort", "Bedrag", "Waaraan / naar wie", "Klant", "Bank", "Medewerker", "Toelichting"],
             gebruik.map((g) => [
               formatDatumTijd(g.datum),
-              g.soort === "ERBIJ" ? "Erbij" : "Af / besteed",
+              gebruikSoortLabel(g),
               geldTekst(g.bedrag, p.valuta),
               gebruikWaaraanTekst(g) || "—",
+              g.klantNaam || "—",
               g.bank || "—",
               g.medewerker || "—",
               g.toelichting || "—"
@@ -409,6 +417,7 @@ function bouwRapportHtml(
             "Soort",
             "Bedrag",
             "Waaraan / naar wie",
+            "Klant",
             "Bank",
             "Medewerker",
             "Toelichting",
@@ -556,9 +565,10 @@ export function exportFinancieelExcel(
         formatDatumTijd(g.datum),
         typeLabel(p.type),
         p.omschrijving || "",
-        g.soort === "ERBIJ" ? "Erbij" : "Af / besteed",
+        gebruikSoortLabel(g),
         geldTekst(g.bedrag, p.valuta),
         gebruikWaaraanTekst(g) || "",
+        g.klantNaam || "",
         g.bank || "",
         g.medewerker || "",
         g.toelichting || "",
@@ -575,6 +585,7 @@ export function exportFinancieelExcel(
       "Soort",
       "Bedrag",
       "Waaraan / naar wie",
+      "Klant",
       "Bank",
       "Medewerker",
       "Toelichting",

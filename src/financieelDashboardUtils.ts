@@ -4,17 +4,21 @@ import {
   betalingsLabel,
   huidigKasSaldo,
   FINANCIEEL_VALUTAS,
+  extraInkomstUitGebruik,
   formatDatumTijd,
   formatGeld,
   geldNaarPersoon,
   geldVanPersoon,
   gebruikingenSamenvatting,
   gebruikWaaraanTekst,
+  inkomstKasRegels,
+  isInkomstKas,
   isOverdrachtMedewerker,
   medewerkerUitGebruik,
   normaliseerGebruikingen,
   normalizeValuta,
   postStatusLabel,
+  totaalInkomstKas,
   typeLabel
 } from "./financieelUtils";
 import { Opdracht } from "./types";
@@ -297,6 +301,21 @@ function basisTotalen(posten: FinancieelPost[]) {
       uitgaven = geldRond(uitgaven + p.bedrag);
       if (p.status === "OPEN") openstaand = geldRond(openstaand + p.bedrag);
     }
+
+    const extra = extraInkomstUitGebruik(p);
+    const betaaldViaRegel = totaalInkomstKas(p);
+    if (extra) inkomsten = geldRond(inkomsten + extra);
+    if (betaaldViaRegel) {
+      ontvangen = geldRond(ontvangen + betaaldViaRegel);
+      if (p.type === "INKOMST" && p.status === "OPEN") {
+        const settle = Math.min(p.bedrag, betaaldViaRegel);
+        teOntvangen = geldRond(Math.max(0, teOntvangen - settle));
+        openstaand = geldRond(Math.max(0, openstaand - settle));
+      }
+    }
+    for (const g of inkomstKasRegels(p)) {
+      if (g.klantNaam?.trim()) klanten.add(g.klantNaam.trim().toLowerCase());
+    }
   }
 
   return {
@@ -513,20 +532,36 @@ export function berekenDagVerslag(
     (a, b) => postDatum(a).getTime() - postDatum(b).getTime()
   );
 
-  const tijdlijn: DagTijdlijnItem[] = sorted.map((p) => {
+  const tijdlijn: DagTijdlijnItem[] = [];
+  for (const p of sorted) {
     const d = postDatum(p);
     const tijd = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
     const positief = p.type !== "UITGAVE";
     const teken = positief ? "+" : "−";
-    return {
+    tijdlijn.push({
       id: p.id,
       tijd,
       tekst: `${typeLabel(p.type)} · ${p.omschrijving}${p.klantNaam ? ` · ${p.klantNaam}` : ""}`,
       bedragLabel: `${teken}${formatGeld(p.bedrag, p.valuta)}`,
       positief,
       post: p
-    };
-  });
+    });
+    for (const g of inkomstKasRegels(p)) {
+      const gd = new Date(g.datum);
+      const gTijd = Number.isNaN(gd.getTime())
+        ? tijd
+        : `${String(gd.getHours()).padStart(2, "0")}:${String(gd.getMinutes()).padStart(2, "0")}`;
+      const klant = (g.klantNaam || p.klantNaam || "").trim();
+      tijdlijn.push({
+        id: `${p.id}:${g.id}`,
+        tijd: gTijd,
+        tekst: `Betaald door klant${klant ? ` · ${klant}` : ""} · ${p.omschrijving}`,
+        bedragLabel: `+${formatGeld(g.bedrag, p.valuta)}`,
+        positief: true,
+        post: p
+      });
+    }
+  }
 
   const geldBij = berekenGeldBijTotalen(inValuta.length ? inValuta : dagPosten).map((g) => ({
     naam: g.naam,
@@ -590,12 +625,13 @@ export function berekenOpenstaandeBetalingen(
       }
       return {
         post: p,
-        openstaand: p.bedrag,
+        openstaand: geldRond(Math.max(0, p.bedrag - totaalInkomstKas(p))),
         dagenOpen: dagen,
         urgentie,
         urgentieLabel
       };
     })
+    .filter((r) => r.openstaand > 0)
     .sort((a, b) => {
       const rank = { achterstallig: 0, bijna: 1, open: 2, betaald: 3 };
       if (rank[a.urgentie] !== rank[b.urgentie]) return rank[a.urgentie] - rank[b.urgentie];
@@ -633,7 +669,11 @@ export function berekenFacturen(posten: FinancieelPost[]): FactuurRij[] {
     const eerste = [...list].sort((a, b) => postDatum(a).getTime() - postDatum(b).getTime())[0];
     const valuta = normalizeValuta(eerste.valuta);
     const bedrag = geldSom(list.map((p) => p.bedrag));
-    const betaald = geldSom(list.filter((p) => p.status === "BETAALD").map((p) => p.bedrag));
+    const betaald = geldSom(
+      list.map((p) =>
+        p.status === "BETAALD" ? p.bedrag : totaalInkomstKas(p)
+      )
+    );
     const openstaand = geldRond(bedrag - betaald);
     const dagen = Math.floor(
       (Date.now() - postDatum(eerste).getTime()) / 86400000
@@ -691,6 +731,18 @@ export function berekenPerCategorie(
     cur.aantal += 1;
     map.set(cat, cur);
   }
+  if (type === "INKOMST") {
+    for (const p of posten) {
+      if (normalizeValuta(p.valuta) !== valuta) continue;
+      const extra = extraInkomstUitGebruik(p);
+      if (!extra) continue;
+      const cat = "Betaald door klant";
+      const cur = map.get(cat) || { bedrag: 0, aantal: 0 };
+      cur.bedrag = geldRond(cur.bedrag + extra);
+      cur.aantal += inkomstKasRegels(p).length;
+      map.set(cat, cur);
+    }
+  }
   const totaal = geldSom([...map.values()].map((v) => v.bedrag)) || 1;
   return [...map.entries()]
     .map(([categorie, v]) => ({
@@ -742,14 +794,16 @@ export function berekenWinstVerlies(
   for (const p of inScope) {
     const cat = (p.categorie || "").trim();
     if (p.type === "INKOMST" || p.type === "KASGELD") {
+      const extra = extraInkomstUitGebruik(p);
+      const som = geldRond(p.bedrag + extra);
       if (catMatch(cat, ["visa", "vergunning", "legalisatie", "advies", "vertaling", "dienst"])) {
-        dienstverlening = geldRond(dienstverlening + p.bedrag);
+        dienstverlening = geldRond(dienstverlening + som);
       } else if (p.type === "KASGELD") {
-        overigeInkomsten = geldRond(overigeInkomsten + p.bedrag);
+        overigeInkomsten = geldRond(overigeInkomsten + som);
       } else if (!cat) {
-        dienstverlening = geldRond(dienstverlening + p.bedrag);
+        dienstverlening = geldRond(dienstverlening + som);
       } else {
-        overigeInkomsten = geldRond(overigeInkomsten + p.bedrag);
+        overigeInkomsten = geldRond(overigeInkomsten + som);
       }
     } else if (p.type === "UITGAVE") {
       if (catMatch(cat, ["personeel", "salaris", "loon"])) {
@@ -765,6 +819,10 @@ export function berekenWinstVerlies(
       } else {
         overigeKosten = geldRond(overigeKosten + p.bedrag);
       }
+    }
+    if (p.type !== "INKOMST" && p.type !== "KASGELD") {
+      const extra = extraInkomstUitGebruik(p);
+      if (extra) overigeInkomsten = geldRond(overigeInkomsten + extra);
     }
   }
 
@@ -820,6 +878,12 @@ export function berekenCashflow(
     } else if (p.type === "KASGELD" || p.status === "BETAALD") {
       geldBinnen = geldRond(geldBinnen + p.bedrag);
     }
+    const extra = extraInkomstUitGebruik(p);
+    if (extra) geldBinnen = geldRond(geldBinnen + extra);
+    if (p.type === "INKOMST" && p.status === "OPEN") {
+      const betaaldViaRegel = totaalInkomstKas(p);
+      if (betaaldViaRegel) geldBinnen = geldRond(geldBinnen + Math.min(p.bedrag, betaaldViaRegel));
+    }
   }
   const voor = allePosten.filter(
     (p) => postDatum(p) < bereik.van && normalizeValuta(p.valuta) === valuta
@@ -874,6 +938,8 @@ export function berekenTijdreeks(
     const punt = map.get(key) || { label, key, inkomsten: 0, uitgaven: 0, netto: 0 };
     if (p.type === "UITGAVE") punt.uitgaven = geldRond(punt.uitgaven + p.bedrag);
     else punt.inkomsten = geldRond(punt.inkomsten + p.bedrag);
+    const extra = extraInkomstUitGebruik(p);
+    if (extra) punt.inkomsten = geldRond(punt.inkomsten + extra);
     punt.netto = geldRond(punt.inkomsten - punt.uitgaven);
     map.set(key, punt);
   }
@@ -1375,6 +1441,12 @@ function isCashBeweging(p: FinancieelPost): boolean {
   return p.status === "BETAALD" && (p.type === "INKOMST" || p.type === "UITGAVE");
 }
 
+function heeftInkomstKasGebruik(p: FinancieelPost): boolean {
+  return normaliseerGebruikingen(p.gebruikingen).some(
+    (g) => g.soort === "ERBIJ" && isInkomstKas(g.waaraan)
+  );
+}
+
 type FollowSaldo = { naam: string; saldo: number };
 
 function bumpFollowSaldo(saldi: Map<string, FollowSaldo>, wie: { naam: string; userId: string | null }, delta: number) {
@@ -1454,53 +1526,55 @@ function followOpsVanPost(p: FinancieelPost, valuta: FinancieelValuta): FollowOp
   const ops: FollowOp[] = [];
   const naar = geldNaarPersoon(p);
   const van = geldVanPersoon(p);
-  if (p.type === "INKOMST" || p.type === "KASGELD") {
-    ops.push({
-      at: postDatum(p),
-      post: p,
-      bedrag: p.bedrag,
-      id: p.id,
-      soort: "binnen",
-      titel: p.type === "KASGELD" ? "Kasgeld erbij" : "Geld ontvangen",
-      uitleg: [
-        p.klantNaam ? `Van klant ${p.klantNaam}` : "Bron onbekend",
-        naar ? `nu bij ${naar.naam}` : null,
-        p.omschrijving
-      ]
-        .filter(Boolean)
-        .join(" · "),
-      bedragLabel: `+${formatGeld(p.bedrag, valuta)}`,
-      besteedCategorie: null
-    });
-  } else if (p.type === "UITGAVE") {
-    const cat = (p.categorie || "").trim() || "Overige";
-    ops.push({
-      at: postDatum(p),
-      post: p,
-      bedrag: p.bedrag,
-      id: p.id,
-      soort: "uit",
-      titel: `Besteed · ${cat}`,
-      uitleg: [van ? `Uit kas van ${van.naam}` : "Uit kas onbekend", p.omschrijving]
-        .filter(Boolean)
-        .join(" · "),
-      bedragLabel: `−${formatGeld(p.bedrag, valuta)}`,
-      besteedCategorie: cat
-    });
-  } else if (p.type === "OVERDRACHT") {
-    ops.push({
-      at: postDatum(p),
-      post: p,
-      bedrag: p.bedrag,
-      id: p.id,
-      soort: "overdracht",
-      titel: "Overdracht",
-      uitleg: `${van?.naam || "Onbekend"} → ${naar?.naam || "Onbekend"}${
-        p.omschrijving ? ` · ${p.omschrijving}` : ""
-      }`,
-      bedragLabel: formatGeld(p.bedrag, valuta),
-      besteedCategorie: null
-    });
+  if (isCashBeweging(p)) {
+    if (p.type === "INKOMST" || p.type === "KASGELD") {
+      ops.push({
+        at: postDatum(p),
+        post: p,
+        bedrag: p.bedrag,
+        id: p.id,
+        soort: "binnen",
+        titel: p.type === "KASGELD" ? "Kasgeld erbij" : "Geld ontvangen",
+        uitleg: [
+          p.klantNaam ? `Van klant ${p.klantNaam}` : "Bron onbekend",
+          naar ? `nu bij ${naar.naam}` : null,
+          p.omschrijving
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        bedragLabel: `+${formatGeld(p.bedrag, valuta)}`,
+        besteedCategorie: null
+      });
+    } else if (p.type === "UITGAVE") {
+      const cat = (p.categorie || "").trim() || "Overige";
+      ops.push({
+        at: postDatum(p),
+        post: p,
+        bedrag: p.bedrag,
+        id: p.id,
+        soort: "uit",
+        titel: `Besteed · ${cat}`,
+        uitleg: [van ? `Uit kas van ${van.naam}` : "Uit kas onbekend", p.omschrijving]
+          .filter(Boolean)
+          .join(" · "),
+        bedragLabel: `−${formatGeld(p.bedrag, valuta)}`,
+        besteedCategorie: cat
+      });
+    } else if (p.type === "OVERDRACHT") {
+      ops.push({
+        at: postDatum(p),
+        post: p,
+        bedrag: p.bedrag,
+        id: p.id,
+        soort: "overdracht",
+        titel: "Overdracht",
+        uitleg: `${van?.naam || "Onbekend"} → ${naar?.naam || "Onbekend"}${
+          p.omschrijving ? ` · ${p.omschrijving}` : ""
+        }`,
+        bedragLabel: formatGeld(p.bedrag, valuta),
+        besteedCategorie: null
+      });
+    }
   }
 
   for (const g of normaliseerGebruikingen(p.gebruikingen)) {
@@ -1531,6 +1605,32 @@ function followOpsVanPost(p: FinancieelPost, valuta: FinancieelValuta): FollowOp
         bedragLabel: formatGeld(g.bedrag, valuta),
         besteedCategorie: null,
         handmatigeDeltas: deltas
+      });
+      continue;
+    }
+    if (g.soort === "ERBIJ" && isInkomstKas(g.waaraan)) {
+      const klant = (g.klantNaam || "").trim();
+      const kasHouder = naar || van;
+      const deltas: NonNullable<FollowOp["handmatigeDeltas"]> = [];
+      if (kasHouder) deltas.push({ naam: kasHouder.naam, userId: kasHouder.userId, delta: g.bedrag });
+      ops.push({
+        at: wanneer,
+        post: p,
+        bedrag: g.bedrag,
+        id: `${p.id}:${g.id}`,
+        soort: "binnen",
+        titel: klant ? `Inkomst in kas · ${klant}` : "Inkomst in kas",
+        uitleg: [
+          klant ? `Van klant ${klant}` : null,
+          kasHouder ? `nu bij ${kasHouder.naam}` : null,
+          `bij post “${p.omschrijving}”`,
+          g.toelichting || null
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        bedragLabel: `+${formatGeld(g.bedrag, valuta)}`,
+        besteedCategorie: null,
+        handmatigeDeltas: deltas.length ? deltas : undefined
       });
       continue;
     }
@@ -1570,7 +1670,7 @@ export function berekenFollowTheMoney(
 ): FollowMoneyDag {
   const dag = parseLokaleDatum(dagIso);
   const ops = allePosten
-    .filter((p) => normalizeValuta(p.valuta) === valuta && isCashBeweging(p))
+    .filter((p) => normalizeValuta(p.valuta) === valuta && (isCashBeweging(p) || heeftInkomstKasGebruik(p)))
     .flatMap((p) => followOpsVanPost(p, valuta))
     .sort((a, b) => a.at.getTime() - b.at.getTime());
 
@@ -1620,6 +1720,8 @@ export function berekenFollowTheMoney(
     } else if (op.post.type === "UITGAVE") {
       if (op.soort === "overdracht") {
         totaalOverdracht = geldRond(totaalOverdracht + Math.abs(op.bedrag));
+      } else if (op.soort === "binnen") {
+        totaalOntvangen = geldRond(totaalOntvangen + op.bedrag);
       } else {
         totaalBesteed = geldRond(totaalBesteed + op.bedrag);
       }

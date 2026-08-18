@@ -2055,12 +2055,23 @@ textarea.form-input {
   background: color-mix(in srgb, currentColor 5%, transparent);
 }
 
+.financieel-gebruik-rij.inkomst {
+  background: color-mix(in srgb, #2e7d32 12%, transparent);
+  outline: 1px solid color-mix(in srgb, #2e7d32 28%, transparent);
+}
+
 .financieel-gebruik-acties {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
   justify-content: space-between;
+}
+
+.financieel-gebruik-acties-knoppen {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .financieel-gebruik-restant {
