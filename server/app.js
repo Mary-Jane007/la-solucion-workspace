@@ -50,7 +50,11 @@ const {
   listFinancielePosten,
   createFinancielePost,
   updateFinancielePost,
-  deleteFinancielePost
+  deleteFinancielePost,
+  getFinancielePostById,
+  createFinancielePostBijlagen,
+  getFinancielePostBijlageById,
+  deleteFinancielePostBijlage
 } = require("./financieStore");
 const {
   listInzendingen,
@@ -209,6 +213,10 @@ const uploadInzendingImg = multer({
 function parseInzendingUpload(req, res, next) {
   const ct = String(req.headers["content-type"] || "").toLowerCase();
   if (!ct.includes("multipart/form-data")) return next();
+  return parseRequiredImageUpload(req, res, next);
+}
+
+function parseRequiredImageUpload(req, res, next) {
   uploadInzendingImg.array("bestanden", 5)(req, res, (err) => {
     if (err) {
       const teGroot = err.code === "LIMIT_FILE_SIZE";
@@ -838,6 +846,64 @@ app.post("/api/admin/financieel", authRequired, requireOwner, async (req, res) =
     return res.status(201).json({ post });
   } catch (err) {
     console.error("Fout bij POST /api/admin/financieel:", err);
+    return res.status(500).json({ error: "Interne serverfout." });
+  }
+});
+
+app.post(
+  "/api/admin/financieel/:id/bestanden",
+  authRequired,
+  requireOwner,
+  parseRequiredImageUpload,
+  async (req, res) => {
+    try {
+      if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
+      const bestaande = await getFinancielePostById(req.params.id);
+      if (!bestaande) return res.status(404).json({ error: "Post niet gevonden." });
+      const files = Array.isArray(req.files) ? req.files : [];
+      if (!files.length) return res.status(400).json({ error: "Geen afbeelding ontvangen." });
+      const post = await createFinancielePostBijlagen(req.params.id, files);
+      return res.status(201).json({ post });
+    } catch (err) {
+      console.error("Fout bij POST /api/admin/financieel/:id/bestanden:", err);
+      return res.status(500).json({ error: "Interne serverfout." });
+    }
+  }
+);
+
+app.get("/api/admin/financieel/bestanden/:id/download", authRequired, requireOwner, async (req, res) => {
+  try {
+    if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
+    const bijlage = await getFinancielePostBijlageById(req.params.id);
+    if (!bijlage) return res.status(404).json({ error: "Afbeelding niet gevonden." });
+    const filePath = path.join(uploadDir, bijlage.opslagNaam);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Bestand ontbreekt." });
+    res.setHeader("Content-Type", bijlage.mimeType || "application/octet-stream");
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${encodeURIComponent(bijlage.origineleNaam)}"`
+    );
+    return res.sendFile(filePath);
+  } catch (err) {
+    console.error("Fout bij download post-afbeelding:", err);
+    return res.status(500).json({ error: "Interne serverfout." });
+  }
+});
+
+app.delete("/api/admin/financieel/bestanden/:id", authRequired, requireOwner, async (req, res) => {
+  try {
+    if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
+    const bijlage = await deleteFinancielePostBijlage(req.params.id);
+    if (!bijlage) return res.status(404).json({ error: "Afbeelding niet gevonden." });
+    const filePath = path.join(uploadDir, bijlage.opslagNaam);
+    try {
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    } catch (unlinkErr) {
+      console.warn("Kon post-afbeelding niet van schijf verwijderen:", filePath, unlinkErr);
+    }
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("Fout bij DELETE post-afbeelding:", err);
     return res.status(500).json({ error: "Interne serverfout." });
   }
 });

@@ -281,6 +281,23 @@ async function migrate() {
     `,
     []
   );
+
+  await query(
+    `
+    create table if not exists financiele_post_bestanden (
+      id text primary key,
+      post_id text not null references financiele_posten(id) on delete cascade,
+      originele_naam text not null,
+      opslag_naam text not null unique,
+      mime_type text not null,
+      grootte int not null,
+      created_at timestamptz not null default now()
+    );
+    create index if not exists idx_fin_post_bestanden_post
+      on financiele_post_bestanden(post_id);
+    `,
+    []
+  );
 }
 
 module.exports = {

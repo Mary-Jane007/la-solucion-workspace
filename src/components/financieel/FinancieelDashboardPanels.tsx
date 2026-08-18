@@ -408,7 +408,7 @@ export function PostenTabel({
                   </span>
                 </td>
                 <td>{p.categorie || "—"}</td>
-                <td>{p.omschrijving}</td>
+                <td>{p.omschrijving}{p.bijlagen?.length ? ` · ${p.bijlagen.length} foto${p.bijlagen.length === 1 ? "" : "’s"}` : ""}</td>
                 <td>{p.klantNaam || "—"}</td>
                 <td>{dossier}</td>
                 <td className={p.type === "UITGAVE" ? "financieel-uitgave" : p.type === "OVERDRACHT" ? "" : "financieel-inkomst"}>

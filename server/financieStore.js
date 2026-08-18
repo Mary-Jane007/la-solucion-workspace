@@ -132,7 +132,7 @@ async function listFinancielePosten() {
     `select ${POST_SELECT} from financiele_posten order by datum desc, created_at desc`,
     []
   );
-  return res.rows.map(rowToPost);
+  return withBijlagen(res.rows.map(rowToPost));
 }
 
 async function createFinancielePost(input) {
@@ -150,7 +150,7 @@ async function createFinancielePost(input) {
     `,
     postValues(id, input)
   );
-  return rowToPost(res.rows[0]);
+  return withOne(rowToPost(res.rows[0]));
 }
 
 async function updateFinancielePost(id, input) {
@@ -186,7 +186,108 @@ async function updateFinancielePost(id, input) {
     `,
     values
   );
+  return res.rows[0] ? withOne(rowToPost(res.rows[0])) : null;
+}
+
+async function getFinancielePostById(id) {
+  if (!hasDb()) return null;
+  const res = await query(`select ${POST_SELECT} from financiele_posten where id = $1`, [id]);
   return res.rows[0] ? rowToPost(res.rows[0]) : null;
+}
+
+function publicBijlage(row) {
+  return {
+    id: row.id,
+    origineleNaam: row.origineleNaam,
+    mimeType: row.mimeType,
+    grootte: Number(row.grootte) || 0
+  };
+}
+
+async function listBijlagenByPostIds(ids) {
+  if (!ids.length) return [];
+  const res = await query(
+    `
+    select
+      id,
+      post_id as "postId",
+      originele_naam as "origineleNaam",
+      opslag_naam as "opslagNaam",
+      mime_type as "mimeType",
+      grootte
+    from financiele_post_bestanden
+    where post_id = any($1::text[])
+    order by created_at asc
+    `,
+    [ids]
+  );
+  return res.rows;
+}
+
+async function withBijlagen(posten) {
+  const ids = posten.map((p) => p.id).filter(Boolean);
+  const rows = await listBijlagenByPostIds(ids);
+  const byId = new Map();
+  for (const row of rows) {
+    const lijst = byId.get(row.postId) || [];
+    lijst.push(publicBijlage(row));
+    byId.set(row.postId, lijst);
+  }
+  return posten.map((p) => ({ ...p, bijlagen: byId.get(p.id) || [] }));
+}
+
+async function withOne(post) {
+  if (!post) return null;
+  const [full] = await withBijlagen([post]);
+  return full;
+}
+
+async function createFinancielePostBijlagen(postId, files) {
+  for (const file of files || []) {
+    await query(
+      `
+      insert into financiele_post_bestanden
+        (id, post_id, originele_naam, opslag_naam, mime_type, grootte)
+      values ($1,$2,$3,$4,$5,$6)
+      `,
+      [
+        uuidv4(),
+        postId,
+        file.originalname || "foto",
+        file.filename,
+        file.mimetype || "image/jpeg",
+        file.size || 0
+      ]
+    );
+  }
+  const post = await getFinancielePostById(postId);
+  return withOne(post);
+}
+
+async function getFinancielePostBijlageById(id) {
+  const res = await query(
+    `
+    select
+      id,
+      post_id as "postId",
+      originele_naam as "origineleNaam",
+      opslag_naam as "opslagNaam",
+      mime_type as "mimeType",
+      grootte
+    from financiele_post_bestanden
+    where id = $1
+    limit 1
+    `,
+    [id]
+  );
+  return res.rows[0] || null;
+}
+
+async function deleteFinancielePostBijlage(id) {
+  const bestaande = await getFinancielePostBijlageById(id);
+  if (!bestaande) return null;
+  await query(`delete from financiele_post_bestanden where id = $1`, [id]);
+  return bestaande;
 }
 
 async function deleteFinancielePost(id) {
@@ -199,5 +300,9 @@ module.exports = {
   listFinancielePosten,
   createFinancielePost,
   updateFinancielePost,
-  deleteFinancielePost
+  deleteFinancielePost,
+  getFinancielePostById,
+  createFinancielePostBijlagen,
+  getFinancielePostBijlageById,
+  deleteFinancielePostBijlage
 };

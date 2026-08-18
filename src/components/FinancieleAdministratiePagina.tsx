@@ -11,6 +11,10 @@ import {
   FinancieelType,
   FinancieelValuta,
   updateFinancieelPost,
+  uploadFinancieelPostBestanden,
+  deleteFinancieelPostBijlage,
+  downloadFinancieelPostBijlage,
+  fetchFinancieelPostBijlageBlob,
   fetchFinancieelInzendingen,
   FinancieelInzending,
   updateFinancieelInzendingStatus
@@ -104,6 +108,10 @@ import {
   WinstVerliesPanel
 } from "./financieel/FinancieelDashboardPanels";
 import { FinancieelInzendingenPanel } from "./financieel/FinancieelInzendingenPanel";
+import { FinancieelFotos } from "./financieel/InzendingBijlagen";
+
+const MAX_POST_FOTOS = 5;
+const MAX_POST_FOTO_BYTES = 8 * 1024 * 1024;
 
 type GebruikFormRij = {
   id: string;
@@ -269,6 +277,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
   const [posten, setPosten] = useState<FinancieelPost[]>([]);
   const [inzendingen, setInzendingen] = useState<FinancieelInzending[]>([]);
   const [inzendingBezigId, setInzendingBezigId] = useState<string | null>(null);
+  const [fotos, setFotos] = useState<File[]>([]);
   const [team, setTeam] = useState<Array<{ id: string; name: string; role: string; active: boolean }>>([]);
   const [form, setForm] = useState<FormState>(() => leegFormulier(initValuta));
   const [bewerkId, setBewerkId] = useState<string | null>(null);
@@ -486,10 +495,54 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
   const resetForm = () => {
     setForm(leegFormulier(form.valuta));
     setBewerkId(null);
+    setFotos([]);
+  };
+  const fotoPreviews = useMemo(
+    () => fotos.map((file) => ({ naam: file.name, url: URL.createObjectURL(file) })),
+    [fotos]
+  );
+  useEffect(() => {
+    return () => {
+      for (const preview of fotoPreviews) URL.revokeObjectURL(preview.url);
+    };
+  }, [fotoPreviews]);
+  const handleFotos = (lijst: FileList | null) => {
+    if (!lijst?.length) return;
+    const gekozen = Array.from(lijst);
+    const teGroot = gekozen.find((file) => file.size > MAX_POST_FOTO_BYTES);
+    if (teGroot) {
+      setFout(`“${teGroot.name}” is groter dan 8 MB.`);
+      return;
+    }
+    setFotos((huidig) => {
+      const samen = [...huidig, ...gekozen];
+      if (samen.length > MAX_POST_FOTOS) {
+        setFout(`Je kunt maximaal ${MAX_POST_FOTOS} foto’s per keer toevoegen.`);
+        return samen.slice(0, MAX_POST_FOTOS);
+      }
+      return samen;
+    });
+  };
+  const verwijderBestaandeFoto = async (bijlageId: string) => {
+    if (!bewerkId) return;
+    try {
+      setFout(null);
+      await deleteFinancieelPostBijlage(bijlageId);
+      setPosten((huidig) =>
+        huidig.map((p) =>
+          p.id === bewerkId
+            ? { ...p, bijlagen: (p.bijlagen || []).filter((b) => b.id !== bijlageId) }
+            : p
+        )
+      );
+    } catch (error) {
+      setFout(error instanceof Error ? error.message : "Kon foto niet verwijderen.");
+    }
   };
   const startBewerk = (post: FinancieelPost) => {
     setTab("dagboek");
     setBewerkId(post.id);
+    setFotos([]);
     setForm({
       datum: naarDateTimeLocal(post.datum),
       type: post.type,
@@ -730,21 +783,20 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
     try {
       setBezig(true);
       setFout(null);
+      let opgeslagen = bewerkId
+        ? await updateFinancieelPost(bewerkId, payload)
+        : await createFinancieelPost(payload);
+      if (fotos.length) {
+        opgeslagen = await uploadFinancieelPostBestanden(opgeslagen.id, fotos);
+      }
+      const genormaliseerd = {
+        ...opgeslagen,
+        valuta: normalizeValuta(opgeslagen.valuta || payload.valuta)
+      };
       if (bewerkId) {
-        const updated = await updateFinancieelPost(bewerkId, payload);
-        setPosten((huidig) =>
-          huidig.map((p) =>
-            p.id === updated.id
-              ? { ...updated, valuta: normalizeValuta(updated.valuta || payload.valuta) }
-              : p
-          )
-        );
+        setPosten((huidig) => huidig.map((p) => (p.id === genormaliseerd.id ? genormaliseerd : p)));
       } else {
-        const created = await createFinancieelPost(payload);
-        setPosten((huidig) => [
-          { ...created, valuta: normalizeValuta(created.valuta || payload.valuta) },
-          ...huidig
-        ]);
+        setPosten((huidig) => [genormaliseerd, ...huidig]);
       }
       resetForm();
     } catch (error) {
@@ -1352,6 +1404,49 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                   </div>
                 </div>
                 <label className="form-label financieel-span-2">Notities<textarea className="form-input" rows={2} value={form.notities} onChange={(e) => setForm({ ...form, notities: e.target.value })} /></label>
+                <div className="form-label financieel-span-2">
+                  Foto’s bijvoegen
+                  <input
+                    type="file"
+                    className="form-input"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => {
+                      handleFotos(e.target.files);
+                      e.target.value = "";
+                    }}
+                  />
+                  <span className="help-text">
+                    Bon, screenshot of kasfoto. JPG/PNG/WEBP, max. {MAX_POST_FOTOS} stuks, 8 MB per foto.
+                  </span>
+                  {bewerkId && (
+                    <FinancieelFotos
+                      bijlagen={posten.find((p) => p.id === bewerkId)?.bijlagen}
+                      fetchBlob={fetchFinancieelPostBijlageBlob}
+                      onDownload={downloadFinancieelPostBijlage}
+                      onVerwijder={(id) => void verwijderBestaandeFoto(id)}
+                    />
+                  )}
+                  {fotoPreviews.length > 0 && (
+                    <div className="inzending-fotos inzending-fotos-preview">
+                      {fotoPreviews.map((foto, index) => (
+                        <figure key={`${foto.naam}-${index}`} className="inzending-foto">
+                          <img src={foto.url} alt={foto.naam} />
+                          <figcaption>
+                            <span>{foto.naam}</span>
+                            <button
+                              type="button"
+                              className="link-btn"
+                              onClick={() => setFotos((huidig) => huidig.filter((_, i) => i !== index))}
+                            >
+                              Verwijderen
+                            </button>
+                          </figcaption>
+                        </figure>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="financieel-form-actions">
                 {bewerkId && <button type="button" className="btn-ghost" onClick={resetForm} disabled={bezig}>Annuleren</button>}

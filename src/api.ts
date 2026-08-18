@@ -22,9 +22,7 @@ async function readApiJson(res: Response): Promise<Record<string, unknown>> {
   const text = await res.text();
   const trimmed = text.trim();
   if (!trimmed || trimmed.startsWith("<")) {
-    throw new Error(
-      "De server is niet bijgewerkt of niet bereikbaar. Vernieuw de pagina en probeer het opnieuw."
-    );
+    throw new Error("De server is niet bereikbaar. Probeer het over een paar seconden opnieuw.");
   }
   try {
     return JSON.parse(trimmed) as Record<string, unknown>;
@@ -33,11 +31,25 @@ async function readApiJson(res: Response): Promise<Record<string, unknown>> {
   }
 }
 
+export async function login(email: string, password: string): Promise<{
+  token: string;
+  user: Gebruiker;
+}> {
+  const res = await apiFetch("/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: email.trim(), password })
+  });
+  const data = await readApiJson(res);
+  if (!res.ok) throw new Error(String(data.error || "Inloggen mislukt."));
+  return data as { token: string; user: Gebruiker };
+}
+
 export async function fetchMe(): Promise<Gebruiker> {
   const res = await apiFetch("/api/auth/me");
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || "Kon gebruiker niet ophalen.");
-  return data as Gebruiker;
+  const data = await readApiJson(res);
+  if (!res.ok) throw new Error(String(data.error || "Kon gebruiker niet ophalen."));
+  return data as unknown as Gebruiker;
 }
 
 export type AdminGebruiker = {
@@ -155,6 +167,13 @@ export interface FinancieelGebruik {
   toelichting?: string;
 }
 
+export interface FinancieelInzendingBijlage {
+  id: string;
+  origineleNaam: string;
+  mimeType: string;
+  grootte: number;
+}
+
 export interface FinancieelPost {
   id: string;
   datum: string;
@@ -178,6 +197,7 @@ export interface FinancieelPost {
   status: FinancieelStatus;
   notities?: string;
   gebruikingen?: FinancieelGebruik[];
+  bijlagen?: FinancieelInzendingBijlage[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -224,14 +244,52 @@ export async function deleteFinancieelPost(id: string): Promise<void> {
   }
 }
 
-export type FinancieelInzendingStatus = "NIEUW" | "GEZIEN" | "VERWERKT";
-
-export interface FinancieelInzendingBijlage {
-  id: string;
-  origineleNaam: string;
-  mimeType: string;
-  grootte: number;
+export async function uploadFinancieelPostBestanden(
+  postId: string,
+  bestanden: File[]
+): Promise<FinancieelPost> {
+  const form = new FormData();
+  for (const file of bestanden) form.append("bestanden", file);
+  const res = await apiFetch(`/api/admin/financieel/${postId}/bestanden`, {
+    method: "POST",
+    body: form
+  });
+  const data = await readApiJson(res);
+  if (!res.ok) throw new Error(String(data.error || "Kon foto’s niet toevoegen."));
+  return data.post as FinancieelPost;
 }
+
+export async function fetchFinancieelPostBijlageBlob(bijlageId: string): Promise<Blob> {
+  const res = await apiFetch(`/api/admin/financieel/bestanden/${bijlageId}/download`);
+  if (!res.ok) {
+    const data = await readApiJson(res).catch(() => ({ error: "Download mislukt." }));
+    throw new Error(String(data.error || "Download mislukt."));
+  }
+  return res.blob();
+}
+
+export async function downloadFinancieelPostBijlage(bijlageId: string, bestandsnaam = "foto"): Promise<void> {
+  const blob = await fetchFinancieelPostBijlageBlob(bijlageId);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = bestandsnaam;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+export async function deleteFinancieelPostBijlage(bijlageId: string): Promise<void> {
+  const res = await apiFetch(`/api/admin/financieel/bestanden/${bijlageId}`, { method: "DELETE" });
+  if (!res.ok) {
+    const data = await readApiJson(res).catch(() => ({ error: "Verwijderen mislukt." }));
+    throw new Error(String(data.error || "Kon foto niet verwijderen."));
+  }
+}
+
+export type FinancieelInzendingStatus = "NIEUW" | "GEZIEN" | "VERWERKT";
 
 export interface FinancieelInzending {
   id: string;

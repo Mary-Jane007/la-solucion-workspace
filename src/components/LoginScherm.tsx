@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { login } from "../api";
 import { Gebruiker, Rol } from "../types";
 import {
   getRememberedEmailForLogin,
@@ -16,15 +17,7 @@ async function loginMetGegevens(
   password: string,
   onLogin: (g: Gebruiker) => void
 ) {
-  const response = await fetch("/api/auth/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: email.trim(), password })
-  });
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.error || "Inloggen mislukt.");
-  }
+  const data = await login(email, password);
   if (data.token) {
     window.localStorage.setItem("la-solucion-token", data.token);
   }
