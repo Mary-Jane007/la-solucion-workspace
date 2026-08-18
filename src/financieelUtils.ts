@@ -258,6 +258,29 @@ export function totaalInkomstKas(p: { gebruikingen?: FinancieelGebruik[] }): num
   return geldRondCents(inkomstKasRegels(p).reduce((s, g) => s + g.bedrag, 0));
 }
 
+export function isBesteedGebruik(g: { soort?: string; waaraan?: string }): boolean {
+  if (g.soort !== "AF") return false;
+  if (isOverdrachtMedewerker(g.waaraan)) return false;
+  if (isBankstorting(g.waaraan)) return false;
+  return true;
+}
+
+export function besteedRegels(p: { gebruikingen?: FinancieelGebruik[] }): FinancieelGebruik[] {
+  return normaliseerGebruikingen(p.gebruikingen).filter(isBesteedGebruik);
+}
+
+export function totaalBesteedUitGebruik(p: { gebruikingen?: FinancieelGebruik[] }): number {
+  return geldRondCents(besteedRegels(p).reduce((s, g) => s + g.bedrag, 0));
+}
+
+/** Besteed/eraf-regels die extra uitgave zijn (niet al geteld via een UITGAVE-post). */
+export function extraUitgaveUitGebruik(p: FinancieelPost): number {
+  const besteed = totaalBesteedUitGebruik(p);
+  if (!besteed) return 0;
+  if (p.type === "UITGAVE") return 0;
+  return besteed;
+}
+
 /** Extra inkomst bovenop een bestaande INKOMST-post (betaling op andere post telt volledig). */
 export function extraInkomstUitGebruik(p: FinancieelPost): number {
   const kas = totaalInkomstKas(p);
@@ -408,6 +431,7 @@ export function berekenTotalenPerValuta(posten: FinancieelPost[]): FinancieelTot
     } else {
       t.inkomsten += extra;
     }
+    t.uitgaven += extraUitgaveUitGebruik(p);
   }
 
   for (const t of map.values()) {

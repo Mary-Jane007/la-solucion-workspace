@@ -52,6 +52,7 @@ import {
   opdrachtDossierLabel,
   restantBedrag,
   totaalInkomstKas,
+  extraUitgaveUitGebruik,
   SaldoCijfers,
   SURINAAME_BANKEN,
   VALUTA_LABELS
@@ -415,7 +416,10 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
     [gezochtePosten, filterValuta]
   );
   const uitgavenPosten = useMemo(
-    () => filterOpValuta(gezochtePosten, filterValuta).filter((p) => p.type === "UITGAVE"),
+    () =>
+      filterOpValuta(gezochtePosten, filterValuta).filter(
+        (p) => p.type === "UITGAVE" || extraUitgaveUitGebruik(p) > 0
+      ),
     [gezochtePosten, filterValuta]
   );
   const bereik = useMemo(
