@@ -1,0 +1,16 @@
+---
+description: Commit and push to origin after finishing a task
+alwaysApply: true
+---
+
+# Auto commit and push
+
+When a task is done, commit the relevant changes and push to the tracked remote branch (`git push`). Do this without waiting to be asked again.
+
+- Include all files that belong to the finished task.
+- Do not commit secrets (`.env`, credentials, keys).
+- Follow the existing commit-message style; 1–2 sentences on why.
+- Create a new commit; do not amend unless the existing amend rules allow it.
+- Do not force-push. If push is rejected, report the error instead of rewriting history.
+- If there is nothing to commit, still push if the local branch is ahead of origin.
+---
