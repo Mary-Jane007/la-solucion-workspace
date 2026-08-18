@@ -125,6 +125,7 @@ function geldRondCents(bedrag: number): number {
 export const GEBRUIK_BANKSTORTING = "Bankstorting";
 export const GEBRUIK_OVERDRACHT_MEDEWERKER = "Overdracht medewerker";
 export const GEBRUIK_INKOMST_KAS = "Inkomst kas";
+export const CATEGORIE_OPENINGSKAS = "Beginsaldo dag";
 
 export function isBankstorting(waaraan?: string | null): boolean {
   return (waaraan || "").trim().toLowerCase().startsWith("bankstorting");
@@ -136,6 +137,16 @@ export function isOverdrachtMedewerker(waaraan?: string | null): boolean {
 
 export function isInkomstKas(waaraan?: string | null): boolean {
   return (waaraan || "").trim().toLowerCase().startsWith("inkomst kas");
+}
+
+export function isOpeningsKas(p: { type?: string; categorie?: string | null }): boolean {
+  return p.type === "KASGELD" && (p.categorie || "").trim().toLowerCase().startsWith("beginsaldo");
+}
+
+export function normaliseerHeeftSaldo(waarde: unknown): "JA" | "NEE" | "" {
+  const v = String(waarde || "").trim().toUpperCase();
+  if (v === "JA" || v === "NEE") return v;
+  return "";
 }
 
 export function bankUitWaaraan(waaraan?: string | null): string {
@@ -208,6 +219,7 @@ export function normaliseerGebruikingen(waarde: unknown): FinancieelGebruik[] {
       medewerker:
         String(item.medewerker || "").trim() || medewerkerUitWaaraan(waaraan),
       klantNaam: String(item.klantNaam || "").trim(),
+      heeftSaldo: normaliseerHeeftSaldo(item.heeftSaldo),
       toelichting: String(item.toelichting || "").trim()
     });
   }
@@ -263,7 +275,8 @@ export function gebruikingenSamenvatting(p: { gebruikingen?: FinancieelGebruik[]
     .map((g) => {
       const waar = gebruikWaaraanTekst(g);
       const richting = g.soort === "ERBIJ" ? (isInkomstKas(g.waaraan) ? "inkomst in kas" : "erbij") : "af";
-      return [richting, String(g.bedrag), waar].filter(Boolean).join(" · ");
+      const saldo = g.heeftSaldo === "JA" ? "op saldo" : g.heeftSaldo === "NEE" ? "geen saldo" : "";
+      return [richting, String(g.bedrag), waar, saldo].filter(Boolean).join(" · ");
     })
     .join("; ");
 }
@@ -344,7 +357,10 @@ function telPostOp(entry: SaldoCijfers, p: FinancieelPost): SaldoCijfers {
   return next;
 }
 
-export function typeLabel(type: FinancieelPost["type"] | string): string {
+export function typeLabel(type: FinancieelPost["type"] | string, post?: Pick<FinancieelPost, "categorie">): string {
+  if (type === "KASGELD" && post && isOpeningsKas({ type, categorie: post.categorie })) {
+    return "Openingskas";
+  }
   if (type === "INKOMST") return "Inkomst";
   if (type === "UITGAVE") return "Uitgave";
   if (type === "KASGELD") return "Kasgeld";

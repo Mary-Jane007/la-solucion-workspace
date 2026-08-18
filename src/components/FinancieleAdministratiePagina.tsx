@@ -36,8 +36,10 @@ import {
   GEBRUIK_BANKSTORTING,
   GEBRUIK_INKOMST_KAS,
   GEBRUIK_OVERDRACHT_MEDEWERKER,
+  CATEGORIE_OPENINGSKAS,
   isBankstorting,
   isInkomstKas,
+  isOpeningsKas,
   isOverdrachtMedewerker,
   bankUitWaaraan,
   medewerkerUitWaaraan,
@@ -125,6 +127,7 @@ type GebruikFormRij = {
   bank: string;
   medewerker: string;
   klantNaam: string;
+  heeftSaldo: "JA" | "NEE" | "";
   toelichting: string;
 };
 
@@ -163,7 +166,10 @@ function extraZoekvelden(p: FinancieelPost, opdrachtenById: Map<string, Opdracht
   return [opdrachtDossierLabel(opdracht), opdracht.klantNaam, opdracht.omschrijving || ""];
 }
 
-function legeGebruikRij(soort: FinancieelGebruikSoort = "AF"): GebruikFormRij {
+function legeGebruikRij(
+  soort: FinancieelGebruikSoort = "AF",
+  heeftSaldo: "JA" | "NEE" | "" = ""
+): GebruikFormRij {
   return {
     id: nieuweGebruikId(),
     datum: nuDateTimeLocal(),
@@ -173,6 +179,7 @@ function legeGebruikRij(soort: FinancieelGebruikSoort = "AF"): GebruikFormRij {
     bank: "",
     medewerker: "",
     klantNaam: "",
+    heeftSaldo: soort === "ERBIJ" ? heeftSaldo : "",
     toelichting: ""
   };
 }
@@ -587,6 +594,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
         bank: g.bank || bankUitWaaraan(g.waaraan),
         medewerker: g.medewerker || medewerkerUitWaaraan(g.waaraan),
         klantNaam: g.klantNaam || "",
+        heeftSaldo: g.heeftSaldo === "JA" || g.heeftSaldo === "NEE" ? g.heeftSaldo : "",
         toelichting: g.toelichting || ""
       }))
     });
@@ -704,9 +712,17 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       setFout("Bij een overdracht vul je in van wie het geld komt én bij wie het nu is.");
       return;
     }
+    if (isOpeningsKas(form) && !geldBijNaam) {
+      setFout("Bij openingskas vul je in bij wie het geld vanochtend lag.");
+      return;
+    }
     const omschrijving =
       form.omschrijving.trim() ||
-      (form.type === "OVERDRACHT" ? `Overdracht ${geldVanNaam} → ${geldBijNaam}` : "");
+      (form.type === "OVERDRACHT"
+        ? `Overdracht ${geldVanNaam} → ${geldBijNaam}`
+        : isOpeningsKas(form)
+          ? "Beginsaldo kas"
+          : "");
     if (!omschrijving || !Number.isFinite(bedrag) || bedrag < 0) {
       setFout("Vul een omschrijving en een geldig bedrag in.");
       return;
@@ -720,6 +736,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       bank: string;
       medewerker: string;
       klantNaam: string;
+      heeftSaldo: "JA" | "NEE" | "";
       toelichting: string;
     }> = [];
     for (const rij of form.gebruikingen) {
@@ -753,6 +770,10 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
         setFout("Vul bij een inkomst in kas de klantnaam in.");
         return;
       }
+      if (inkomstKas && rij.heeftSaldo !== "JA" && rij.heeftSaldo !== "NEE") {
+        setFout("Geef bij elke inkomst-regel aan of de klant openstaand saldo heeft.");
+        return;
+      }
       let gebruikDatum: string;
       try {
         gebruikDatum = dateTimeLocalNaarIso(rij.datum || form.datum);
@@ -775,6 +796,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
         bank: isBankstorting(rij.waaraan) ? rij.bank.trim() : "",
         medewerker: isOverdrachtMedewerker(rij.waaraan) ? rij.medewerker.trim() : "",
         klantNaam: rij.soort === "ERBIJ" ? rij.klantNaam.trim() : "",
+        heeftSaldo: rij.soort === "ERBIJ" ? rij.heeftSaldo : "",
         toelichting: rij.toelichting.trim()
       });
     }
@@ -785,7 +807,10 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       bedrag,
       valuta: normalizeValuta(form.valuta),
       wisselkoers,
-      categorie: form.categorie.trim(),
+      categorie:
+        form.type === "KASGELD" && form.categorie.trim().toLowerCase().startsWith("beginsaldo")
+          ? CATEGORIE_OPENINGSKAS
+          : form.categorie.trim(),
       referentie: form.referentie.trim(),
       klantNaam: (gekozen?.klantNaam || form.klantNaam).trim(),
       opdrachtId: form.opdrachtId || null,
@@ -1036,21 +1061,39 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                 <label className="form-label">Datum & tijd<input type="datetime-local" className="form-input" value={form.datum} onChange={(e) => setForm({ ...form, datum: e.target.value })} required /></label>
                 <label className="form-label">
                   Type
-                  <select className="form-input" value={form.type} onChange={(e) => {
-                    const type = e.target.value as FinancieelType;
+                  <select className="form-input" value={isOpeningsKas(form) ? "OPENINGSKAS" : form.type} onChange={(e) => {
+                    const gekozen = e.target.value;
+                    if (gekozen === "OPENINGSKAS") {
+                      setForm({
+                        ...form,
+                        type: "KASGELD",
+                        status: "BETAALD",
+                        categorie: CATEGORIE_OPENINGSKAS,
+                        omschrijving: form.omschrijving.trim() || "Beginsaldo kas"
+                      });
+                      return;
+                    }
+                    const type = gekozen as FinancieelType;
                     setForm({
                       ...form,
                       type,
-                      status: type === "KASGELD" || type === "OVERDRACHT" ? "BETAALD" : form.status
+                      status: type === "KASGELD" || type === "OVERDRACHT" ? "BETAALD" : form.status,
+                      categorie: isOpeningsKas(form) ? "" : form.categorie
                     });
                   }}>
                     <option value="INKOMST">Inkomst</option>
                     <option value="UITGAVE">Uitgave</option>
+                    <option value="OPENINGSKAS">Openingskas (beginsaldo van de dag)</option>
                     <option value="KASGELD">Kasgeld (al in kas)</option>
                     <option value="OVERDRACHT">Overdracht (van A naar B)</option>
                   </select>
                 </label>
                 <label className="form-label">Bedrag<input className="form-input" inputMode="decimal" placeholder="0,00" value={form.bedrag} onChange={(e) => setForm({ ...form, bedrag: e.target.value })} required /></label>
+                {isOpeningsKas(form) && (
+                  <p className="muted financieel-span-2">
+                    Vul hier het bedrag in dat vanochtend al in de kas lag. Dit is het beginsaldo van de dag in Follow the money, geen nieuwe inkomst.
+                  </p>
+                )}
                 <label className="form-label">
                   Valuta
                   <select className="form-input" value={form.valuta} onChange={(e) => setForm({ ...form, valuta: e.target.value as FinancieelValuta })}>
@@ -1172,10 +1215,10 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                   <datalist id="financieel-klanten">{klantOpties.map((naam) => <option key={naam} value={naam} />)}</datalist>
                   {form.klantNaam.trim() && <p className={`financieel-klant-saldo-hint${actueelKlantSaldo && (actueelKlantSaldo.teOntvangen > 0 || actueelKlantSaldo.teBetalen > 0) ? " heeft-saldo" : ""}`}>{klantSaldoSamenvatting(actueelKlantSaldo, form.valuta)}</p>}
                 </label>
-                <label className="form-label financieel-span-2">Omschrijving<input className="form-input" value={form.omschrijving} onChange={(e) => setForm({ ...form, omschrijving: e.target.value })} required={form.type !== "OVERDRACHT"} placeholder={form.type === "OVERDRACHT" ? "Optioneel — anders: Overdracht A → B" : ""} /></label>
+                <label className="form-label financieel-span-2">Omschrijving<input className="form-input" value={form.omschrijving} onChange={(e) => setForm({ ...form, omschrijving: e.target.value })} required={form.type !== "OVERDRACHT"} placeholder={form.type === "OVERDRACHT" ? "Optioneel — anders: Overdracht A → B" : isOpeningsKas(form) ? "Beginsaldo kas" : ""} /></label>
                 <label className="form-label">
                   Categorie
-                  <input className="form-input" list="financieel-categorieen" placeholder={form.type === "UITGAVE" ? "Kantoor, personeel..." : "Visa, advies..."} value={form.categorie} onChange={(e) => setForm({ ...form, categorie: e.target.value })} />
+                  <input className="form-input" list="financieel-categorieen" placeholder={form.type === "UITGAVE" ? "Kantoor, personeel..." : isOpeningsKas(form) ? "Beginsaldo dag" : "Visa, advies..."} value={form.categorie} onChange={(e) => setForm({ ...form, categorie: e.target.value })} disabled={isOpeningsKas(form)} />
                   <datalist id="financieel-categorieen">{categorieOpties.map((categorie) => <option key={categorie} value={categorie} />)}</datalist>
                 </label>
                 <label className="form-label">Referentie<input className="form-input" placeholder="Factuurnummer" value={form.referentie} onChange={(e) => setForm({ ...form, referentie: e.target.value })} /></label>
@@ -1183,7 +1226,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                   <div className="section-header">
                     <h3>Van dit bedrag gebruikt</h3>
                     <p className="muted">
-                      Het originele bedrag blijft staan. Voeg een regel toe voor wat eraf ging, of voor geld dat erbij kwam / de klant betaalde.
+                      Het originele bedrag blijft staan. Kies wat deze regel is: besteed, betaling op saldo, of nieuwe inkomst.
                     </p>
                   </div>
                   {form.gebruikingen.map((rij, index) => {
@@ -1214,6 +1257,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                               soort,
                               waaraan: soort === "ERBIJ" ? GEBRUIK_INKOMST_KAS : isInkomstKas(rij.waaraan) ? "" : rij.waaraan,
                               klantNaam: soort === "ERBIJ" ? rij.klantNaam || form.klantNaam : rij.klantNaam,
+                              heeftSaldo: soort === "ERBIJ" ? rij.heeftSaldo || "" : "",
                               bank: soort === "ERBIJ" ? "" : rij.bank,
                               medewerker: soort === "ERBIJ" ? "" : rij.medewerker
                             };
@@ -1221,7 +1265,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                           }}
                         >
                           <option value="AF">Besteed / eraf</option>
-                          <option value="ERBIJ">Erbij gekomen / betaald door klant</option>
+                          <option value="ERBIJ">Erbij / betaald door klant</option>
                         </select>
                       </label>
                       <label className="form-label">
@@ -1350,14 +1394,52 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                             value={rij.klantNaam}
                             onChange={(e) => {
                               const gebruikingen = form.gebruikingen.slice();
-                              gebruikingen[index] = { ...rij, klantNaam: e.target.value };
+                              const klantNaam = e.target.value;
+                              const saldo = klantSaldoVoor(alleKlantSaldi, klantNaam, form.valuta);
+                              const heeftOpen = !!(saldo && (saldo.teOntvangen > 0 || saldo.teBetalen > 0));
+                              gebruikingen[index] = {
+                                ...rij,
+                                klantNaam,
+                                heeftSaldo:
+                                  rij.heeftSaldo || (klantNaam.trim() ? (heeftOpen ? "JA" : "NEE") : "")
+                              };
                               setForm({ ...form, gebruikingen });
                             }}
                           />
+                        </label>
+                      )}
+                      {rij.soort === "ERBIJ" && (
+                        <label className="form-label financieel-span-2">
+                          Is er openstaand saldo?
+                          <select
+                            className="form-input"
+                            value={rij.heeftSaldo}
+                            onChange={(e) => {
+                              const gebruikingen = form.gebruikingen.slice();
+                              gebruikingen[index] = {
+                                ...rij,
+                                heeftSaldo: e.target.value as "JA" | "NEE" | ""
+                              };
+                              setForm({ ...form, gebruikingen });
+                            }}
+                          >
+                            <option value="">— Geef aan —</option>
+                            <option value="JA">Ja — betaling op bestaand saldo</option>
+                            <option value="NEE">Nee — nieuwe inkomst, geen saldo</option>
+                          </select>
                           {rij.klantNaam.trim() && (
                             <p className={`financieel-klant-saldo-hint${rijKlantSaldo && (rijKlantSaldo.teOntvangen > 0 || rijKlantSaldo.teBetalen > 0) ? " heeft-saldo" : ""}`}>
                               {klantSaldoSamenvatting(rijKlantSaldo, form.valuta)}
+                              {rij.heeftSaldo === "JA" && rijKlantSaldo && rijKlantSaldo.teOntvangen > 0
+                                ? ` Dit bedrag wordt verrekend met het openstaande saldo.`
+                                : ""}
+                              {rij.heeftSaldo === "JA" && !(rijKlantSaldo && (rijKlantSaldo.teOntvangen > 0 || rijKlantSaldo.teBetalen > 0))
+                                ? " Let op: er is nu geen open saldo gevonden voor deze klant in deze valuta."
+                                : ""}
                             </p>
+                          )}
+                          {!rij.klantNaam.trim() && (
+                            <p className="muted">Kies eerst een klant om te zien of er saldo is.</p>
                           )}
                         </label>
                       )}
@@ -1490,12 +1572,27 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                             ...form,
                             gebruikingen: [
                               ...form.gebruikingen,
-                              { ...legeGebruikRij("ERBIJ"), klantNaam: form.klantNaam }
+                              { ...legeGebruikRij("ERBIJ", "JA"), klantNaam: form.klantNaam }
                             ]
                           })
                         }
                       >
-                        Betaald door klant / erbij
+                        Betaling op saldo
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={() =>
+                          setForm({
+                            ...form,
+                            gebruikingen: [
+                              ...form.gebruikingen,
+                              { ...legeGebruikRij("ERBIJ", "NEE"), klantNaam: form.klantNaam }
+                            ]
+                          })
+                        }
+                      >
+                        Nieuwe inkomst / erbij
                       </button>
                     </div>
                     <p className="muted financieel-gebruik-restant">

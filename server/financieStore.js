@@ -59,6 +59,9 @@ function normalizeGebruikingen(waarde) {
         bank: String(item.bank || "").trim(),
         medewerker: String(item.medewerker || "").trim(),
         klantNaam: String(item.klantNaam || "").trim(),
+        heeftSaldo: ["JA", "NEE"].includes(String(item.heeftSaldo || "").toUpperCase())
+          ? String(item.heeftSaldo).toUpperCase()
+          : "",
         toelichting: String(item.toelichting || "").trim()
       };
     })

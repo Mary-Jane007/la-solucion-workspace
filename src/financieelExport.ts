@@ -83,7 +83,7 @@ function postVulvakken(
   return [
     { veld: "ID", waarde: p.id },
     { veld: "Datum & tijd", waarde: formatDatumTijd(p.datum) },
-    { veld: "Type", waarde: typeLabel(p.type) },
+    { veld: "Type", waarde: typeLabel(p.type, p) },
     { veld: "Omschrijving", waarde: leeg(p.omschrijving) },
     { veld: "Origineel bedrag", waarde: geldTekst(p.bedrag, p.valuta) },
     { veld: "Afgetrokken / besteed", waarde: geldTekst(totaalGebruikAf(p), p.valuta) },
@@ -147,7 +147,7 @@ function dagboekRij(p: FinancieelPost, opdrachtenById: Map<string, Opdracht>): s
     .join(" | ");
   return [
     formatDatumTijd(p.datum),
-    typeLabel(p.type),
+    typeLabel(p.type, p),
     p.omschrijving || "",
     geldTekst(p.bedrag, p.valuta),
     geldTekst(totaalGebruikAf(p), p.valuta),
@@ -242,7 +242,7 @@ function bouwRapportHtml(
     for (const g of gebruikingenVanPost(p)) {
       gebruikRijen.push([
         formatDatumTijd(g.datum),
-        typeLabel(p.type),
+        typeLabel(p.type, p),
         p.omschrijving || "",
         gebruikSoortLabel(g),
         geldTekst(g.bedrag, p.valuta),
@@ -275,7 +275,7 @@ function bouwRapportHtml(
           )
         : `<p class="muted">Geen gebruiksregels op dit bedrag.</p>`;
       return `<article class="kaart">
-        <h3>${htmlEscape(formatDatumTijd(p.datum))} · ${htmlEscape(typeLabel(p.type))} · ${htmlEscape(
+        <h3>${htmlEscape(formatDatumTijd(p.datum))} · ${htmlEscape(typeLabel(p.type, p))} · ${htmlEscape(
           p.omschrijving || "(geen omschrijving)"
         )}</h3>
         ${veldenTabelHtml(postVulvakken(p, opdrachtenById))}
@@ -563,7 +563,7 @@ export function exportFinancieelExcel(
     for (const g of gebruikingenVanPost(p)) {
       gebruikRijen.push([
         formatDatumTijd(g.datum),
-        typeLabel(p.type),
+        typeLabel(p.type, p),
         p.omschrijving || "",
         gebruikSoortLabel(g),
         geldTekst(g.bedrag, p.valuta),

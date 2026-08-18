@@ -166,6 +166,8 @@ export interface FinancieelGebruik {
   medewerker?: string;
   /** Klant bij inkomst die in de kas erbij komt. */
   klantNaam?: string;
+  /** JA = betaling op bestaand klantsaldo, NEE = nieuwe inkomst. */
+  heeftSaldo?: "JA" | "NEE" | "";
   toelichting?: string;
 }
 

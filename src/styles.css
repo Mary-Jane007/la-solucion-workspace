@@ -3128,8 +3128,34 @@ textarea.form-input {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-chart-blue) 25%, transparent);
 }
 
+.ftm-node-begin::before {
+  background: var(--color-chart-blue);
+}
+
 .ftm-node-binnen::before {
   background: var(--color-chart-green);
+}
+
+.ftm-bewegingen {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 8px 0 0;
+  border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+  display: grid;
+  gap: 6px;
+}
+
+.ftm-beweging {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.ftm-beweging em {
+  font-style: normal;
+  font-weight: 650;
+  white-space: nowrap;
 }
 
 .ftm-node-uit::before {

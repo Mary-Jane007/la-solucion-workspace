@@ -405,7 +405,7 @@ export function PostenTabel({
                           : "financieel-pill inkomst"
                     }
                   >
-                    {typeLabel(p.type)}
+                    {typeLabel(p.type, p)}
                   </span>
                 </td>
                 <td>{p.categorie || "—"}</td>
@@ -1116,8 +1116,7 @@ export function FollowTheMoneyPanel({
           <div>
             <h2>Follow the money</h2>
             <p className="muted">
-              Waar het geld vandaan kwam, bij wie het was, waaraan het is besteed en hoeveel er over
-              is — {dag.datumLabel}.
+              Waar het geld vandaan kwam, bij wie het was, en elk bedrag apart — {dag.datumLabel}.
             </p>
           </div>
           <div className="ftm-day-nav">
@@ -1142,11 +1141,11 @@ export function FollowTheMoneyPanel({
             <strong>{formatGeld(dag.totaalBegin, dag.valuta)}</strong>
           </div>
           <div>
-            <span className="muted">Ontvangen</span>
+            <span className="muted">Ontvangen (apart)</span>
             <strong className="financieel-inkomst">{formatGeld(dag.totaalOntvangen, dag.valuta)}</strong>
           </div>
           <div>
-            <span className="muted">Besteed</span>
+            <span className="muted">Besteed (apart)</span>
             <strong className="financieel-uitgave">{formatGeld(dag.totaalBesteed, dag.valuta)}</strong>
           </div>
           <div>
@@ -1163,7 +1162,7 @@ export function FollowTheMoneyPanel({
       <section className="card page-card">
         <div className="section-header">
           <h2>Bij wie ligt het geld?</h2>
-          <p className="muted">Beginsaldo → bewegingen vandaag → wat er overblijft.</p>
+          <p className="muted">Beginsaldo, daarna elk bedrag apart, en wat er overblijft.</p>
         </div>
         {dag.personen.length === 0 ? (
           <p className="muted">Deze dag geen kasbewegingen en geen beginsaldo.</p>
@@ -1192,6 +1191,16 @@ export function FollowTheMoneyPanel({
                     </dd>
                   </div>
                 </dl>
+                {p.bewegingen.length > 0 && (
+                  <ul className="ftm-bewegingen">
+                    {p.bewegingen.map((b) => (
+                      <li key={b.id} className={`ftm-beweging ftm-beweging-${b.soort}`}>
+                        <span>{b.titel}</span>
+                        <em>{b.bedragLabel}</em>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </article>
             ))}
           </div>
@@ -1201,7 +1210,7 @@ export function FollowTheMoneyPanel({
       <section className="card page-card">
         <div className="section-header">
           <h2>Het spoor van vandaag</h2>
-          <p className="muted">Van wie het eerst was, naar wie het ging, en waaraan het is besteed.</p>
+          <p className="muted">Elk bedrag apart: beginsaldo, inkomsten, betalingen, uitgaven en overdrachten.</p>
         </div>
         {dag.gebeurtenissen.length === 0 ? (
           <p className="muted">Geen kasbewegingen op deze dag. Blader terug of registreer een post.</p>
