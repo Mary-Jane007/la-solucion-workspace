@@ -14,6 +14,7 @@ import {
   inkomstKasRegels,
   isInkomstKas,
   isOpeningsKas,
+  totaalOpeningsKas,
   isOverdrachtMedewerker,
   medewerkerUitGebruik,
   normaliseerGebruikingen,
@@ -519,14 +520,18 @@ export function berekenDagVerslag(
 ): DagVerslag {
   const dagPosten = allePosten.filter((p) => isZelfdeLokaleDag(postDatum(p), dag));
   const inValuta = dagPosten.filter((p) => normalizeValuta(p.valuta) === voorkeurValuta);
-  const h = basisTotalen(inValuta.length ? inValuta : dagPosten);
+  const bron = inValuta.length ? inValuta : dagPosten;
+  const h = basisTotalen(bron);
   const valuta = inValuta.length ? voorkeurValuta : normalizeValuta(dagPosten[0]?.valuta);
+  const openingsKas = totaalOpeningsKas(bron);
+  h.kasgeld = geldRond(Math.max(0, h.kasgeld - openingsKas));
+  h.netto = geldRond(h.inkomsten + h.kasgeld - h.uitgaven);
 
   const voorDag = allePosten.filter((p) => {
     const d = postDatum(p);
     return d < startVanDag(dag) && normalizeValuta(p.valuta) === valuta;
   });
-  const beginsaldo = basisTotalen(voorDag).netto;
+  const beginsaldo = openingsKas > 0 ? openingsKas : basisTotalen(voorDag).netto;
   const eindbalans = geldRond(beginsaldo + h.netto);
 
   const sorted = [...(inValuta.length ? inValuta : dagPosten)].sort(
@@ -589,7 +594,7 @@ export function berekenDagVerslag(
     eindbalans,
     transacties: h.transacties,
     grootsteInkomst:
-      sorted.filter((p) => p.type === "INKOMST" || p.type === "KASGELD").sort((a, b) => b.bedrag - a.bedrag)[0] ||
+      sorted.filter((p) => (p.type === "INKOMST" || p.type === "KASGELD") && !isOpeningsKas(p)).sort((a, b) => b.bedrag - a.bedrag)[0] ||
       null,
     grootsteUitgave:
       sorted.filter((p) => p.type === "UITGAVE").sort((a, b) => b.bedrag - a.bedrag)[0] || null,
@@ -1472,6 +1477,14 @@ function bumpFollowSaldo(saldi: Map<string, FollowSaldo>, wie: { naam: string; u
   saldi.set(key, cur);
 }
 
+function zetFollowSaldo(saldi: Map<string, FollowSaldo>, wie: { naam: string; userId: string | null }, saldo: number) {
+  const key = followSleutel(wie.naam, wie.userId);
+  const cur = saldi.get(key) || { naam: wie.naam, saldo: 0 };
+  if (!cur.naam || cur.naam === "Onbekend") cur.naam = wie.naam;
+  cur.saldo = geldRond(saldo);
+  saldi.set(key, cur);
+}
+
 function applyFollowSaldo(saldi: Map<string, FollowSaldo>, p: FinancieelPost, bedrag = p.bedrag) {
   const amount = geldRond(bedrag);
   if (amount === 0) return;
@@ -1723,7 +1736,7 @@ export function berekenFollowTheMoney(
 
   for (const op of ops) {
     const beginVandaag = op.soort === "begin" && isZelfdeLokaleDag(op.at, dag);
-    if (op.at < startVanDag(dag) || beginVandaag) {
+    if (op.at < startVanDag(dag)) {
       if (op.handmatigeDeltas) {
         for (const delta of op.handmatigeDeltas) {
           bumpFollowSaldo(opening, { naam: delta.naam, userId: delta.userId }, delta.delta);
@@ -1731,7 +1744,16 @@ export function berekenFollowTheMoney(
       } else {
         applyFollowSaldo(opening, op.post, op.bedrag);
       }
-      if (beginVandaag) dagOps.push(op);
+    } else if (beginVandaag) {
+      const wie = geldNaarPersoon(op.post);
+      if (op.handmatigeDeltas) {
+        for (const delta of op.handmatigeDeltas) {
+          zetFollowSaldo(opening, { naam: delta.naam, userId: delta.userId }, delta.delta);
+        }
+      } else if (wie) {
+        zetFollowSaldo(opening, wie, op.bedrag);
+      }
+      dagOps.push(op);
     } else if (isZelfdeLokaleDag(op.at, dag)) dagOps.push(op);
   }
 

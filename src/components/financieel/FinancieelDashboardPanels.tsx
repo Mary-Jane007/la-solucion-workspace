@@ -147,6 +147,10 @@ export function OverzichtPanel({
         </div>
         <div className="fin-today-metrics">
           <div>
+            <span className="muted">Start van de dag</span>
+            <strong>{formatGeld(dag.beginsaldo, kpis.valuta)}</strong>
+          </div>
+          <div>
             <span className="muted">Binnen</span>
             <strong className="financieel-inkomst">{formatGeld(dag.inkomsten, kpis.valuta)}</strong>
           </div>
@@ -257,7 +261,7 @@ export function VandaagPanel({ dag, valuta }: { dag: DagVerslag; valuta: Financi
         <div className="fin-kpi-grid fin-kpi-grid-compact">
           {(
             [
-              ["Beginsaldo", dag.beginsaldo, "blauw", true],
+              ["Start van de dag", dag.beginsaldo, "blauw", true],
               ["Inkomsten vandaag", dag.inkomsten, "groen", true],
               ["Uitgaven vandaag", dag.uitgaven, "rood", true],
               ["Ontvangen betalingen", dag.ontvangen, "groen", true],

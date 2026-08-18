@@ -143,6 +143,12 @@ export function isOpeningsKas(p: { type?: string; categorie?: string | null }): 
   return p.type === "KASGELD" && (p.categorie || "").trim().toLowerCase().startsWith("beginsaldo");
 }
 
+export function totaalOpeningsKas(posten: FinancieelPost[]): number {
+  return geldRondCents(
+    posten.filter((p) => isOpeningsKas(p)).reduce((s, p) => s + (Number(p.bedrag) || 0), 0)
+  );
+}
+
 export function normaliseerHeeftSaldo(waarde: unknown): "JA" | "NEE" | "" {
   const v = String(waarde || "").trim().toUpperCase();
   if (v === "JA" || v === "NEE") return v;
