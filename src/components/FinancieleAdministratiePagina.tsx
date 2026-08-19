@@ -456,8 +456,8 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
     [vorigePosten, dashboardValuta, dagenInPeriode]
   );
   const dagVerslag = useMemo(
-    () => berekenDagVerslag(gezochtePosten, new Date(), dashboardValuta),
-    [gezochtePosten, dashboardValuta]
+    () => berekenDagVerslag(posten, new Date(), dashboardValuta),
+    [posten, dashboardValuta]
   );
   const followMoney = useMemo(
     () => berekenFollowTheMoney(posten, followDag, dashboardValuta),

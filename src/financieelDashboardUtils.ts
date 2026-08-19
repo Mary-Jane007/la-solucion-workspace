@@ -346,9 +346,20 @@ export function berekenDashboardKpis(
   dagenInPeriode: number,
   kasPosten: FinancieelPost[] = posten
 ): DashboardKpis {
-  const h = basisTotalen(posten);
-  const v = basisTotalen(vorigePosten);
+  const hBasis = basisTotalen(posten);
+  const vBasis = basisTotalen(vorigePosten);
   const inKas = huidigKasSaldo(kasPosten, valuta);
+  const vInKas = huidigKasSaldo(vorigePosten, valuta);
+  const h = {
+    ...hBasis,
+    kasgeld: inKas,
+    netto: geldRond(hBasis.inkomsten + inKas - hBasis.uitgaven)
+  };
+  const v = {
+    ...vBasis,
+    kasgeld: vInKas,
+    netto: geldRond(vBasis.inkomsten + vInKas - vBasis.uitgaven)
+  };
   const dagen = Math.max(1, dagenInPeriode);
   const gemPerDag = geldRond(h.inkomsten / dagen);
   const gemPerKlant = h.klanten > 0 ? geldRond(h.inkomsten / h.klanten) : 0;

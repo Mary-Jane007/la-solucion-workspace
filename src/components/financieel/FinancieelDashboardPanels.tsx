@@ -148,20 +148,20 @@ export function OverzichtPanel({
         <div className="fin-today-metrics">
           <div>
             <span className="muted">Start van de dag</span>
-            <strong>{formatGeld(dag.beginsaldo, kpis.valuta)}</strong>
+            <strong>{formatGeld(kpis.inKas, kpis.valuta)}</strong>
           </div>
           <div>
             <span className="muted">Binnen</span>
-            <strong className="financieel-inkomst">{formatGeld(dag.inkomsten, kpis.valuta)}</strong>
+            <strong className="financieel-inkomst">{formatGeld(kpis.ontvangen, kpis.valuta)}</strong>
           </div>
           <div>
             <span className="muted">Uit</span>
-            <strong className="financieel-uitgave">{formatGeld(dag.uitgaven, kpis.valuta)}</strong>
+            <strong className="financieel-uitgave">{formatGeld(kpis.uitgaven, kpis.valuta)}</strong>
           </div>
           <div>
             <span className="muted">Over</span>
-            <strong className={dag.netto >= 0 ? "financieel-inkomst" : "financieel-uitgave"}>
-              {formatGeld(dag.netto, kpis.valuta)}
+            <strong className={kpis.netto >= 0 ? "financieel-inkomst" : "financieel-uitgave"}>
+              {formatGeld(kpis.netto, kpis.valuta)}
             </strong>
           </div>
           <div>
