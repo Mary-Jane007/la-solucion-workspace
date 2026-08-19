@@ -119,7 +119,7 @@ export function StatistiekenPagina({ werkruimte, onNavigeer }: Props) {
       vorigePosten,
       valuta,
       dagen,
-      filterOpValuta(posten, valuta)
+      posten
     );
     const openstaand = berekenOpenstaandeBetalingen(posten).filter(
       (r) => normalizeValuta(r.post.valuta) === valuta

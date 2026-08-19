@@ -36,9 +36,11 @@ import {
   GEBRUIK_BANKSTORTING,
   GEBRUIK_INKOMST_KAS,
   GEBRUIK_OVERDRACHT_MEDEWERKER,
+  GEBRUIK_VALUTA_OMZETTING,
   CATEGORIE_OPENINGSKAS,
   isBankstorting,
   isInkomstKas,
+  isValutaOmzetting,
   isOpeningsKas,
   isOverdrachtMedewerker,
   bankUitWaaraan,
@@ -128,6 +130,8 @@ type GebruikFormRij = {
   waaraan: string;
   bank: string;
   medewerker: string;
+  doelValuta: "" | FinancieelValuta;
+  wisselkoers: string;
   klantNaam: string;
   heeftSaldo: "JA" | "NEE" | "";
   toelichting: string;
@@ -180,6 +184,8 @@ function legeGebruikRij(
     waaraan: soort === "ERBIJ" ? GEBRUIK_INKOMST_KAS : "",
     bank: "",
     medewerker: "",
+    doelValuta: "",
+    wisselkoers: "",
     klantNaam: "",
     heeftSaldo: soort === "ERBIJ" ? heeftSaldo : "",
     toelichting: ""
@@ -448,7 +454,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
         vorigePosten,
         dashboardValuta,
         dagenInPeriode,
-        filterOpValuta(posten, dashboardValuta)
+        posten
       ),
     [periodePosten, vorigePosten, dashboardValuta, dagenInPeriode, posten]
   );
@@ -598,6 +604,11 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
               : g.waaraan || "",
         bank: g.bank || bankUitWaaraan(g.waaraan),
         medewerker: g.medewerker || medewerkerUitWaaraan(g.waaraan),
+        doelValuta:
+          g.doelValuta === "EUR" || g.doelValuta === "USD" || g.doelValuta === "SRD" || g.doelValuta === "XCG"
+            ? g.doelValuta
+            : "",
+        wisselkoers: g.wisselkoers == null ? "" : String(g.wisselkoers).replace(".", ","),
         klantNaam: g.klantNaam || "",
         heeftSaldo: g.heeftSaldo === "JA" || g.heeftSaldo === "NEE" ? g.heeftSaldo : "",
         toelichting: g.toelichting || ""
@@ -740,6 +751,9 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       waaraan: string;
       bank: string;
       medewerker: string;
+      doelValuta: "" | FinancieelValuta;
+      wisselkoers: number | null;
+      doelBedrag: number | null;
       klantNaam: string;
       heeftSaldo: "JA" | "NEE" | "";
       toelichting: string;
@@ -769,6 +783,26 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       if (isOverdrachtMedewerker(rij.waaraan) && rij.soort !== "AF") {
         setFout("Overdracht medewerker kan alleen als ‘Afgetrokken / besteed’ (verplaatsing).");
         return;
+      }
+      const valutaOmzetting = rij.soort === "AF" && isValutaOmzetting(rij.waaraan);
+      const doelValuta = valutaOmzetting ? (rij.doelValuta || "") : "";
+      let gebruikWisselkoers: number | null = null;
+      let doelBedrag: number | null = null;
+      if (valutaOmzetting) {
+        if (!doelValuta) {
+          setFout("Kies bij valuta omzetten naar welke valuta het bedrag moet.");
+          return;
+        }
+        if (doelValuta === normalizeValuta(form.valuta)) {
+          setFout("Kies bij valuta omzetten een andere doelvaluta.");
+          return;
+        }
+        gebruikWisselkoers = Number(String(rij.wisselkoers).replace(",", "."));
+        if (!Number.isFinite(gebruikWisselkoers) || gebruikWisselkoers <= 0) {
+          setFout("Vul bij valuta omzetten een geldige wisselkoers in.");
+          return;
+        }
+        doelBedrag = Math.round(gebruikBedrag * gebruikWisselkoers * 100) / 100;
       }
       const inkomstKas = rij.soort === "ERBIJ" && (isInkomstKas(rij.waaraan) || !rij.waaraan.trim());
       if (inkomstKas && !rij.klantNaam.trim()) {
@@ -800,6 +834,9 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
               : rij.waaraan.trim(),
         bank: isBankstorting(rij.waaraan) ? rij.bank.trim() : "",
         medewerker: isOverdrachtMedewerker(rij.waaraan) ? rij.medewerker.trim() : "",
+        doelValuta,
+        wisselkoers: gebruikWisselkoers,
+        doelBedrag,
         klantNaam: rij.soort === "ERBIJ" ? rij.klantNaam.trim() : "",
         heeftSaldo: rij.soort === "ERBIJ" ? rij.heeftSaldo : "",
         toelichting: rij.toelichting.trim()
@@ -1261,6 +1298,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                             (UITGAVE_CATEGORIEEN as readonly string[]).includes(rij.waaraan) ||
                             isBankstorting(rij.waaraan) ||
                             isOverdrachtMedewerker(rij.waaraan) ||
+                            isValutaOmzetting(rij.waaraan) ||
                             !rij.waaraan
                           );
                     return (
@@ -1280,7 +1318,9 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                               klantNaam: soort === "ERBIJ" ? rij.klantNaam || form.klantNaam : rij.klantNaam,
                               heeftSaldo: soort === "ERBIJ" ? rij.heeftSaldo || "" : "",
                               bank: soort === "ERBIJ" ? "" : rij.bank,
-                              medewerker: soort === "ERBIJ" ? "" : rij.medewerker
+                              medewerker: soort === "ERBIJ" ? "" : rij.medewerker,
+                              doelValuta: soort === "ERBIJ" ? "" : rij.doelValuta,
+                              wisselkoers: soort === "ERBIJ" ? "" : rij.wisselkoers
                             };
                             setForm({ ...form, gebruikingen });
                           }}
@@ -1316,6 +1356,8 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                                 ? GEBRUIK_BANKSTORTING
                                 : isOverdrachtMedewerker(rij.waaraan)
                                   ? GEBRUIK_OVERDRACHT_MEDEWERKER
+                                : isValutaOmzetting(rij.waaraan)
+                                  ? GEBRUIK_VALUTA_OMZETTING
                                 : (UITGAVE_CATEGORIEEN as readonly string[]).includes(rij.waaraan)
                                   ? rij.waaraan
                                 : rij.waaraan
@@ -1348,6 +1390,16 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                                 bank: "",
                                 soort: "AF"
                               };
+                            } else if (gekozen === GEBRUIK_VALUTA_OMZETTING) {
+                              gebruikingen[index] = {
+                                ...rij,
+                                waaraan: GEBRUIK_VALUTA_OMZETTING,
+                                bank: "",
+                                medewerker: "",
+                                soort: "AF",
+                                doelValuta: rij.doelValuta || "",
+                                wisselkoers: rij.wisselkoers || ""
+                              };
                             } else if (gekozen === "__anders__") {
                               gebruikingen[index] = {
                                 ...rij,
@@ -1376,6 +1428,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                               <option value="">— Kies —</option>
                               <option value={GEBRUIK_BANKSTORTING}>Bankstorting</option>
                               <option value={GEBRUIK_OVERDRACHT_MEDEWERKER}>Overdracht medewerker</option>
+                              <option value={GEBRUIK_VALUTA_OMZETTING}>Valuta omzetten (bijv. USD → SRD)</option>
                               {UITGAVE_CATEGORIEEN.map((categorie) => (
                                 <option key={categorie} value={categorie}>{categorie}</option>
                               ))}
@@ -1384,6 +1437,53 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                           )}
                         </select>
                       </label>
+                      {rij.soort === "AF" && isValutaOmzetting(rij.waaraan) && (
+                        <>
+                          <label className="form-label">
+                            Naar valuta
+                            <select
+                              className="form-input"
+                              value={rij.doelValuta}
+                              onChange={(e) => {
+                                const gebruikingen = form.gebruikingen.slice();
+                                gebruikingen[index] = {
+                                  ...rij,
+                                  doelValuta: e.target.value as "" | FinancieelValuta
+                                };
+                                setForm({ ...form, gebruikingen });
+                              }}
+                            >
+                              <option value="">— Kies doelvaluta —</option>
+                              {FINANCIEEL_VALUTAS.filter((v) => v !== form.valuta).map((v) => (
+                                <option key={v} value={v}>{VALUTA_LABELS[v]}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="form-label">
+                            Wisselkoers
+                            <input
+                              className="form-input"
+                              inputMode="decimal"
+                              placeholder="bijv. 40,50"
+                              value={rij.wisselkoers}
+                              onChange={(e) => {
+                                const gebruikingen = form.gebruikingen.slice();
+                                gebruikingen[index] = { ...rij, wisselkoers: e.target.value };
+                                setForm({ ...form, gebruikingen });
+                              }}
+                            />
+                            <span className="help-text">
+                              Resultaat: {(() => {
+                                const bron = Number(String(rij.bedrag).replace(",", "."));
+                                const koers = Number(String(rij.wisselkoers).replace(",", "."));
+                                const doel = bron > 0 && koers > 0 ? Math.round(bron * koers * 100) / 100 : 0;
+                                const code = rij.doelValuta || "—";
+                                return doel > 0 ? `${doel.toLocaleString("nl-NL")} ${code}` : "vul bedrag en koers in";
+                              })()}
+                            </span>
+                          </label>
+                        </>
+                      )}
                       {toonZelfInvullen && (
                         <label className="form-label">
                           Zelf invullen
@@ -1552,6 +1652,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                   <datalist id="financieel-gebruik-waaraan">
                     <option value={GEBRUIK_BANKSTORTING} />
                     <option value={GEBRUIK_OVERDRACHT_MEDEWERKER} />
+                    <option value={GEBRUIK_VALUTA_OMZETTING} />
                     {UITGAVE_CATEGORIEEN.map((categorie) => (
                       <option key={categorie} value={categorie} />
                     ))}
@@ -1632,6 +1733,9 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                               waaraan: rij.waaraan,
                               bank: rij.bank,
                               medewerker: rij.medewerker,
+                              doelValuta: rij.doelValuta,
+                              wisselkoers: Number(String(rij.wisselkoers).replace(",", ".")) || null,
+                              doelBedrag: null,
                               klantNaam: rij.klantNaam
                             }))
                           }),

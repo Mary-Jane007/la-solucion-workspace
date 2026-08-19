@@ -818,6 +818,9 @@ const financieelSchema = z.object({
         waaraan: z.string().optional().nullable(),
         bank: z.string().optional().nullable(),
         medewerker: z.string().optional().nullable(),
+        doelValuta: z.enum(["EUR", "USD", "SRD", "XCG", ""]).optional().nullable(),
+        wisselkoers: z.number().finite().positive().optional().nullable(),
+        doelBedrag: z.number().finite().positive().optional().nullable(),
         klantNaam: z.string().optional().nullable(),
         heeftSaldo: z.enum(["JA", "NEE", ""]).optional().nullable(),
         toelichting: z.string().optional().nullable()

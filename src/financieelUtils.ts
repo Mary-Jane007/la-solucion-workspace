@@ -125,6 +125,7 @@ function geldRondCents(bedrag: number): number {
 export const GEBRUIK_BANKSTORTING = "Bankstorting";
 export const GEBRUIK_OVERDRACHT_MEDEWERKER = "Overdracht medewerker";
 export const GEBRUIK_INKOMST_KAS = "Inkomst kas";
+export const GEBRUIK_VALUTA_OMZETTING = "Valuta omzetten";
 export const CATEGORIE_OPENINGSKAS = "Beginsaldo dag";
 
 export function isBankstorting(waaraan?: string | null): boolean {
@@ -137,6 +138,10 @@ export function isOverdrachtMedewerker(waaraan?: string | null): boolean {
 
 export function isInkomstKas(waaraan?: string | null): boolean {
   return (waaraan || "").trim().toLowerCase().startsWith("inkomst kas");
+}
+
+export function isValutaOmzetting(waaraan?: string | null): boolean {
+  return (waaraan || "").trim().toLowerCase().startsWith("valuta omzetten");
 }
 
 export function isOpeningsKas(p: { type?: string; categorie?: string | null }): boolean {
@@ -180,6 +185,9 @@ export function gebruikWaaraanTekst(g: {
   waaraan?: string;
   bank?: string;
   medewerker?: string;
+  doelValuta?: string;
+  wisselkoers?: number | null;
+  doelBedrag?: number | null;
   klantNaam?: string;
 }): string {
   const waar = (g.waaraan || "").trim();
@@ -192,9 +200,36 @@ export function gebruikWaaraanTekst(g: {
     return `${GEBRUIK_OVERDRACHT_MEDEWERKER} · ${medewerker}`;
   }
   if (isOverdrachtMedewerker(waar)) return GEBRUIK_OVERDRACHT_MEDEWERKER;
+  if (isValutaOmzetting(waar)) {
+    const doelRaw = String(g.doelValuta || "").toUpperCase();
+    const doel = ["EUR", "USD", "SRD", "XCG"].includes(doelRaw) ? (doelRaw as FinancieelValuta) : "";
+    const koers = Number(g.wisselkoers);
+    const doelBedrag = Number(g.doelBedrag);
+    if (doel && Number.isFinite(koers) && koers > 0) {
+      const doelTekst = Number.isFinite(doelBedrag) && doelBedrag > 0
+        ? ` · ${doel} (${geldRondCents(doelBedrag)})`
+        : ` · ${doel}`;
+      return `${GEBRUIK_VALUTA_OMZETTING}${doelTekst} · koers ${koers}`;
+    }
+    if (doel) return `${GEBRUIK_VALUTA_OMZETTING} · ${doel}`;
+    return GEBRUIK_VALUTA_OMZETTING;
+  }
   if (isInkomstKas(waar) && klant) return `${GEBRUIK_INKOMST_KAS} · ${klant}`;
   if (isInkomstKas(waar)) return GEBRUIK_INKOMST_KAS;
   return waar;
+}
+
+export function omzettingDoelBedrag(g: {
+  bedrag?: number;
+  wisselkoers?: number | null;
+  doelBedrag?: number | null;
+}): number {
+  const direct = Number(g.doelBedrag);
+  if (Number.isFinite(direct) && direct > 0) return geldRondCents(direct);
+  const bedrag = Number(g.bedrag);
+  const koers = Number(g.wisselkoers);
+  if (!Number.isFinite(bedrag) || bedrag <= 0 || !Number.isFinite(koers) || koers <= 0) return 0;
+  return geldRondCents(bedrag * koers);
 }
 
 export function nieuweGebruikId(): string {
@@ -224,6 +259,15 @@ export function normaliseerGebruikingen(waarde: unknown): FinancieelGebruik[] {
       bank: String(item.bank || "").trim() || bankUitWaaraan(waaraan),
       medewerker:
         String(item.medewerker || "").trim() || medewerkerUitWaaraan(waaraan),
+      doelValuta: ["EUR", "USD", "SRD", "XCG"].includes(String(item.doelValuta || "").toUpperCase())
+        ? String(item.doelValuta || "").toUpperCase()
+        : "",
+      wisselkoers: Number.isFinite(Number(item.wisselkoers)) && Number(item.wisselkoers) > 0
+        ? Number(item.wisselkoers)
+        : null,
+      doelBedrag: Number.isFinite(Number(item.doelBedrag)) && Number(item.doelBedrag) > 0
+        ? geldRondCents(Number(item.doelBedrag))
+        : null,
       klantNaam: String(item.klantNaam || "").trim(),
       heeftSaldo: normaliseerHeeftSaldo(item.heeftSaldo),
       toelichting: String(item.toelichting || "").trim()
@@ -262,7 +306,30 @@ export function isBesteedGebruik(g: { soort?: string; waaraan?: string }): boole
   if (g.soort !== "AF") return false;
   if (isOverdrachtMedewerker(g.waaraan)) return false;
   if (isBankstorting(g.waaraan)) return false;
+  if (isValutaOmzetting(g.waaraan)) return false;
   return true;
+}
+
+export function omzettingRegelsNaarValuta(
+  p: { gebruikingen?: FinancieelGebruik[] },
+  valuta: FinancieelValuta
+): FinancieelGebruik[] {
+  const doel = normalizeValuta(valuta);
+  return normaliseerGebruikingen(p.gebruikingen).filter(
+    (g) =>
+      g.soort === "AF" &&
+      isValutaOmzetting(g.waaraan) &&
+      String(g.doelValuta || "").toUpperCase() === doel
+  );
+}
+
+export function totaalOmzettingNaarValuta(
+  p: { gebruikingen?: FinancieelGebruik[] },
+  valuta: FinancieelValuta
+): number {
+  return geldRondCents(
+    omzettingRegelsNaarValuta(p, valuta).reduce((s, g) => s + omzettingDoelBedrag(g), 0)
+  );
 }
 
 export function besteedRegels(p: { gebruikingen?: FinancieelGebruik[] }): FinancieelGebruik[] {
@@ -283,13 +350,24 @@ export function extraUitgaveUitGebruik(p: FinancieelPost): number {
 
 /** Extra inkomst bovenop een bestaande INKOMST-post (betaling op andere post telt volledig). */
 export function extraInkomstUitGebruik(p: FinancieelPost): number {
-  const kas = totaalInkomstKas(p);
+  return extraInkomstUitGebruikVoorValuta(p, normalizeValuta(p.valuta));
+}
+
+export function extraInkomstUitGebruikVoorValuta(
+  p: FinancieelPost,
+  valuta: FinancieelValuta
+): number {
+  const postValuta = normalizeValuta(p.valuta);
+  const eigenValuta = postValuta === normalizeValuta(valuta);
+  const kas = eigenValuta ? totaalInkomstKas(p) : 0;
+  const omzetting = totaalOmzettingNaarValuta(p, normalizeValuta(valuta));
+  if (!eigenValuta) return omzetting;
   if (!kas) return 0;
   if (p.type === "INKOMST" && p.status === "OPEN") {
-    return geldRondCents(Math.max(0, kas - (Number(p.bedrag) || 0)));
+    return geldRondCents(Math.max(0, kas - (Number(p.bedrag) || 0)) + omzetting);
   }
-  if (p.type === "INKOMST") return kas;
-  return kas;
+  if (p.type === "INKOMST") return geldRondCents(kas + omzetting);
+  return geldRondCents(kas + omzetting);
 }
 
 /** Origineel bedrag plus erbij, minus afgetrokken — het origineel zelf blijft ongewijzigd. */
@@ -566,12 +644,30 @@ export function berekenGeldBijTotalen(posten: FinancieelPost[]): GeldBijTotaal[]
         if (!naam) continue;
         bumpPersoon(map, { naam, userId: null }, valuta, "ontvangenOverdracht", g.bedrag);
       }
+      for (const g of normaliseerGebruikingen(p.gebruikingen)) {
+        if (g.soort !== "AF" || !isValutaOmzetting(g.waaraan)) continue;
+        const doelValuta = String(g.doelValuta || "").toUpperCase();
+        if (!["EUR", "USD", "SRD", "XCG"].includes(doelValuta)) continue;
+        const doelBedrag = omzettingDoelBedrag(g);
+        if (!doelBedrag) continue;
+        const naar = geldNaarPersoon(p) || geldVanPersoon(p);
+        if (naar) bumpPersoon(map, naar, doelValuta as FinancieelValuta, "kasgeld", doelBedrag);
+      }
     } else {
       // Open post: inkomst-regels tellen wél mee in de kas.
       for (const g of normaliseerGebruikingen(p.gebruikingen)) {
         if (g.soort !== "ERBIJ" || !isInkomstKas(g.waaraan)) continue;
         const naar = geldNaarPersoon(p) || geldVanPersoon(p);
         if (naar) bumpPersoon(map, naar, valuta, "inkomsten", g.bedrag);
+      }
+      for (const g of normaliseerGebruikingen(p.gebruikingen)) {
+        if (g.soort !== "AF" || !isValutaOmzetting(g.waaraan)) continue;
+        const doelValuta = String(g.doelValuta || "").toUpperCase();
+        if (!["EUR", "USD", "SRD", "XCG"].includes(doelValuta)) continue;
+        const doelBedrag = omzettingDoelBedrag(g);
+        if (!doelBedrag) continue;
+        const naar = geldNaarPersoon(p) || geldVanPersoon(p);
+        if (naar) bumpPersoon(map, naar, doelValuta as FinancieelValuta, "kasgeld", doelBedrag);
       }
     }
   }

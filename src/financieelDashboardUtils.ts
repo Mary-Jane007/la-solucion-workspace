@@ -16,11 +16,13 @@ import {
   besteedRegels,
   isBesteedGebruik,
   isInkomstKas,
+  isValutaOmzetting,
   isOpeningsKas,
   isOverdrachtMedewerker,
   medewerkerUitGebruik,
   normaliseerGebruikingen,
   normalizeValuta,
+  omzettingDoelBedrag,
   postStatusLabel,
   totaalInkomstKas,
   totaalBesteedUitGebruik,
@@ -1548,6 +1550,17 @@ function heeftFollowAfGebruik(p: FinancieelPost): boolean {
   return normaliseerGebruikingen(p.gebruikingen).some((g) => g.soort === "AF");
 }
 
+function heeftValutaOmzettingNaar(p: FinancieelPost, valuta: FinancieelValuta): boolean {
+  const doel = normalizeValuta(valuta);
+  return normaliseerGebruikingen(p.gebruikingen).some(
+    (g) =>
+      g.soort === "AF" &&
+      isValutaOmzetting(g.waaraan) &&
+      String(g.doelValuta || "").toUpperCase() === doel &&
+      omzettingDoelBedrag(g) > 0
+  );
+}
+
 type FollowSaldo = { naam: string; saldo: number };
 
 function bumpFollowSaldo(saldi: Map<string, FollowSaldo>, wie: { naam: string; userId: string | null }, delta: number) {
@@ -1635,7 +1648,9 @@ function followOpsVanPost(p: FinancieelPost, valuta: FinancieelValuta): FollowOp
   const ops: FollowOp[] = [];
   const naar = geldNaarPersoon(p);
   const van = geldVanPersoon(p);
-  if (isCashBeweging(p)) {
+  const postValuta = normalizeValuta(p.valuta);
+  const zelfdeValuta = postValuta === normalizeValuta(valuta);
+  if (zelfdeValuta && isCashBeweging(p)) {
     if (isOpeningsKas(p)) {
       const deltas: NonNullable<FollowOp["handmatigeDeltas"]> = [];
       if (naar) deltas.push({ naam: naar.naam, userId: naar.userId, delta: p.bedrag });
@@ -1719,6 +1734,39 @@ function followOpsVanPost(p: FinancieelPost, valuta: FinancieelValuta): FollowOp
     const at = new Date(g.datum);
     const wanneer = Number.isNaN(at.getTime()) ? postDatum(p) : at;
     const waar = gebruikWaaraanTekst(g) || g.toelichting || p.omschrijving;
+    if (!zelfdeValuta) {
+      if (
+        g.soort === "AF" &&
+        isValutaOmzetting(g.waaraan) &&
+        String(g.doelValuta || "").toUpperCase() === normalizeValuta(valuta)
+      ) {
+        const doelBedrag = omzettingDoelBedrag(g);
+        if (doelBedrag > 0) {
+          const kasHouder = naar || van;
+          const deltas: NonNullable<FollowOp["handmatigeDeltas"]> = [];
+          if (kasHouder) deltas.push({ naam: kasHouder.naam, userId: kasHouder.userId, delta: doelBedrag });
+          ops.push({
+            at: wanneer,
+            post: p,
+            bedrag: doelBedrag,
+            id: `${p.id}:${g.id}:fx-in`,
+            soort: "binnen",
+            titel: `Valuta omgezet · ${postValuta} → ${normalizeValuta(valuta)}`,
+            uitleg: [
+              `van ${formatGeld(g.bedrag, postValuta)} naar ${formatGeld(doelBedrag, valuta)}`,
+              kasHouder ? `nu bij ${kasHouder.naam}` : null,
+              `bij post “${p.omschrijving}”`
+            ]
+              .filter(Boolean)
+              .join(" · "),
+            bedragLabel: `+${formatGeld(doelBedrag, valuta)}`,
+            besteedCategorie: null,
+            handmatigeDeltas: deltas.length ? deltas : undefined
+          });
+        }
+      }
+      continue;
+    }
     if (g.soort === "AF" && isOverdrachtMedewerker(g.waaraan)) {
       const medewerker = medewerkerUitGebruik(g) || "Onbekende medewerker";
       const bron = geldNaarPersoon(p) || geldVanPersoon(p);
@@ -1781,6 +1829,33 @@ function followOpsVanPost(p: FinancieelPost, valuta: FinancieelValuta): FollowOp
       continue;
     }
     if (g.soort === "AF") {
+      if (isValutaOmzetting(g.waaraan)) {
+        const doelValuta = String(g.doelValuta || "").toUpperCase() || "onbekend";
+        const doelBedrag = omzettingDoelBedrag(g);
+        const kasHouder = naar || van;
+        const deltas: NonNullable<FollowOp["handmatigeDeltas"]> = [];
+        if (kasHouder) deltas.push({ naam: kasHouder.naam, userId: kasHouder.userId, delta: -g.bedrag });
+        ops.push({
+          at: wanneer,
+          post: p,
+          bedrag: g.bedrag,
+          id: `${p.id}:${g.id}:fx-out`,
+          soort: "uit",
+          titel: `Valuta omgezet · ${postValuta} → ${doelValuta}`,
+          uitleg: [
+            `−${formatGeld(g.bedrag, valuta)}`,
+            doelBedrag > 0 ? `doel ${formatGeld(doelBedrag, doelValuta)}` : null,
+            kasHouder ? `uit kas van ${kasHouder.naam}` : null,
+            `bij post “${p.omschrijving}”`
+          ]
+            .filter(Boolean)
+            .join(" · "),
+          bedragLabel: `−${formatGeld(g.bedrag, valuta)}`,
+          besteedCategorie: null,
+          handmatigeDeltas: deltas.length ? deltas : undefined
+        });
+        continue;
+      }
       const kasHouder = naar || van;
       const deltas: NonNullable<FollowOp["handmatigeDeltas"]> = [];
       if (kasHouder) deltas.push({ naam: kasHouder.naam, userId: kasHouder.userId, delta: -g.bedrag });
@@ -1830,8 +1905,9 @@ export function berekenFollowTheMoney(
   const ops = allePosten
     .filter(
       (p) =>
-        normalizeValuta(p.valuta) === valuta &&
-        (isCashBeweging(p) || heeftInkomstKasGebruik(p) || heeftFollowAfGebruik(p))
+        ((normalizeValuta(p.valuta) === valuta &&
+          (isCashBeweging(p) || heeftInkomstKasGebruik(p) || heeftFollowAfGebruik(p))) ||
+          heeftValutaOmzettingNaar(p, valuta))
     )
     .flatMap((p) => followOpsVanPost(p, valuta))
     .sort((a, b) => a.at.getTime() - b.at.getTime());

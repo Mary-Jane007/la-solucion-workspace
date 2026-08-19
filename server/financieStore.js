@@ -58,6 +58,15 @@ function normalizeGebruikingen(waarde) {
         waaraan: genormaliseerdWaaraan,
         bank: String(item.bank || "").trim(),
         medewerker: String(item.medewerker || "").trim(),
+        doelValuta: ["EUR", "USD", "SRD", "XCG"].includes(String(item.doelValuta || "").toUpperCase())
+          ? String(item.doelValuta).toUpperCase()
+          : "",
+        wisselkoers: Number.isFinite(Number(item.wisselkoers)) && Number(item.wisselkoers) > 0
+          ? Math.round(Number(item.wisselkoers) * 1000000) / 1000000
+          : null,
+        doelBedrag: Number.isFinite(Number(item.doelBedrag)) && Number(item.doelBedrag) > 0
+          ? Math.round(Number(item.doelBedrag) * 100) / 100
+          : null,
         klantNaam: String(item.klantNaam || "").trim(),
         heeftSaldo: ["JA", "NEE"].includes(String(item.heeftSaldo || "").toUpperCase())
           ? String(item.heeftSaldo).toUpperCase()

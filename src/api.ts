@@ -164,6 +164,12 @@ export interface FinancieelGebruik {
   bank?: string;
   /** Naam van medewerker bij overdracht vanuit dit bedrag. */
   medewerker?: string;
+  /** Doelvaluta bij "Valuta omzetten". */
+  doelValuta?: FinancieelValuta | "";
+  /** Wisselkoers voor omzetting (bron -> doel). */
+  wisselkoers?: number | null;
+  /** Berekend doelbedrag in doelvaluta. */
+  doelBedrag?: number | null;
   /** Klant bij inkomst die in de kas erbij komt. */
   klantNaam?: string;
   /** JA = betaling op bestaand klantsaldo, NEE = nieuwe inkomst. */
