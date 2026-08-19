@@ -552,7 +552,7 @@ export function berekenDagVerslag(
     const d = postDatum(p);
     return d < startVanDag(dag) && normalizeValuta(p.valuta) === valuta;
   });
-  const beginsaldo = openingsKas > 0 ? openingsKas : huidigKasSaldo(voorDag, valuta);
+  const beginsaldo = huidigKasSaldo(voorDag, valuta);
   const eindbalans = geldRond(beginsaldo + h.netto);
 
   const sorted = [...(inValuta.length ? inValuta : dagPosten)].sort(
