@@ -163,7 +163,7 @@ export function OverzichtPanel({
         <div className="fin-today-metrics">
           <div>
             <span className="muted">Start van de dag</span>
-            <strong>{formatGeld(kpis.inKas, kpis.valuta)}</strong>
+            <strong>{formatGeld(dag.beginsaldo, kpis.valuta)}</strong>
           </div>
           <div>
             <span className="muted">Binnen</span>
