@@ -17,7 +17,6 @@ import {
   isBesteedGebruik,
   isInkomstKas,
   isOpeningsKas,
-  totaalOpeningsKas,
   isOverdrachtMedewerker,
   medewerkerUitGebruik,
   normaliseerGebruikingen,
@@ -542,18 +541,16 @@ export function berekenDagVerslag(
   const dagPosten = allePosten.filter((p) => isZelfdeLokaleDag(postDatum(p), dag));
   const inValuta = dagPosten.filter((p) => normalizeValuta(p.valuta) === voorkeurValuta);
   const bron = inValuta.length ? inValuta : dagPosten;
-  const h = basisTotalen(bron);
   const valuta = inValuta.length ? voorkeurValuta : normalizeValuta(dagPosten[0]?.valuta);
-  const openingsKas = totaalOpeningsKas(bron);
-  h.kasgeld = geldRond(Math.max(0, h.kasgeld - openingsKas));
-  h.netto = geldRond(h.inkomsten + h.kasgeld - h.uitgaven);
-
-  const voorDag = allePosten.filter((p) => {
-    const d = postDatum(p);
-    return d < startVanDag(dag) && normalizeValuta(p.valuta) === valuta;
-  });
-  const beginsaldo = openingsKas > 0 ? openingsKas : huidigKasSaldo(voorDag, valuta);
-  const eindbalans = geldRond(beginsaldo + h.netto);
+  const h = basisTotalen(bron);
+  const follow = berekenFollowTheMoney(allePosten, lokaleDatumIso(dag), valuta);
+  h.inkomsten = follow.totaalOntvangen;
+  h.uitgaven = follow.totaalBesteed;
+  h.kasgeld = follow.totaalOver;
+  h.ontvangen = follow.totaalOntvangen;
+  h.netto = geldRond(follow.totaalOver - follow.totaalBegin);
+  const beginsaldo = follow.totaalBegin;
+  const eindbalans = follow.totaalOver;
 
   const sorted = [...(inValuta.length ? inValuta : dagPosten)].sort(
     (a, b) => postDatum(a).getTime() - postDatum(b).getTime()
