@@ -276,6 +276,8 @@ export function VandaagPanel({
   geselecteerdeDag: string;
   onGeselecteerdeDag: (dag: string) => void;
 }) {
+  const vorigeDag = () => onGeselecteerdeDag(verschuifDag(geselecteerdeDag, -1));
+  const volgendeDag = () => onGeselecteerdeDag(verschuifDag(geselecteerdeDag, 1));
   return (
     <div className="fin-panel-stack">
       <section className="card page-card">
@@ -293,6 +295,14 @@ export function VandaagPanel({
               onChange={(e) => onGeselecteerdeDag(e.target.value)}
             />
           </label>
+        </div>
+        <div className="ftm-day-nav">
+          <button type="button" className="btn-secondary" onClick={vorigeDag}>
+            ← Vorige dag
+          </button>
+          <button type="button" className="btn-secondary" onClick={volgendeDag}>
+            Volgende dag →
+          </button>
         </div>
         <div className="fin-kpi-grid fin-kpi-grid-compact">
           {(

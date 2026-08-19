@@ -307,7 +307,6 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
   const [laden, setLaden] = useState(true);
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
-  const [followDag, setFollowDag] = useState(() => lokaleDatumIso(new Date()));
   const [overzichtDag, setOverzichtDag] = useState(() => lokaleDatumIso(new Date()));
   const formulierRef = useRef<HTMLElement>(null);
 
@@ -462,8 +461,8 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
     [posten, overzichtDag, dashboardValuta]
   );
   const followMoney = useMemo(
-    () => berekenFollowTheMoney(posten, followDag, dashboardValuta),
-    [posten, followDag, dashboardValuta]
+    () => berekenFollowTheMoney(posten, overzichtDag, dashboardValuta),
+    [posten, overzichtDag, dashboardValuta]
   );
   const openstaand = useMemo(() => berekenOpenstaandeBetalingen(gezochtePosten), [gezochtePosten]);
   const facturen = useMemo(() => berekenFacturen(gezochtePosten), [gezochtePosten]);
@@ -984,7 +983,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
           />
         )}
         {!laden && tab === "followmoney" && (
-          <FollowTheMoneyPanel dag={followMoney} onDagWissel={setFollowDag} />
+          <FollowTheMoneyPanel dag={followMoney} onDagWissel={setOverzichtDag} />
         )}
         {!laden && tab === "dagboek" && (
           <section className="card page-card">
@@ -1041,7 +1040,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
         {!laden && tab === "cashflow" && <CashflowPanel cf={cashflow} tijdreeks={tijdreeks} />}
         {!laden && tab === "analyses" && (
           <AnalysesPanel tijdreeks={tijdreeks} kosten={kosten} diensten={diensten} aging={aging} kalender={kalender} signaleringen={signaleringen} valuta={dashboardValuta} onDagKlik={(datum) => {
-            setFollowDag(datum);
+            setOverzichtDag(datum);
             setTab("followmoney");
           }} />
         )}
