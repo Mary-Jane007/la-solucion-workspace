@@ -975,7 +975,14 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
             bezigId={inzendingBezigId}
           />
         )}
-        {!laden && tab === "vandaag" && <VandaagPanel dag={dagVerslag} valuta={dashboardValuta} />}
+        {!laden && tab === "vandaag" && (
+          <VandaagPanel
+            dag={dagVerslag}
+            valuta={dashboardValuta}
+            geselecteerdeDag={overzichtDag}
+            onGeselecteerdeDag={setOverzichtDag}
+          />
+        )}
         {!laden && tab === "followmoney" && (
           <FollowTheMoneyPanel dag={followMoney} onDagWissel={setFollowDag} />
         )}

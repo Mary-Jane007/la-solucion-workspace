@@ -265,21 +265,42 @@ export function OverzichtPanel({
   );
 }
 
-export function VandaagPanel({ dag, valuta }: { dag: DagVerslag; valuta: FinancieelValuta }) {
+export function VandaagPanel({
+  dag,
+  valuta,
+  geselecteerdeDag,
+  onGeselecteerdeDag
+}: {
+  dag: DagVerslag;
+  valuta: FinancieelValuta;
+  geselecteerdeDag: string;
+  onGeselecteerdeDag: (dag: string) => void;
+}) {
   return (
     <div className="fin-panel-stack">
       <section className="card page-card">
-        <div className="section-header">
-          <h2>Dagelijks financieel verslag</h2>
-          <p className="muted">{dag.datumLabel}</p>
+        <div className="section-header section-header-row">
+          <div>
+            <h2>Dagelijks financieel verslag</h2>
+            <p className="muted">{dag.datumLabel}</p>
+          </div>
+          <label className="form-label">
+            Datum
+            <input
+              type="date"
+              className="form-input"
+              value={geselecteerdeDag}
+              onChange={(e) => onGeselecteerdeDag(e.target.value)}
+            />
+          </label>
         </div>
         <div className="fin-kpi-grid fin-kpi-grid-compact">
           {(
             [
               ["Start van de dag", dag.beginsaldo, "blauw", true],
-              ["Inkomsten vandaag", dag.inkomsten, "groen", true],
+              ["Binnen (ontvangen)", dag.ontvangen, "groen", true],
               ["Uitgaven vandaag", dag.uitgaven, "rood", true],
-              ["Ontvangen betalingen", dag.ontvangen, "groen", true],
+              ["Inkomsten totaal", dag.inkomsten, "groen", true],
               ["Openstaande betalingen", dag.openstaand, "oranje", true],
               ["Nettoresultaat vandaag", dag.netto, dag.netto >= 0 ? "groen" : "rood", true],
               ["Eindbalans", dag.eindbalans, "blauw", true],
@@ -311,9 +332,9 @@ export function VandaagPanel({ dag, valuta }: { dag: DagVerslag; valuta: Financi
             </p>
           </div>
           <div>
-            <h3>Geld bij medewerkers vandaag</h3>
+            <h3>Geld bij medewerkers op deze dag</h3>
             {dag.geldBijVandaag.length === 0 ? (
-              <p className="muted">Nog geen “bij wie”-registraties vandaag.</p>
+              <p className="muted">Nog geen “bij wie”-registraties op deze dag.</p>
             ) : (
               <ul className="fin-simple-list">
                 {dag.geldBijVandaag.map((g) => (
@@ -330,11 +351,11 @@ export function VandaagPanel({ dag, valuta }: { dag: DagVerslag; valuta: Financi
 
       <section className="card page-card">
         <div className="section-header">
-          <h2>Tijdlijn vandaag</h2>
+          <h2>Tijdlijn van de dag</h2>
           <p className="muted">Chronologisch overzicht van alle posten.</p>
         </div>
         {dag.tijdlijn.length === 0 ? (
-          <p className="muted">Nog geen transacties vandaag.</p>
+          <p className="muted">Nog geen transacties op deze dag.</p>
         ) : (
           <ol className="fin-timeline">
             {dag.tijdlijn.map((t) => (
