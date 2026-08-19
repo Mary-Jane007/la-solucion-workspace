@@ -87,6 +87,7 @@ import {
   lokaleDatumIso,
   maakDagAfsluiting,
   maakMaandAfsluiting,
+  parseLokaleDatum,
   PERIODE_OPTIES,
   PeriodeSleutel,
   standaardValutaLaden,
@@ -307,6 +308,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
   const [followDag, setFollowDag] = useState(() => lokaleDatumIso(new Date()));
+  const [overzichtDag, setOverzichtDag] = useState(() => lokaleDatumIso(new Date()));
   const formulierRef = useRef<HTMLElement>(null);
 
   const opdrachtenById = useMemo(() => new Map(opdrachten.map((o) => [o.id, o])), [opdrachten]);
@@ -456,8 +458,8 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
     [vorigePosten, dashboardValuta, dagenInPeriode]
   );
   const dagVerslag = useMemo(
-    () => berekenDagVerslag(posten, new Date(), dashboardValuta),
-    [posten, dashboardValuta]
+    () => berekenDagVerslag(posten, parseLokaleDatum(overzichtDag), dashboardValuta),
+    [posten, overzichtDag, dashboardValuta]
   );
   const followMoney = useMemo(
     () => berekenFollowTheMoney(posten, followDag, dashboardValuta),
@@ -954,7 +956,16 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
           </section>
         )}
         {!laden && tab === "overzicht" && (
-          <OverzichtPanel kpis={kpis} gezondheid={gezondheid} signaleringen={signaleringen} dag={dagVerslag} tijdreeks={tijdreeks} onOpenTab={(id) => setTab(id as FinancieelTabId)} />
+          <OverzichtPanel
+            kpis={kpis}
+            gezondheid={gezondheid}
+            signaleringen={signaleringen}
+            dag={dagVerslag}
+            tijdreeks={tijdreeks}
+            overzichtDag={overzichtDag}
+            onOverzichtDag={setOverzichtDag}
+            onOpenTab={(id) => setTab(id as FinancieelTabId)}
+          />
         )}
         {!laden && tab === "inzendingen" && (
           <FinancieelInzendingenPanel

@@ -129,6 +129,8 @@ export function OverzichtPanel({
   signaleringen,
   dag,
   tijdreeks,
+  overzichtDag,
+  onOverzichtDag,
   onOpenTab
 }: {
   kpis: DashboardKpis;
@@ -136,14 +138,27 @@ export function OverzichtPanel({
   signaleringen: Signalering[];
   dag: DagVerslag;
   tijdreeks: TijdreeksPunt[];
+  overzichtDag: string;
+  onOverzichtDag: (dag: string) => void;
   onOpenTab: (tab: string) => void;
 }) {
   return (
     <div className="fin-panel-stack">
       <section className="card page-card fin-today-strip">
-        <div className="section-header">
-          <h2>Vandaag in één oogopslag</h2>
-          <p className="muted">{dag.datumLabel}</p>
+        <div className="section-header section-header-row">
+          <div>
+            <h2>Overzicht per dag</h2>
+            <p className="muted">{dag.datumLabel}</p>
+          </div>
+          <label className="form-label">
+            Datum
+            <input
+              type="date"
+              className="form-input"
+              value={overzichtDag}
+              onChange={(e) => onOverzichtDag(e.target.value)}
+            />
+          </label>
         </div>
         <div className="fin-today-metrics">
           <div>
