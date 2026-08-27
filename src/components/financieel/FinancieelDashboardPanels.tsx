@@ -162,7 +162,7 @@ export function OverzichtPanel({
         </div>
         <div className="fin-today-metrics">
           <div>
-            <span className="muted">Start van de dag</span>
+            <span className="muted">Beginsaldo / Begon met</span>
             <strong>{formatGeld(dag.beginsaldo, kpis.valuta)}</strong>
           </div>
           <div>
@@ -307,13 +307,13 @@ export function VandaagPanel({
         <div className="fin-kpi-grid fin-kpi-grid-compact">
           {(
             [
-              ["Start van de dag", dag.beginsaldo, "blauw", true],
+              ["Beginsaldo / Begon met", dag.beginsaldo, "blauw", true],
               ["Binnen (ontvangen)", dag.ontvangen, "groen", true],
               ["Uitgaven vandaag", dag.uitgaven, "rood", true],
               ["Inkomsten totaal", dag.inkomsten, "groen", true],
               ["Openstaande betalingen", dag.openstaand, "oranje", true],
               ["Nettoresultaat vandaag", dag.netto, dag.netto >= 0 ? "groen" : "rood", true],
-              ["Eindbalans", dag.eindbalans, "blauw", true],
+              ["Over (eindbalans)", dag.eindbalans, "blauw", true],
               ["Aantal transacties", dag.transacties, "blauw", false]
             ] as const
           ).map(([label, waarde, tone, isGeld]) => (
@@ -1187,8 +1187,9 @@ export function FollowTheMoneyPanel({
         </div>
         <div className="fin-today-metrics">
           <div>
-            <span className="muted">Start van de dag</span>
+            <span className="muted">Beginsaldo / Begon met</span>
             <strong>{formatGeld(dag.totaalBegin, dag.valuta)}</strong>
+            <span className="fin-kpi-hint muted">openingskas-registratie, of Over van gisteren</span>
           </div>
           <div>
             <span className="muted">Ontvangen (apart)</span>
@@ -1203,8 +1204,9 @@ export function FollowTheMoneyPanel({
             <strong>{formatGeld(dag.totaalOverdracht, dag.valuta)}</strong>
           </div>
           <div>
-            <span className="muted">Nog in kas (einde dag)</span>
+            <span className="muted">Over (restant → volgende dag)</span>
             <strong>{formatGeld(dag.totaalOver, dag.valuta)}</strong>
+            <span className="fin-kpi-hint muted">= beginsaldo + erbij − eruit</span>
           </div>
         </div>
       </section>
@@ -1212,7 +1214,9 @@ export function FollowTheMoneyPanel({
       <section className="card page-card">
         <div className="section-header">
           <h2>Bij wie ligt het geld?</h2>
-          <p className="muted">Beginsaldo, daarna elk bedrag apart, en wat er overblijft.</p>
+          <p className="muted">
+            Beginsaldo is hetzelfde als “Begon met”. Wat je niet besteedt, blijft automatisch in Over en gaat door naar morgen.
+          </p>
         </div>
         {dag.personen.length === 0 ? (
           <p className="muted">Deze dag geen kasbewegingen en geen beginsaldo.</p>
@@ -1223,7 +1227,7 @@ export function FollowTheMoneyPanel({
                 <h3>{p.naam}</h3>
                 <dl>
                   <div>
-                    <dt>Begon met</dt>
+                    <dt>Beginsaldo / Begon met</dt>
                     <dd>{formatGeld(p.beginsaldo, dag.valuta)}</dd>
                   </div>
                   <div>

@@ -1660,9 +1660,9 @@ function followOpsVanPost(p: FinancieelPost, valuta: FinancieelValuta): FollowOp
         bedrag: p.bedrag,
         id: p.id,
         soort: "begin",
-        titel: "Beginsaldo kas",
+        titel: "Beginsaldo / Begon met",
         uitleg: [
-          `Hiermee is de dag begonnen`,
+          `Dit is het beginsaldo van de dag`,
           naar ? `bij ${naar.naam}` : null,
           p.omschrijving
         ]
@@ -1915,10 +1915,24 @@ export function berekenFollowTheMoney(
   const opening = new Map<string, FollowSaldo>();
   const dagOps: FollowOp[] = [];
 
+  // Beginsaldo-registratie (= Begon met) zet het beginsaldo.
+  // Zonder registratie blijft beginsaldo het restant (Over) van eerdere dagen.
+  // Niet verbruikt beginsaldo blijft in Over via: over = beginsaldo + erbij − eruit.
   for (const op of ops) {
-    const beginVandaag = op.soort === "begin" && isZelfdeLokaleDag(op.at, dag);
+    const beginOp = op.soort === "begin";
+    const beginVandaag = beginOp && isZelfdeLokaleDag(op.at, dag);
+
     if (op.at < startVanDag(dag)) {
-      if (op.handmatigeDeltas) {
+      if (beginOp) {
+        if (op.handmatigeDeltas) {
+          for (const delta of op.handmatigeDeltas) {
+            zetFollowSaldo(opening, { naam: delta.naam, userId: delta.userId }, delta.delta);
+          }
+        } else {
+          const wie = geldNaarPersoon(op.post);
+          if (wie) zetFollowSaldo(opening, wie, op.bedrag);
+        }
+      } else if (op.handmatigeDeltas) {
         for (const delta of op.handmatigeDeltas) {
           bumpFollowSaldo(opening, { naam: delta.naam, userId: delta.userId }, delta.delta);
         }
@@ -1926,16 +1940,18 @@ export function berekenFollowTheMoney(
         applyFollowSaldo(opening, op.post, op.bedrag);
       }
     } else if (beginVandaag) {
-      const wie = geldNaarPersoon(op.post);
       if (op.handmatigeDeltas) {
         for (const delta of op.handmatigeDeltas) {
           zetFollowSaldo(opening, { naam: delta.naam, userId: delta.userId }, delta.delta);
         }
-      } else if (wie) {
-        zetFollowSaldo(opening, wie, op.bedrag);
+      } else {
+        const wie = geldNaarPersoon(op.post);
+        if (wie) zetFollowSaldo(opening, wie, op.bedrag);
       }
       dagOps.push(op);
-    } else if (isZelfdeLokaleDag(op.at, dag)) dagOps.push(op);
+    } else if (isZelfdeLokaleDag(op.at, dag)) {
+      dagOps.push(op);
+    }
   }
 
   const running = new Map([...opening.entries()].map(([k, v]) => [k, { ...v }]));
@@ -2021,7 +2037,8 @@ export function berekenFollowTheMoney(
       const beginsaldo = opening.get(key)?.saldo || 0;
       const binnen = binnenPer.get(key) || 0;
       const uit = uitPer.get(key) || 0;
-      const over = running.get(key)?.saldo ?? geldRond(beginsaldo + binnen - uit);
+      // Niet verbruikt beginsaldo blijft automatisch in Over.
+      const over = geldRond(beginsaldo + binnen - uit);
       return {
         key,
         naam,
