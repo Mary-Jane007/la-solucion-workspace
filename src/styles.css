@@ -2353,7 +2353,31 @@ textarea.form-input {
   background: color-mix(in srgb, var(--accent, #1e3a5f) 5%, transparent);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+}
+
+.help-video-beheer-blok {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.help-video-beheer-blok h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.help-video-of {
+  margin: 0;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  text-transform: lowercase;
+}
+
+.help-video-bestandsnaam {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
 }
 
 .help-video-actions {

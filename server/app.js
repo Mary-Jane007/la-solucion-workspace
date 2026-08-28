@@ -15,9 +15,15 @@ const { v4: uuidv4 } = require("uuid");
 const { migrate } = require("./db");
 const { z } = require("zod");
 const {
-  getHelpVideoUrl,
-  setHelpVideoUrl,
-  clearHelpVideoUrl
+  HELP_VIDEO_DIR,
+  HELP_VIDEO_BASENAME,
+  ensureHelpVideoDir,
+  getHelpVideo,
+  getHelpVideoFilePath,
+  setHelpVideoLink,
+  setHelpVideoFile,
+  clearHelpVideo,
+  toPublicHelpVideo
 } = require("./helpVideoStore");
 const {
   hasDb,
@@ -199,6 +205,42 @@ const INZENDING_IMG_TYPES = new Set([
 ]);
 const INZENDING_IMG_EXTS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".heif"]);
 
+const HELP_VIDEO_MIMES = new Set([
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
+  "video/ogg",
+  "video/x-msvideo"
+]);
+const HELP_VIDEO_EXTS = new Set([".mp4", ".webm", ".mov", ".ogg", ".avi"]);
+
+ensureHelpVideoDir();
+
+const uploadHelpVideo = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      ensureHelpVideoDir();
+      cb(null, HELP_VIDEO_DIR);
+    },
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname || "").toLowerCase();
+      const safeExt = HELP_VIDEO_EXTS.has(ext) ? ext : ".mp4";
+      cb(null, `${HELP_VIDEO_BASENAME}${safeExt}`);
+    }
+  }),
+  limits: {
+    fileSize: 100 * 1024 * 1024
+  },
+  fileFilter: (_req, file, cb) => {
+    const mime = String(file.mimetype || "").toLowerCase();
+    const ext = path.extname(file.originalname || "").toLowerCase();
+    if (HELP_VIDEO_MIMES.has(mime) || mime.startsWith("video/") || HELP_VIDEO_EXTS.has(ext)) {
+      return cb(null, true);
+    }
+    return cb(new Error("Alleen videobestanden zijn toegestaan (mp4, webm, mov)."));
+  }
+});
+
 const uploadInzendingImg = multer({
   storage: uploadStorage,
   limits: {
@@ -248,7 +290,10 @@ function generateToken(user) {
 
 function authRequired(req, res, next) {
   const authHeader = req.headers.authorization || "";
-  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  let token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (!token && req.query.access_token) {
+    token = String(req.query.access_token);
+  }
   if (!token) {
     return res.status(401).json({ error: "Niet geautoriseerd: ontbrekende token." });
   }
@@ -1110,18 +1155,69 @@ app.post("/api/admin/users/:id/toggle-active", authRequired, requireOwner, (req,
 
 app.get("/api/help/video", authRequired, async (_req, res) => {
   try {
-    const url = await getHelpVideoUrl();
-    return res.json({ url });
+    const stored = await getHelpVideo();
+    const video = toPublicHelpVideo(stored);
+    return res.json({
+      video,
+      url: video?.playbackUrl || ""
+    });
   } catch (err) {
     console.error("Fout bij GET /api/help/video:", err);
     return res.status(500).json({ error: "Kon uitlegvideo niet ophalen." });
   }
 });
 
+app.get("/api/help/video/stream", authRequired, async (req, res) => {
+  try {
+    const file = await getHelpVideoFilePath();
+    if (!file) {
+      return res.status(404).json({ error: "Geen videobestand beschikbaar." });
+    }
+    res.setHeader("Content-Type", file.mimeType);
+    res.setHeader("Cache-Control", "private, no-store");
+    if (file.originalName) {
+      res.setHeader("Content-Disposition", `inline; filename="${file.originalName.replace(/"/g, "")}"`);
+    }
+    fs.createReadStream(file.filePath).pipe(res);
+  } catch (err) {
+    console.error("Fout bij GET /api/help/video/stream:", err);
+    if (!res.headersSent) {
+      return res.status(500).json({ error: "Kon videobestand niet afspelen." });
+    }
+  }
+});
+
+app.post("/api/admin/help/video/upload", authRequired, requireOwner, (req, res) => {
+  uploadHelpVideo.single("video")(req, res, async (err) => {
+    if (err) {
+      const teGroot = err.code === "LIMIT_FILE_SIZE";
+      return res.status(400).json({
+        error: teGroot
+          ? "Videobestand is te groot (max. 100 MB)."
+          : err.message || "Upload mislukt."
+      });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: "Kies een videobestand om te uploaden." });
+    }
+    try {
+      const video = await setHelpVideoFile({
+        storageName: req.file.filename,
+        originalName: req.file.originalname,
+        mimeType: req.file.mimetype
+      });
+      return res.json({ video, message: "Videobestand geüpload." });
+    } catch (saveErr) {
+      console.error("Fout bij opslaan help-video:", saveErr);
+      return res.status(500).json({ error: "Kon videobestand niet opslaan." });
+    }
+  });
+});
+
 app.put("/api/admin/help/video", authRequired, requireOwner, async (req, res) => {
   try {
-    const url = await setHelpVideoUrl(req.body?.url);
-    return res.json({ url, message: "Uitlegvideo opgeslagen." });
+    const video = await setHelpVideoLink(req.body?.url);
+    return res.json({ video, url: video?.playbackUrl || "", message: "Videolink opgeslagen." });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Kon uitlegvideo niet opslaan.";
     console.error("Fout bij PUT /api/admin/help/video:", err);
@@ -1131,8 +1227,8 @@ app.put("/api/admin/help/video", authRequired, requireOwner, async (req, res) =>
 
 app.delete("/api/admin/help/video", authRequired, requireOwner, async (_req, res) => {
   try {
-    await clearHelpVideoUrl();
-    return res.json({ url: "", message: "Uitlegvideo verwijderd." });
+    await clearHelpVideo();
+    return res.json({ video: null, url: "", message: "Uitlegvideo verwijderd." });
   } catch (err) {
     console.error("Fout bij DELETE /api/admin/help/video:", err);
     return res.status(500).json({ error: "Kon uitlegvideo niet verwijderen." });

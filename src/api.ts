@@ -404,14 +404,34 @@ export async function updateFinancieelInzendingStatus(
   return data.inzending as FinancieelInzending;
 }
 
-export async function fetchHelpVideoUrl(): Promise<string> {
+import { HelpVideoInfo } from "./helpConfig";
+
+export function helpVideoStreamUrl(): string {
+  const token = getToken();
+  if (!token) return "/api/help/video/stream";
+  return `/api/help/video/stream?access_token=${encodeURIComponent(token)}`;
+}
+
+export async function fetchHelpVideo(): Promise<HelpVideoInfo | null> {
   const res = await apiFetch("/api/help/video");
   const data = await readApiJson(res);
   if (!res.ok) throw new Error(String(data.error || "Kon uitlegvideo niet ophalen."));
-  return String(data.url || "");
+  const video = data.video as HelpVideoInfo | null | undefined;
+  if (video?.playbackUrl) return video;
+  const legacyUrl = String(data.url || "").trim();
+  if (legacyUrl) {
+    return { source: legacyUrl.includes("/api/help/video/stream") ? "file" : "link", playbackUrl: legacyUrl };
+  }
+  return null;
 }
 
-export async function saveHelpVideoUrl(url: string): Promise<string> {
+/** @deprecated gebruik fetchHelpVideo */
+export async function fetchHelpVideoUrl(): Promise<string> {
+  const video = await fetchHelpVideo();
+  return video?.playbackUrl || "";
+}
+
+export async function saveHelpVideoUrl(url: string): Promise<HelpVideoInfo | null> {
   const res = await apiFetch("/api/admin/help/video", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
@@ -419,12 +439,29 @@ export async function saveHelpVideoUrl(url: string): Promise<string> {
   });
   const data = await readApiJson(res);
   if (!res.ok) throw new Error(String(data.error || "Kon uitlegvideo niet opslaan."));
-  return String(data.url || "");
+  return (data.video as HelpVideoInfo | null) || null;
 }
 
-export async function deleteHelpVideoUrl(): Promise<void> {
+export async function uploadHelpVideoFile(file: File): Promise<HelpVideoInfo | null> {
+  const form = new FormData();
+  form.append("video", file);
+  const res = await apiFetch("/api/admin/help/video/upload", {
+    method: "POST",
+    body: form
+  });
+  const data = await readApiJson(res);
+  if (!res.ok) throw new Error(String(data.error || "Kon videobestand niet uploaden."));
+  return (data.video as HelpVideoInfo | null) || null;
+}
+
+export async function deleteHelpVideo(): Promise<void> {
   const res = await apiFetch("/api/admin/help/video", { method: "DELETE" });
   const data = await readApiJson(res);
   if (!res.ok) throw new Error(String(data.error || "Kon uitlegvideo niet verwijderen."));
+}
+
+/** @deprecated gebruik deleteHelpVideo */
+export async function deleteHelpVideoUrl(): Promise<void> {
+  await deleteHelpVideo();
 }
 

@@ -1,6 +1,17 @@
-import { FormEvent, useEffect, useState } from "react";
-import { deleteHelpVideoUrl, fetchHelpVideoUrl, saveHelpVideoUrl } from "../api";
-import { parseHelpVideoUrl, resolveHelpVideoUrl } from "../helpConfig";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  deleteHelpVideo,
+  fetchHelpVideo,
+  helpVideoStreamUrl,
+  saveHelpVideoUrl,
+  uploadHelpVideoFile
+} from "../api";
+import {
+  HELP_VIDEO_ACCEPT,
+  HELP_VIDEO_MAX_MB,
+  HelpVideoInfo,
+  helpVideoEmbed
+} from "../helpConfig";
 
 type HelpStap = {
   titel: string;
@@ -128,30 +139,41 @@ function HelpOnderwerp({ titel, stappen, tip }: HelpStap) {
 
 function HelpVideoBlok({
   isEigenaar,
-  videoUrl,
+  video,
   inputUrl,
+  gekozenBestand,
   laden,
   bezig,
   fout,
   succes,
   onInputChange,
-  onOpslaan,
+  onBestandChange,
+  onOpslaanLink,
+  onUploadBestand,
   onVerwijderen
 }: {
   isEigenaar: boolean;
-  videoUrl: string;
+  video: HelpVideoInfo | null;
   inputUrl: string;
+  gekozenBestand: File | null;
   laden: boolean;
   bezig: boolean;
   fout: string | null;
   succes: string | null;
   onInputChange: (url: string) => void;
-  onOpslaan: (e: FormEvent) => void;
+  onBestandChange: (file: File | null) => void;
+  onOpslaanLink: (e: FormEvent) => void;
+  onUploadBestand: () => void;
   onVerwijderen: () => void;
 }) {
-  const effectief = resolveHelpVideoUrl(videoUrl);
-  const embed = parseHelpVideoUrl(effectief);
-  const linkOngeldig = Boolean(inputUrl.trim()) && !parseHelpVideoUrl(inputUrl.trim());
+  const streamUrl = useMemo(() => helpVideoStreamUrl(), [video?.source]);
+  const embed = helpVideoEmbed(video, streamUrl);
+  const linkOngeldig = Boolean(inputUrl.trim()) && !helpVideoEmbed(
+    { source: "link", playbackUrl: inputUrl.trim() },
+    streamUrl
+  );
+  const bestandTeGroot =
+    gekozenBestand && gekozenBestand.size > HELP_VIDEO_MAX_MB * 1024 * 1024;
 
   return (
     <section className="card page-card help-video-section">
@@ -163,28 +185,75 @@ function HelpVideoBlok({
       </div>
 
       {isEigenaar && (
-        <form className="help-video-beheer" onSubmit={onOpslaan}>
-          <label className="form-label">
-            Videolink (YouTube, Vimeo of directe .mp4)
-            <input
-              type="url"
-              className="form-input"
-              value={inputUrl}
-              onChange={(e) => onInputChange(e.target.value)}
-              placeholder="https://www.youtube.com/watch?v=..."
-              disabled={bezig || laden}
-            />
-          </label>
-          {linkOngeldig && (
-            <p className="login-hint login-error">
-              Deze link wordt niet herkend. Gebruik YouTube, Vimeo of een directe mp4/webm-link.
-            </p>
-          )}
-          <div className="help-video-actions">
-            <button type="submit" className="btn-primary" disabled={bezig || laden || linkOngeldig || !inputUrl.trim()}>
-              {bezig ? "Bezig..." : "Video opslaan"}
+        <div className="help-video-beheer">
+          <div className="help-video-beheer-blok">
+            <h3>Videobestand uploaden</h3>
+            <p className="muted">Mp4, webm of mov — max. {HELP_VIDEO_MAX_MB} MB.</p>
+            <label className="form-label">
+              Kies bestand
+              <input
+                type="file"
+                className="form-input"
+                accept={HELP_VIDEO_ACCEPT}
+                disabled={bezig || laden}
+                onChange={(e) => onBestandChange(e.target.files?.[0] || null)}
+              />
+            </label>
+            {gekozenBestand && (
+              <p className="muted">
+                Geselecteerd: <strong>{gekozenBestand.name}</strong> (
+                {(gekozenBestand.size / (1024 * 1024)).toFixed(1)} MB)
+              </p>
+            )}
+            {bestandTeGroot && (
+              <p className="login-hint login-error">
+                Bestand is te groot. Maximum is {HELP_VIDEO_MAX_MB} MB.
+              </p>
+            )}
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={bezig || laden || !gekozenBestand || bestandTeGroot}
+              onClick={onUploadBestand}
+            >
+              {bezig ? "Bezig met uploaden..." : "Videobestand uploaden"}
             </button>
-            {videoUrl && (
+          </div>
+
+          <p className="help-video-of" aria-hidden="true">
+            of
+          </p>
+
+          <form className="help-video-beheer-blok" onSubmit={onOpslaanLink}>
+            <h3>Videolink plakken</h3>
+            <p className="muted">YouTube, Vimeo of een directe mp4-link.</p>
+            <label className="form-label">
+              Link
+              <input
+                type="url"
+                className="form-input"
+                value={inputUrl}
+                onChange={(e) => onInputChange(e.target.value)}
+                placeholder="https://www.youtube.com/watch?v=..."
+                disabled={bezig || laden}
+              />
+            </label>
+            {linkOngeldig && (
+              <p className="login-hint login-error">
+                Deze link wordt niet herkend. Gebruik YouTube, Vimeo of een directe mp4/webm-link.
+              </p>
+            )}
+            <button
+              type="submit"
+              className="btn-secondary"
+              disabled={bezig || laden || linkOngeldig || !inputUrl.trim()}
+            >
+              {bezig ? "Bezig..." : "Link opslaan"}
+            </button>
+          </form>
+
+          <div className="help-video-actions">
+            {video && (
               <button type="button" className="btn-secondary" disabled={bezig || laden} onClick={onVerwijderen}>
                 Video verwijderen
               </button>
@@ -193,23 +262,22 @@ function HelpVideoBlok({
           {fout && <p className="login-hint login-error">{fout}</p>}
           {succes && <p className="login-hint login-success">{succes}</p>}
           <p className="muted help-video-beheer-hint">
-            Als eigenaar kun je hier de uitlegvideo toevoegen of verwijderen. Medewerkers zien alleen de
-            opgeslagen video.
+            Upload een bestand of plak een link. Een nieuwe upload of link vervangt de vorige video.
+            Medewerkers zien alleen de afgespeelde video.
           </p>
-        </form>
+        </div>
       )}
 
       {laden ? (
         <p className="muted">Video laden...</p>
       ) : embed ? (
         <div className="help-video-frame">
+          {video?.source === "file" && video.originalName && (
+            <p className="muted help-video-bestandsnaam">{video.originalName}</p>
+          )}
           {embed.kind === "file" ? (
             <video className="help-video-native" controls preload="metadata" src={embed.src}>
-              Je browser ondersteunt deze video niet.{" "}
-              <a href={embed.src} target="_blank" rel="noreferrer">
-                Open de video in een nieuw tabblad
-              </a>
-              .
+              Je browser ondersteunt deze video niet.
             </video>
           ) : (
             <iframe
@@ -228,7 +296,7 @@ function HelpVideoBlok({
           </p>
           <p className="muted">
             {isEigenaar
-              ? "Plak hierboven een videolink en klik op Video opslaan. Daarna verschijnt de speler op deze plek voor iedereen."
+              ? "Upload hierboven een videobestand of plak een link. Daarna verschijnt de speler op deze plek voor iedereen."
               : "De eigenaar kan een uitlegvideo toevoegen. Zodra die is geplaatst, zie je hem hier."}
           </p>
         </div>
@@ -238,8 +306,9 @@ function HelpVideoBlok({
 }
 
 export function HelpPagina({ isEigenaar }: { isEigenaar: boolean }) {
-  const [videoUrl, setVideoUrl] = useState("");
+  const [video, setVideo] = useState<HelpVideoInfo | null>(null);
   const [inputUrl, setInputUrl] = useState("");
+  const [gekozenBestand, setGekozenBestand] = useState<File | null>(null);
   const [laden, setLaden] = useState(true);
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
@@ -249,10 +318,10 @@ export function HelpPagina({ isEigenaar }: { isEigenaar: boolean }) {
     let cancelled = false;
     (async () => {
       try {
-        const url = await fetchHelpVideoUrl();
+        const info = await fetchHelpVideo();
         if (!cancelled) {
-          setVideoUrl(url);
-          setInputUrl(url);
+          setVideo(info);
+          setInputUrl(info?.source === "link" ? info.playbackUrl : "");
         }
       } catch (err) {
         if (!cancelled) {
@@ -267,18 +336,36 @@ export function HelpPagina({ isEigenaar }: { isEigenaar: boolean }) {
     };
   }, []);
 
-  const handleOpslaan = async (e: FormEvent) => {
+  const handleOpslaanLink = async (e: FormEvent) => {
     e.preventDefault();
     setFout(null);
     setSucces(null);
     try {
       setBezig(true);
-      const url = await saveHelpVideoUrl(inputUrl.trim());
-      setVideoUrl(url);
-      setInputUrl(url);
-      setSucces("Uitlegvideo opgeslagen. Medewerkers zien hem nu op Help.");
+      const saved = await saveHelpVideoUrl(inputUrl.trim());
+      setVideo(saved);
+      setGekozenBestand(null);
+      setSucces("Videolink opgeslagen. Medewerkers zien hem nu op Help.");
     } catch (err) {
       setFout(err instanceof Error ? err.message : "Opslaan mislukt.");
+    } finally {
+      setBezig(false);
+    }
+  };
+
+  const handleUploadBestand = async () => {
+    if (!gekozenBestand) return;
+    setFout(null);
+    setSucces(null);
+    try {
+      setBezig(true);
+      const saved = await uploadHelpVideoFile(gekozenBestand);
+      setVideo(saved);
+      setInputUrl("");
+      setGekozenBestand(null);
+      setSucces("Videobestand geüpload. Medewerkers kunnen het nu afspelen op Help.");
+    } catch (err) {
+      setFout(err instanceof Error ? err.message : "Upload mislukt.");
     } finally {
       setBezig(false);
     }
@@ -290,9 +377,10 @@ export function HelpPagina({ isEigenaar }: { isEigenaar: boolean }) {
     setSucces(null);
     try {
       setBezig(true);
-      await deleteHelpVideoUrl();
-      setVideoUrl("");
+      await deleteHelpVideo();
+      setVideo(null);
       setInputUrl("");
+      setGekozenBestand(null);
       setSucces("Uitlegvideo verwijderd.");
     } catch (err) {
       setFout(err instanceof Error ? err.message : "Verwijderen mislukt.");
@@ -305,14 +393,17 @@ export function HelpPagina({ isEigenaar }: { isEigenaar: boolean }) {
     <div className="info-stack help-page">
       <HelpVideoBlok
         isEigenaar={isEigenaar}
-        videoUrl={videoUrl}
+        video={video}
         inputUrl={inputUrl}
+        gekozenBestand={gekozenBestand}
         laden={laden}
         bezig={bezig}
         fout={fout}
         succes={succes}
         onInputChange={setInputUrl}
-        onOpslaan={handleOpslaan}
+        onBestandChange={setGekozenBestand}
+        onOpslaanLink={handleOpslaanLink}
+        onUploadBestand={handleUploadBestand}
         onVerwijderen={handleVerwijderen}
       />
       {HELP_ONDERWERPEN.map((onderwerp) => (

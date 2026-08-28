@@ -1,9 +1,16 @@
 /**
  * Fallback-videolink (optioneel) via .env — normaal beheert de eigenaar de video in Help.
- * VITE_APP_UITLEG_VIDEO_URL=https://www.youtube.com/watch?v=...
  */
 export const APP_UITLEG_VIDEO_URL =
   (import.meta.env.VITE_APP_UITLEG_VIDEO_URL as string | undefined)?.trim() || "";
+
+export type HelpVideoSource = "link" | "file";
+
+export type HelpVideoInfo = {
+  source: HelpVideoSource;
+  playbackUrl: string;
+  originalName?: string | null;
+};
 
 export type HelpVideoKind = "youtube" | "vimeo" | "file";
 
@@ -26,7 +33,7 @@ export function parseHelpVideoUrl(raw: string): HelpVideoEmbed | null {
     return { kind: "vimeo", src: `https://player.vimeo.com/video/${vimeoMatch[1]}` };
   }
 
-  if (/\.(mp4|webm|ogg)(\?|$)/i.test(url)) {
+  if (/\.(mp4|webm|ogg)(\?|$)/i.test(url) || url.includes("/api/help/video/stream")) {
     return { kind: "file", src: url };
   }
 
@@ -40,7 +47,22 @@ export function parseHelpVideoUrl(raw: string): HelpVideoEmbed | null {
   return null;
 }
 
-/** API-url heeft voorrang; anders optionele env-fallback. */
-export function resolveHelpVideoUrl(apiUrl: string): string {
-  return apiUrl.trim() || APP_UITLEG_VIDEO_URL;
+/** Zet API-video om naar afspeel-embed; env-fallback als er geen video in de app staat. */
+export function helpVideoEmbed(
+  video: HelpVideoInfo | null,
+  streamUrlWithAuth: string
+): HelpVideoEmbed | null {
+  if (video?.source === "file") {
+    return { kind: "file", src: streamUrlWithAuth };
+  }
+  if (video?.source === "link") {
+    return parseHelpVideoUrl(video.playbackUrl);
+  }
+  if (APP_UITLEG_VIDEO_URL) {
+    return parseHelpVideoUrl(APP_UITLEG_VIDEO_URL);
+  }
+  return null;
 }
+
+export const HELP_VIDEO_ACCEPT = "video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov";
+export const HELP_VIDEO_MAX_MB = 100;
