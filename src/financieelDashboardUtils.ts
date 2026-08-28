@@ -1896,50 +1896,66 @@ function followOpsVanPost(p: FinancieelPost, valuta: FinancieelValuta): FollowOp
   return ops;
 }
 
-export function berekenFollowTheMoney(
-  allePosten: FinancieelPost[],
+function followTheMoneyRelevantePosten(allePosten: FinancieelPost[], valuta: FinancieelValuta): FinancieelPost[] {
+  return allePosten.filter(
+    (p) =>
+      ((normalizeValuta(p.valuta) === valuta &&
+        (isCashBeweging(p) || heeftInkomstKasGebruik(p) || heeftFollowAfGebruik(p))) ||
+        heeftValutaOmzettingNaar(p, valuta))
+  );
+}
+
+function legeFollowMoneyDag(dagIso: string, valuta: FinancieelValuta): FollowMoneyDag {
+  const dag = parseLokaleDatum(dagIso);
+  return {
+    datum: dagIso,
+    datumLabel: dag.toLocaleDateString("nl-NL", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric"
+    }),
+    valuta,
+    personen: [],
+    gebeurtenissen: [],
+    besteed: [],
+    totaalBegin: 0,
+    totaalOntvangen: 0,
+    totaalBesteed: 0,
+    totaalOverdracht: 0,
+    totaalOver: 0
+  };
+}
+
+function followCarryVanDag(dag: FollowMoneyDag): Map<string, FollowSaldo> {
+  const carry = new Map<string, FollowSaldo>();
+  for (const p of dag.personen) {
+    if (p.over !== 0) {
+      carry.set(p.key, { naam: p.naam, saldo: p.over });
+    }
+  }
+  return carry;
+}
+
+function berekenFollowTheMoneyDag(
+  ops: FollowOp[],
   dagIso: string,
-  valuta: FinancieelValuta
+  valuta: FinancieelValuta,
+  openingCarry: Map<string, FollowSaldo>
 ): FollowMoneyDag {
   const dag = parseLokaleDatum(dagIso);
-  const ops = allePosten
-    .filter(
-      (p) =>
-        ((normalizeValuta(p.valuta) === valuta &&
-          (isCashBeweging(p) || heeftInkomstKasGebruik(p) || heeftFollowAfGebruik(p))) ||
-          heeftValutaOmzettingNaar(p, valuta))
-    )
-    .flatMap((p) => followOpsVanPost(p, valuta))
-    .sort((a, b) => a.at.getTime() - b.at.getTime());
-
+  const heeftCarry = openingCarry.size > 0;
   const opening = new Map<string, FollowSaldo>();
-  const dagOps: FollowOp[] = [];
+  for (const [key, saldo] of openingCarry) {
+    opening.set(key, { naam: saldo.naam, saldo: geldRond(saldo.saldo) });
+  }
 
-  // Beginsaldo-registratie (= Begon met) zet het beginsaldo.
-  // Zonder registratie blijft beginsaldo het restant (Over) van eerdere dagen.
-  // Niet verbruikt beginsaldo blijft in Over via: over = beginsaldo + erbij − eruit.
-  for (const op of ops) {
-    const beginOp = op.soort === "begin";
-    const beginVandaag = beginOp && isZelfdeLokaleDag(op.at, dag);
+  const dagOps = ops.filter((op) => isZelfdeLokaleDag(op.at, dag));
 
-    if (op.at < startVanDag(dag)) {
-      if (beginOp) {
-        if (op.handmatigeDeltas) {
-          for (const delta of op.handmatigeDeltas) {
-            zetFollowSaldo(opening, { naam: delta.naam, userId: delta.userId }, delta.delta);
-          }
-        } else {
-          const wie = geldNaarPersoon(op.post);
-          if (wie) zetFollowSaldo(opening, wie, op.bedrag);
-        }
-      } else if (op.handmatigeDeltas) {
-        for (const delta of op.handmatigeDeltas) {
-          bumpFollowSaldo(opening, { naam: delta.naam, userId: delta.userId }, delta.delta);
-        }
-      } else {
-        applyFollowSaldo(opening, op.post, op.bedrag);
-      }
-    } else if (beginVandaag) {
+  // Eerste dag zonder carry: openingskas-registratie zet het beginsaldo.
+  if (!heeftCarry) {
+    for (const op of dagOps) {
+      if (op.soort !== "begin") continue;
       if (op.handmatigeDeltas) {
         for (const delta of op.handmatigeDeltas) {
           zetFollowSaldo(opening, { naam: delta.naam, userId: delta.userId }, delta.delta);
@@ -1948,9 +1964,6 @@ export function berekenFollowTheMoney(
         const wie = geldNaarPersoon(op.post);
         if (wie) zetFollowSaldo(opening, wie, op.bedrag);
       }
-      dagOps.push(op);
-    } else if (isZelfdeLokaleDag(op.at, dag)) {
-      dagOps.push(op);
     }
   }
 
@@ -1972,6 +1985,37 @@ export function berekenFollowTheMoney(
 
   for (const op of dagOps) {
     const tijd = `${String(op.at.getHours()).padStart(2, "0")}:${String(op.at.getMinutes()).padStart(2, "0")}`;
+
+    if (op.soort === "begin") {
+      const wie =
+        op.handmatigeDeltas?.[0] ||
+        (() => {
+          const p = geldNaarPersoon(op.post);
+          return p ? { naam: p.naam, userId: p.userId, delta: op.bedrag } : null;
+        })();
+      const key = wie ? followSleutel(wie.naam, wie.userId) : null;
+      const beginsaldoWeergave = key ? opening.get(key)?.saldo ?? op.bedrag : op.bedrag;
+      const beweging: FollowMoneyBeweging = {
+        id: op.id,
+        titel: `${tijd} · ${op.titel}`,
+        bedragLabel: formatGeld(beginsaldoWeergave, valuta),
+        soort: op.soort
+      };
+      gebeurtenissen.push({
+        id: op.id,
+        tijd,
+        soort: op.soort,
+        titel: op.titel,
+        uitleg: heeftCarry
+          ? [`Over van vorige dag · automatisch doorgezet`, wie ? `bij ${wie.naam}` : null].filter(Boolean).join(" · ")
+          : op.uitleg,
+        bedragLabel: formatGeld(beginsaldoWeergave, valuta),
+        post: op.post
+      });
+      if (key) pushBeweging(key, beweging);
+      continue;
+    }
+
     const beweging: FollowMoneyBeweging = {
       id: op.id,
       titel: `${tijd} · ${op.titel}`,
@@ -1999,8 +2043,6 @@ export function berekenFollowTheMoney(
     for (const delta of deltas) {
       pushBeweging(delta.key, beweging);
     }
-
-    if (op.soort === "begin") continue;
 
     if (op.soort === "overdracht") {
       totaalOverdracht = geldRond(totaalOverdracht + Math.abs(op.bedrag));
@@ -2073,4 +2115,41 @@ export function berekenFollowTheMoney(
     totaalOverdracht,
     totaalOver: geldRond(personen.reduce((s, p) => s + p.over, 0))
   };
+}
+
+export function berekenFollowTheMoney(
+  allePosten: FinancieelPost[],
+  dagIso: string,
+  valuta: FinancieelValuta
+): FollowMoneyDag {
+  const relevantPosten = followTheMoneyRelevantePosten(allePosten, valuta);
+  if (relevantPosten.length === 0) {
+    return legeFollowMoneyDag(dagIso, valuta);
+  }
+
+  const ops = relevantPosten
+    .flatMap((p) => followOpsVanPost(p, valuta))
+    .sort((a, b) => a.at.getTime() - b.at.getTime());
+
+  const vroegsteIso = ops.reduce((min, op) => {
+    const iso = lokaleDatumIso(op.at);
+    return iso < min ? iso : min;
+  }, dagIso);
+
+  if (parseLokaleDatum(dagIso).getTime() < parseLokaleDatum(vroegsteIso).getTime()) {
+    return legeFollowMoneyDag(dagIso, valuta);
+  }
+
+  let carry = new Map<string, FollowSaldo>();
+  let result = legeFollowMoneyDag(dagIso, valuta);
+  let curIso = vroegsteIso;
+
+  while (parseLokaleDatum(curIso).getTime() <= parseLokaleDatum(dagIso).getTime()) {
+    result = berekenFollowTheMoneyDag(ops, curIso, valuta, carry);
+    carry = followCarryVanDag(result);
+    if (curIso === dagIso) break;
+    curIso = verschuifDag(curIso, 1);
+  }
+
+  return result;
 }

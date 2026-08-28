@@ -1189,7 +1189,7 @@ export function FollowTheMoneyPanel({
           <div>
             <span className="muted">Beginsaldo / Begon met</span>
             <strong>{formatGeld(dag.totaalBegin, dag.valuta)}</strong>
-            <span className="fin-kpi-hint muted">openingskas-registratie, of Over van gisteren</span>
+            <span className="fin-kpi-hint muted">automatisch Over van gisteren, of openingskas op eerste dag</span>
           </div>
           <div>
             <span className="muted">Ontvangen (apart)</span>
