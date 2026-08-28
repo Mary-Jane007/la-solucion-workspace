@@ -262,8 +262,9 @@ function HelpVideoBlok({
           {fout && <p className="login-hint login-error">{fout}</p>}
           {succes && <p className="login-hint login-success">{succes}</p>}
           <p className="muted help-video-beheer-hint">
-            Upload een bestand of plak een link. Een nieuwe upload of link vervangt de vorige video.
-            Medewerkers zien alleen de afgespeelde video.
+            Upload een bestand of plak een link. De video wordt opgeslagen in de database en blijft
+            beschikbaar na herstart of verhuizing van de server. Medewerkers zien alleen de afgespeelde
+            video.
           </p>
         </div>
       )}
@@ -363,7 +364,7 @@ export function HelpPagina({ isEigenaar }: { isEigenaar: boolean }) {
       setVideo(saved);
       setInputUrl("");
       setGekozenBestand(null);
-      setSucces("Videobestand geüpload. Medewerkers kunnen het nu afspelen op Help.");
+      setSucces("Videobestand opgeslagen. De video blijft bewaard en is direct af te spelen op Help.");
     } catch (err) {
       setFout(err instanceof Error ? err.message : "Upload mislukt.");
     } finally {

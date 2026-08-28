@@ -19,9 +19,9 @@ const {
   HELP_VIDEO_BASENAME,
   ensureHelpVideoDir,
   getHelpVideo,
-  getHelpVideoFilePath,
+  getHelpVideoForStream,
   setHelpVideoLink,
-  setHelpVideoFile,
+  saveHelpVideoBuffer,
   clearHelpVideo,
   toPublicHelpVideo
 } = require("./helpVideoStore");
@@ -217,17 +217,7 @@ const HELP_VIDEO_EXTS = new Set([".mp4", ".webm", ".mov", ".ogg", ".avi"]);
 ensureHelpVideoDir();
 
 const uploadHelpVideo = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => {
-      ensureHelpVideoDir();
-      cb(null, HELP_VIDEO_DIR);
-    },
-    filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname || "").toLowerCase();
-      const safeExt = HELP_VIDEO_EXTS.has(ext) ? ext : ".mp4";
-      cb(null, `${HELP_VIDEO_BASENAME}${safeExt}`);
-    }
-  }),
+  storage: multer.memoryStorage(),
   limits: {
     fileSize: 100 * 1024 * 1024
   },
@@ -240,6 +230,75 @@ const uploadHelpVideo = multer({
     return cb(new Error("Alleen videobestanden zijn toegestaan (mp4, webm, mov)."));
   }
 });
+
+function streamHelpVideoResponse(req, res, { buffer, filePath, mimeType, originalName }) {
+  const safeName = String(originalName || "uitlegvideo").replace(/"/g, "");
+  res.setHeader("Content-Type", mimeType || "video/mp4");
+  res.setHeader("Cache-Control", "private, no-store");
+  res.setHeader("Accept-Ranges", "bytes");
+  if (safeName) {
+    res.setHeader("Content-Disposition", `inline; filename="${safeName}"`);
+  }
+
+  const range = req.headers.range;
+  if (buffer) {
+    const size = buffer.length;
+    if (!range) {
+      res.setHeader("Content-Length", size);
+      return res.end(buffer);
+    }
+    const match = /^bytes=(\d*)-(\d*)$/i.exec(String(range).trim());
+    if (!match) {
+      res.status(416).end();
+      return;
+    }
+    let start = match[1] ? parseInt(match[1], 10) : 0;
+    let end = match[2] ? parseInt(match[2], 10) : size - 1;
+    if (Number.isNaN(start) || Number.isNaN(end) || start >= size) {
+      res.status(416).end();
+      return;
+    }
+    end = Math.min(end, size - 1);
+    res.status(206);
+    res.setHeader("Content-Range", `bytes ${start}-${end}/${size}`);
+    res.setHeader("Content-Length", end - start + 1);
+    return res.end(buffer.subarray(start, end + 1));
+  }
+
+  if (!filePath) {
+    res.status(404).json({ error: "Videobestand niet gevonden." });
+    return;
+  }
+
+  fs.stat(filePath, (err, stat) => {
+    if (err || !stat.isFile()) {
+      res.status(404).json({ error: "Videobestand niet gevonden." });
+      return;
+    }
+    const size = stat.size;
+    if (!range) {
+      res.setHeader("Content-Length", size);
+      fs.createReadStream(filePath).pipe(res);
+      return;
+    }
+    const match = /^bytes=(\d*)-(\d*)$/i.exec(String(range).trim());
+    if (!match) {
+      res.status(416).end();
+      return;
+    }
+    let start = match[1] ? parseInt(match[1], 10) : 0;
+    let end = match[2] ? parseInt(match[2], 10) : size - 1;
+    if (Number.isNaN(start) || start >= size) {
+      res.status(416).end();
+      return;
+    }
+    end = Math.min(end, size - 1);
+    res.status(206);
+    res.setHeader("Content-Range", `bytes ${start}-${end}/${size}`);
+    res.setHeader("Content-Length", end - start + 1);
+    fs.createReadStream(filePath, { start, end }).pipe(res);
+  });
+}
 
 const uploadInzendingImg = multer({
   storage: uploadStorage,
@@ -1169,16 +1228,11 @@ app.get("/api/help/video", authRequired, async (_req, res) => {
 
 app.get("/api/help/video/stream", authRequired, async (req, res) => {
   try {
-    const file = await getHelpVideoFilePath();
-    if (!file) {
+    const stream = await getHelpVideoForStream();
+    if (!stream) {
       return res.status(404).json({ error: "Geen videobestand beschikbaar." });
     }
-    res.setHeader("Content-Type", file.mimeType);
-    res.setHeader("Cache-Control", "private, no-store");
-    if (file.originalName) {
-      res.setHeader("Content-Disposition", `inline; filename="${file.originalName.replace(/"/g, "")}"`);
-    }
-    fs.createReadStream(file.filePath).pipe(res);
+    streamHelpVideoResponse(req, res, stream);
   } catch (err) {
     console.error("Fout bij GET /api/help/video/stream:", err);
     if (!res.headersSent) {
@@ -1197,19 +1251,21 @@ app.post("/api/admin/help/video/upload", authRequired, requireOwner, (req, res) 
           : err.message || "Upload mislukt."
       });
     }
-    if (!req.file) {
+    if (!req.file?.buffer?.length) {
       return res.status(400).json({ error: "Kies een videobestand om te uploaden." });
     }
     try {
-      const video = await setHelpVideoFile({
-        storageName: req.file.filename,
+      const video = await saveHelpVideoBuffer({
+        buffer: req.file.buffer,
         originalName: req.file.originalname,
         mimeType: req.file.mimetype
       });
-      return res.json({ video, message: "Videobestand geüpload." });
+      return res.json({ video, message: "Videobestand opgeslagen in de database." });
     } catch (saveErr) {
+      const message =
+        saveErr instanceof Error ? saveErr.message : "Kon videobestand niet opslaan.";
       console.error("Fout bij opslaan help-video:", saveErr);
-      return res.status(500).json({ error: "Kon videobestand niet opslaan." });
+      return res.status(500).json({ error: message });
     }
   });
 });

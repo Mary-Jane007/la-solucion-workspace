@@ -6,6 +6,7 @@ const DATA_PATH = path.join(__dirname, "data.json");
 const SETTINGS_KEY = "help_video_url";
 const HELP_VIDEO_DIR = path.join(__dirname, "uploads", "help-video");
 const HELP_VIDEO_BASENAME = "help-uitleg";
+const HELP_VIDEO_ROW_ID = 1;
 
 function hasDb() {
   return Boolean(process.env.DATABASE_URL);
@@ -30,28 +31,45 @@ function writeLocalData(data) {
   fs.writeFileSync(DATA_PATH, JSON.stringify(data, null, 2), "utf8");
 }
 
+function extFromMime(mimeType) {
+  const mime = String(mimeType || "").toLowerCase();
+  if (mime.includes("webm")) return ".webm";
+  if (mime.includes("quicktime")) return ".mov";
+  if (mime.includes("ogg")) return ".ogg";
+  if (mime.includes("msvideo") || mime.includes("avi")) return ".avi";
+  return ".mp4";
+}
+
 function parseStoredVideo(raw) {
   const text = String(raw || "").trim();
   if (!text) return null;
   try {
     const parsed = JSON.parse(text);
     if (parsed?.kind === "link" && parsed.url) {
-      return { kind: "link", url: String(parsed.url).trim(), originalName: null, mimeType: null, storageName: null };
+      return {
+        kind: "link",
+        url: String(parsed.url).trim(),
+        originalName: null,
+        mimeType: null,
+        storage: null,
+        storageName: null
+      };
     }
-    if (parsed?.kind === "file" && parsed.storageName) {
+    if (parsed?.kind === "file") {
       return {
         kind: "file",
         url: null,
         originalName: String(parsed.originalName || "Uitlegvideo").trim() || "Uitlegvideo",
         mimeType: String(parsed.mimeType || "video/mp4").trim() || "video/mp4",
-        storageName: String(parsed.storageName).trim()
+        storage: parsed.storage === "database" ? "database" : "disk",
+        storageName: parsed.storageName ? String(parsed.storageName).trim() : null
       };
     }
   } catch {
     /* legacy plain url */
   }
   if (/^https?:\/\//i.test(text)) {
-    return { kind: "link", url: text, originalName: null, mimeType: null, storageName: null };
+    return { kind: "link", url: text, originalName: null, mimeType: null, storage: null, storageName: null };
   }
   return null;
 }
@@ -63,7 +81,8 @@ function serializeVideo(video) {
   }
   return JSON.stringify({
     kind: "file",
-    storageName: video.storageName,
+    storage: video.storage || "disk",
+    storageName: video.storageName || null,
     originalName: video.originalName,
     mimeType: video.mimeType
   });
@@ -95,15 +114,24 @@ async function writeRawSetting(value) {
   );
 }
 
+async function deleteHelpVideoBlob() {
+  if (!hasDb()) return;
+  await query("delete from help_video_files where id=$1", [HELP_VIDEO_ROW_ID]);
+}
+
 function deleteHelpVideoFiles() {
-  ensureHelpVideoDir();
-  for (const name of fs.readdirSync(HELP_VIDEO_DIR)) {
-    if (!name.startsWith(HELP_VIDEO_BASENAME)) continue;
-    try {
-      fs.unlinkSync(path.join(HELP_VIDEO_DIR, name));
-    } catch {
-      /* ignore */
+  try {
+    ensureHelpVideoDir();
+    for (const name of fs.readdirSync(HELP_VIDEO_DIR)) {
+      if (!name.startsWith(HELP_VIDEO_BASENAME)) continue;
+      try {
+        fs.unlinkSync(path.join(HELP_VIDEO_DIR, name));
+      } catch {
+        /* ignore */
+      }
     }
+  } catch {
+    /* map bestaat niet */
   }
 }
 
@@ -146,13 +174,44 @@ async function getHelpVideo() {
   return parseStoredVideo(await readRawSetting());
 }
 
-async function getHelpVideoFilePath() {
+async function readHelpVideoBufferFromDb() {
+  if (!hasDb()) return null;
+  const res = await query(
+    "select original_name, mime_type, data from help_video_files where id=$1 limit 1",
+    [HELP_VIDEO_ROW_ID]
+  );
+  const row = res.rows[0];
+  if (!row?.data) return null;
+  return {
+    buffer: Buffer.isBuffer(row.data) ? row.data : Buffer.from(row.data),
+    mimeType: row.mime_type || "video/mp4",
+    originalName: row.original_name || "Uitlegvideo"
+  };
+}
+
+async function getHelpVideoForStream() {
   const video = await getHelpVideo();
-  if (!video || video.kind !== "file" || !video.storageName) return null;
-  ensureHelpVideoDir();
-  const filePath = path.join(HELP_VIDEO_DIR, video.storageName);
-  if (!fs.existsSync(filePath)) return null;
-  return { filePath, mimeType: video.mimeType || "video/mp4", originalName: video.originalName };
+  if (!video || video.kind !== "file") return null;
+
+  if (video.storage === "database" || hasDb()) {
+    const fromDb = await readHelpVideoBufferFromDb();
+    if (fromDb) return { ...fromDb, filePath: null };
+  }
+
+  if (video.storageName) {
+    ensureHelpVideoDir();
+    const filePath = path.join(HELP_VIDEO_DIR, video.storageName);
+    if (fs.existsSync(filePath)) {
+      return {
+        buffer: null,
+        filePath,
+        mimeType: video.mimeType || "video/mp4",
+        originalName: video.originalName || "Uitlegvideo"
+      };
+    }
+  }
+
+  return null;
 }
 
 async function setHelpVideoLink(rawUrl) {
@@ -161,38 +220,66 @@ async function setHelpVideoLink(rawUrl) {
     throw new Error("Vul een videolink in.");
   }
   const url = normalizeHelpVideoUrl(trimmed);
+  await deleteHelpVideoBlob();
   deleteHelpVideoFiles();
-  await writeRawSetting(serializeVideo({ kind: "link", url, originalName: null, mimeType: null, storageName: null }));
-  return toPublicHelpVideo(await getHelpVideo());
-}
-
-async function setHelpVideoFile({ storageName, originalName, mimeType }) {
-  if (!storageName) {
-    throw new Error("Geen videobestand ontvangen.");
-  }
-  // Verwijder oude bestanden (andere extensie) vóór metadata-update.
-  for (const name of fs.readdirSync(HELP_VIDEO_DIR)) {
-    if (name.startsWith(HELP_VIDEO_BASENAME) && name !== storageName) {
-      try {
-        fs.unlinkSync(path.join(HELP_VIDEO_DIR, name));
-      } catch {
-        /* ignore */
-      }
-    }
-  }
   await writeRawSetting(
-    serializeVideo({
-      kind: "file",
-      url: null,
-      storageName,
-      originalName: originalName || "Uitlegvideo",
-      mimeType: mimeType || "video/mp4"
-    })
+    serializeVideo({ kind: "link", url, originalName: null, mimeType: null, storage: null, storageName: null })
   );
   return toPublicHelpVideo(await getHelpVideo());
 }
 
+async function saveHelpVideoBuffer({ buffer, originalName, mimeType }) {
+  if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) {
+    throw new Error("Geen videobestand ontvangen.");
+  }
+
+  const safeName = String(originalName || "Uitlegvideo").trim() || "Uitlegvideo";
+  const safeMime = String(mimeType || "video/mp4").trim() || "video/mp4";
+
+  deleteHelpVideoFiles();
+
+  if (hasDb()) {
+    await query(
+      `
+      insert into help_video_files (id, original_name, mime_type, data, updated_at)
+      values ($1, $2, $3, $4, now())
+      on conflict (id) do update
+      set original_name = excluded.original_name,
+          mime_type = excluded.mime_type,
+          data = excluded.data,
+          updated_at = now()
+      `,
+      [HELP_VIDEO_ROW_ID, safeName, safeMime, buffer]
+    );
+    await writeRawSetting(
+      serializeVideo({
+        kind: "file",
+        storage: "database",
+        storageName: null,
+        originalName: safeName,
+        mimeType: safeMime
+      })
+    );
+  } else {
+    ensureHelpVideoDir();
+    const storageName = `${HELP_VIDEO_BASENAME}${extFromMime(safeMime)}`;
+    fs.writeFileSync(path.join(HELP_VIDEO_DIR, storageName), buffer);
+    await writeRawSetting(
+      serializeVideo({
+        kind: "file",
+        storage: "disk",
+        storageName,
+        originalName: safeName,
+        mimeType: safeMime
+      })
+    );
+  }
+
+  return toPublicHelpVideo(await getHelpVideo());
+}
+
 async function clearHelpVideo() {
+  await deleteHelpVideoBlob();
   deleteHelpVideoFiles();
   await writeRawSetting("");
   return null;
@@ -204,9 +291,9 @@ module.exports = {
   ensureHelpVideoDir,
   normalizeHelpVideoUrl,
   getHelpVideo,
-  getHelpVideoFilePath,
+  getHelpVideoForStream,
   setHelpVideoLink,
-  setHelpVideoFile,
+  saveHelpVideoBuffer,
   clearHelpVideo,
   toPublicHelpVideo
 };

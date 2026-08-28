@@ -312,6 +312,15 @@ async function migrate() {
       value text not null default '',
       updated_at timestamptz not null default now()
     );
+
+    create table if not exists help_video_files (
+      id int primary key default 1,
+      original_name text not null default 'Uitlegvideo',
+      mime_type text not null default 'video/mp4',
+      data bytea not null,
+      updated_at timestamptz not null default now(),
+      constraint help_video_files_singleton check (id = 1)
+    );
     `,
     []
   );
