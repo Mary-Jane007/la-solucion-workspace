@@ -104,7 +104,7 @@ export const PAGINA_INFO: Record<AppPagina, { titel: string; ondertitel: string 
   },
   help: {
     titel: "Help",
-    ondertitel: "Korte uitleg over het gebruik van het portaal."
+    ondertitel: "Video-uitleg en stap-voor-stap handleiding voor het portaal."
   },
   contact: {
     titel: "Contact",
