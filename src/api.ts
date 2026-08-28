@@ -404,3 +404,27 @@ export async function updateFinancieelInzendingStatus(
   return data.inzending as FinancieelInzending;
 }
 
+export async function fetchHelpVideoUrl(): Promise<string> {
+  const res = await apiFetch("/api/help/video");
+  const data = await readApiJson(res);
+  if (!res.ok) throw new Error(String(data.error || "Kon uitlegvideo niet ophalen."));
+  return String(data.url || "");
+}
+
+export async function saveHelpVideoUrl(url: string): Promise<string> {
+  const res = await apiFetch("/api/admin/help/video", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url })
+  });
+  const data = await readApiJson(res);
+  if (!res.ok) throw new Error(String(data.error || "Kon uitlegvideo niet opslaan."));
+  return String(data.url || "");
+}
+
+export async function deleteHelpVideoUrl(): Promise<void> {
+  const res = await apiFetch("/api/admin/help/video", { method: "DELETE" });
+  const data = await readApiJson(res);
+  if (!res.ok) throw new Error(String(data.error || "Kon uitlegvideo niet verwijderen."));
+}
+

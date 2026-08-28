@@ -15,6 +15,11 @@ const { v4: uuidv4 } = require("uuid");
 const { migrate } = require("./db");
 const { z } = require("zod");
 const {
+  getHelpVideoUrl,
+  setHelpVideoUrl,
+  clearHelpVideoUrl
+} = require("./helpVideoStore");
+const {
   hasDb,
   getUsers,
   getUserByEmail,
@@ -1101,6 +1106,37 @@ app.post("/api/admin/users/:id/toggle-active", authRequired, requireOwner, (req,
       return res.status(500).json({ error: "Interne serverfout." });
     }
   })();
+});
+
+app.get("/api/help/video", authRequired, async (_req, res) => {
+  try {
+    const url = await getHelpVideoUrl();
+    return res.json({ url });
+  } catch (err) {
+    console.error("Fout bij GET /api/help/video:", err);
+    return res.status(500).json({ error: "Kon uitlegvideo niet ophalen." });
+  }
+});
+
+app.put("/api/admin/help/video", authRequired, requireOwner, async (req, res) => {
+  try {
+    const url = await setHelpVideoUrl(req.body?.url);
+    return res.json({ url, message: "Uitlegvideo opgeslagen." });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Kon uitlegvideo niet opslaan.";
+    console.error("Fout bij PUT /api/admin/help/video:", err);
+    return res.status(400).json({ error: message });
+  }
+});
+
+app.delete("/api/admin/help/video", authRequired, requireOwner, async (_req, res) => {
+  try {
+    await clearHelpVideoUrl();
+    return res.json({ url: "", message: "Uitlegvideo verwijderd." });
+  } catch (err) {
+    console.error("Fout bij DELETE /api/admin/help/video:", err);
+    return res.status(500).json({ error: "Kon uitlegvideo niet verwijderen." });
+  }
 });
 
 app.get("/api/health", async (_req, res) => {

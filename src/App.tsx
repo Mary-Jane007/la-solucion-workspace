@@ -283,7 +283,7 @@ function IngelogdeApp({
           onVernieuwOpdrachten={vernieuwOpdrachten}
         />
       )}
-      {huidigePagina === "help" && <HelpPagina />}
+      {huidigePagina === "help" && <HelpPagina isEigenaar={isEigenaar} />}
       {huidigePagina === "contact" && <ContactPagina />}
       {werkruimte.dialoog}
     </AppLayout>

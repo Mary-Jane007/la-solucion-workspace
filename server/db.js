@@ -304,6 +304,17 @@ async function migrate() {
     `,
     []
   );
+
+  await query(
+    `
+    create table if not exists app_settings (
+      key text primary key,
+      value text not null default '',
+      updated_at timestamptz not null default now()
+    );
+    `,
+    []
+  );
 }
 
 module.exports = {

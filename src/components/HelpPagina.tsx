@@ -1,4 +1,6 @@
-import { APP_UITLEG_VIDEO_URL, parseHelpVideoUrl } from "../helpConfig";
+import { FormEvent, useEffect, useState } from "react";
+import { deleteHelpVideoUrl, fetchHelpVideoUrl, saveHelpVideoUrl } from "../api";
+import { parseHelpVideoUrl, resolveHelpVideoUrl } from "../helpConfig";
 
 type HelpStap = {
   titel: string;
@@ -106,8 +108,50 @@ const HELP_ONDERWERPEN: HelpStap[] = [
   }
 ];
 
-function HelpVideoBlok() {
-  const embed = parseHelpVideoUrl(APP_UITLEG_VIDEO_URL);
+function HelpOnderwerp({ titel, stappen, tip }: HelpStap) {
+  return (
+    <section className="card page-card help-section">
+      <h2>{titel}</h2>
+      <ol className="help-steps">
+        {stappen.map((stap) => (
+          <li key={stap}>{stap}</li>
+        ))}
+      </ol>
+      {tip && (
+        <p className="help-tip">
+          <strong>Tip:</strong> {tip}
+        </p>
+      )}
+    </section>
+  );
+}
+
+function HelpVideoBlok({
+  isEigenaar,
+  videoUrl,
+  inputUrl,
+  laden,
+  bezig,
+  fout,
+  succes,
+  onInputChange,
+  onOpslaan,
+  onVerwijderen
+}: {
+  isEigenaar: boolean;
+  videoUrl: string;
+  inputUrl: string;
+  laden: boolean;
+  bezig: boolean;
+  fout: string | null;
+  succes: string | null;
+  onInputChange: (url: string) => void;
+  onOpslaan: (e: FormEvent) => void;
+  onVerwijderen: () => void;
+}) {
+  const effectief = resolveHelpVideoUrl(videoUrl);
+  const embed = parseHelpVideoUrl(effectief);
+  const linkOngeldig = Boolean(inputUrl.trim()) && !parseHelpVideoUrl(inputUrl.trim());
 
   return (
     <section className="card page-card help-video-section">
@@ -118,7 +162,46 @@ function HelpVideoBlok() {
         </p>
       </div>
 
-      {embed ? (
+      {isEigenaar && (
+        <form className="help-video-beheer" onSubmit={onOpslaan}>
+          <label className="form-label">
+            Videolink (YouTube, Vimeo of directe .mp4)
+            <input
+              type="url"
+              className="form-input"
+              value={inputUrl}
+              onChange={(e) => onInputChange(e.target.value)}
+              placeholder="https://www.youtube.com/watch?v=..."
+              disabled={bezig || laden}
+            />
+          </label>
+          {linkOngeldig && (
+            <p className="login-hint login-error">
+              Deze link wordt niet herkend. Gebruik YouTube, Vimeo of een directe mp4/webm-link.
+            </p>
+          )}
+          <div className="help-video-actions">
+            <button type="submit" className="btn-primary" disabled={bezig || laden || linkOngeldig || !inputUrl.trim()}>
+              {bezig ? "Bezig..." : "Video opslaan"}
+            </button>
+            {videoUrl && (
+              <button type="button" className="btn-secondary" disabled={bezig || laden} onClick={onVerwijderen}>
+                Video verwijderen
+              </button>
+            )}
+          </div>
+          {fout && <p className="login-hint login-error">{fout}</p>}
+          {succes && <p className="login-hint login-success">{succes}</p>}
+          <p className="muted help-video-beheer-hint">
+            Als eigenaar kun je hier de uitlegvideo toevoegen of verwijderen. Medewerkers zien alleen de
+            opgeslagen video.
+          </p>
+        </form>
+      )}
+
+      {laden ? (
+        <p className="muted">Video laden...</p>
+      ) : embed ? (
         <div className="help-video-frame">
           {embed.kind === "file" ? (
             <video className="help-video-native" controls preload="metadata" src={embed.src}>
@@ -139,18 +222,14 @@ function HelpVideoBlok() {
           )}
         </div>
       ) : (
-        <div className="help-video-placeholder" aria-label="Plaats voor uitlegvideo">
+        <div className="help-video-placeholder" aria-label="Geen uitlegvideo">
           <p>
-            <strong>Uitlegvideo</strong>
+            <strong>Nog geen uitlegvideo</strong>
           </p>
           <p className="muted">
-            Hier komt de video waarin de app wordt uitgelegd. Zodra de link is ingesteld, verschijnt de
-            speler automatisch op deze plek.
-          </p>
-          <p className="help-video-config muted">
-            Eigenaar/beheerder: zet de videolink in <code>src/helpConfig.ts</code> (veld{" "}
-            <code>CONFIG_URL</code>) of als <code>VITE_APP_UITLEG_VIDEO_URL</code> in je <code>.env</code>.
-            YouTube-, Vimeo- en directe mp4-links werken.
+            {isEigenaar
+              ? "Plak hierboven een videolink en klik op Video opslaan. Daarna verschijnt de speler op deze plek voor iedereen."
+              : "De eigenaar kan een uitlegvideo toevoegen. Zodra die is geplaatst, zie je hem hier."}
           </p>
         </div>
       )}
@@ -158,28 +237,84 @@ function HelpVideoBlok() {
   );
 }
 
-function HelpOnderwerp({ titel, stappen, tip }: HelpStap) {
-  return (
-    <section className="card page-card help-section">
-      <h2>{titel}</h2>
-      <ol className="help-steps">
-        {stappen.map((stap) => (
-          <li key={stap}>{stap}</li>
-        ))}
-      </ol>
-      {tip && (
-        <p className="help-tip">
-          <strong>Tip:</strong> {tip}
-        </p>
-      )}
-    </section>
-  );
-}
+export function HelpPagina({ isEigenaar }: { isEigenaar: boolean }) {
+  const [videoUrl, setVideoUrl] = useState("");
+  const [inputUrl, setInputUrl] = useState("");
+  const [laden, setLaden] = useState(true);
+  const [bezig, setBezig] = useState(false);
+  const [fout, setFout] = useState<string | null>(null);
+  const [succes, setSucces] = useState<string | null>(null);
 
-export function HelpPagina() {
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const url = await fetchHelpVideoUrl();
+        if (!cancelled) {
+          setVideoUrl(url);
+          setInputUrl(url);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setFout(err instanceof Error ? err.message : "Kon uitlegvideo niet laden.");
+        }
+      } finally {
+        if (!cancelled) setLaden(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleOpslaan = async (e: FormEvent) => {
+    e.preventDefault();
+    setFout(null);
+    setSucces(null);
+    try {
+      setBezig(true);
+      const url = await saveHelpVideoUrl(inputUrl.trim());
+      setVideoUrl(url);
+      setInputUrl(url);
+      setSucces("Uitlegvideo opgeslagen. Medewerkers zien hem nu op Help.");
+    } catch (err) {
+      setFout(err instanceof Error ? err.message : "Opslaan mislukt.");
+    } finally {
+      setBezig(false);
+    }
+  };
+
+  const handleVerwijderen = async () => {
+    if (!window.confirm("Weet je zeker dat je de uitlegvideo wilt verwijderen?")) return;
+    setFout(null);
+    setSucces(null);
+    try {
+      setBezig(true);
+      await deleteHelpVideoUrl();
+      setVideoUrl("");
+      setInputUrl("");
+      setSucces("Uitlegvideo verwijderd.");
+    } catch (err) {
+      setFout(err instanceof Error ? err.message : "Verwijderen mislukt.");
+    } finally {
+      setBezig(false);
+    }
+  };
+
   return (
     <div className="info-stack help-page">
-      <HelpVideoBlok />
+      <HelpVideoBlok
+        isEigenaar={isEigenaar}
+        videoUrl={videoUrl}
+        inputUrl={inputUrl}
+        laden={laden}
+        bezig={bezig}
+        fout={fout}
+        succes={succes}
+        onInputChange={setInputUrl}
+        onOpslaan={handleOpslaan}
+        onVerwijderen={handleVerwijderen}
+      />
       {HELP_ONDERWERPEN.map((onderwerp) => (
         <HelpOnderwerp key={onderwerp.titel} {...onderwerp} />
       ))}

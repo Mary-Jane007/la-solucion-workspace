@@ -2345,6 +2345,28 @@ textarea.form-input {
   background: #000;
 }
 
+.help-video-beheer {
+  margin-bottom: 16px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--accent, #1e3a5f) 5%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.help-video-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.help-video-beheer-hint {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
 .help-video-placeholder {
   padding: 28px 20px;
   border-radius: 12px;
@@ -2355,18 +2377,6 @@ textarea.form-input {
 
 .help-video-placeholder p {
   margin: 0 0 8px;
-}
-
-.help-video-config {
-  margin-top: 14px !important;
-  font-size: 0.85rem;
-  text-align: left;
-  max-width: 52rem;
-  margin-inline: auto !important;
-}
-
-.help-video-config code {
-  font-size: 0.82rem;
 }
 
 .stats-split {

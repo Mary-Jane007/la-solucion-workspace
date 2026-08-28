@@ -1,19 +1,9 @@
 /**
- * Plak hier de link naar je app-uitlegvideo.
- * Ondersteund: YouTube, Vimeo, of een directe videolink (.mp4 / .webm).
- *
- * Voorbeelden:
- * - https://www.youtube.com/watch?v=JOUW_VIDEO_ID
- * - https://youtu.be/JOUW_VIDEO_ID
- * - https://vimeo.com/123456789
- * - https://jouwdomein.nl/video/app-uitleg.mp4
- *
- * Je kunt ook VITE_APP_UITLEG_VIDEO_URL in .env zetten ( heeft voorrang ).
+ * Fallback-videolink (optioneel) via .env — normaal beheert de eigenaar de video in Help.
+ * VITE_APP_UITLEG_VIDEO_URL=https://www.youtube.com/watch?v=...
  */
-const CONFIG_URL = "";
-
 export const APP_UITLEG_VIDEO_URL =
-  (import.meta.env.VITE_APP_UITLEG_VIDEO_URL as string | undefined)?.trim() || CONFIG_URL.trim();
+  (import.meta.env.VITE_APP_UITLEG_VIDEO_URL as string | undefined)?.trim() || "";
 
 export type HelpVideoKind = "youtube" | "vimeo" | "file";
 
@@ -48,4 +38,9 @@ export function parseHelpVideoUrl(raw: string): HelpVideoEmbed | null {
   }
 
   return null;
+}
+
+/** API-url heeft voorrang; anders optionele env-fallback. */
+export function resolveHelpVideoUrl(apiUrl: string): string {
+  return apiUrl.trim() || APP_UITLEG_VIDEO_URL;
 }
