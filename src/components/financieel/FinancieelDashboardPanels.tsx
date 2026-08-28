@@ -166,23 +166,23 @@ export function OverzichtPanel({
             <strong>{formatGeld(dag.beginsaldo, kpis.valuta)}</strong>
           </div>
           <div>
-            <span className="muted">Binnen</span>
-            <strong className="financieel-inkomst">{formatGeld(kpis.ontvangen, kpis.valuta)}</strong>
+            <span className="muted">Deze dag erbij</span>
+            <strong className="financieel-inkomst">{formatGeld(dag.ontvangen, kpis.valuta)}</strong>
           </div>
           <div>
-            <span className="muted">Uit</span>
-            <strong className="financieel-uitgave">{formatGeld(kpis.uitgaven, kpis.valuta)}</strong>
+            <span className="muted">Deze dag eruit</span>
+            <strong className="financieel-uitgave">{formatGeld(dag.uitgaven, kpis.valuta)}</strong>
           </div>
           <div>
-            <span className="muted">Over</span>
-            <strong className={kpis.netto >= 0 ? "financieel-inkomst" : "financieel-uitgave"}>
-              {formatGeld(kpis.netto, kpis.valuta)}
+            <span className="muted">Totaal in kas (alle medewerkers)</span>
+            <strong className={dag.eindbalans >= 0 ? "financieel-inkomst" : "financieel-uitgave"}>
+              {formatGeld(dag.eindbalans, kpis.valuta)}
             </strong>
           </div>
           <div>
-            <span className="muted">In kas</span>
-            <strong className={kpis.inKas >= 0 ? "financieel-inkomst" : "financieel-uitgave"}>
-              {formatGeld(kpis.inKas, kpis.valuta)}
+            <span className="muted">Mutatie deze dag</span>
+            <strong className={dag.netto >= 0 ? "financieel-inkomst" : "financieel-uitgave"}>
+              {formatGeld(dag.netto, kpis.valuta)}
             </strong>
           </div>
           <div>
@@ -1186,27 +1186,30 @@ export function FollowTheMoneyPanel({
           </div>
         </div>
         <div className="fin-today-metrics">
+          <div className="fin-metric-primary">
+            <span className="muted">Totaal in kas (alle medewerkers)</span>
+            <strong className="financieel-inkomst">{formatGeld(dag.totaalInKas, dag.valuta)}</strong>
+            <span className="fin-kpi-hint muted">
+              Einde van deze dag · opgeteld per medewerker · niet de hele maand/periode
+            </span>
+          </div>
           <div>
             <span className="muted">Beginsaldo / Begon met</span>
             <strong>{formatGeld(dag.totaalBegin, dag.valuta)}</strong>
-            <span className="fin-kpi-hint muted">automatisch Over van gisteren, of openingskas op eerste dag</span>
+            <span className="fin-kpi-hint muted">start van deze dag</span>
           </div>
           <div>
-            <span className="muted">Ontvangen (apart)</span>
+            <span className="muted">Deze dag erbij</span>
             <strong className="financieel-inkomst">{formatGeld(dag.totaalOntvangen, dag.valuta)}</strong>
           </div>
           <div>
-            <span className="muted">Besteed (apart)</span>
+            <span className="muted">Deze dag eruit</span>
             <strong className="financieel-uitgave">{formatGeld(dag.totaalBesteed, dag.valuta)}</strong>
           </div>
           <div>
             <span className="muted">Overgedragen intern</span>
             <strong>{formatGeld(dag.totaalOverdracht, dag.valuta)}</strong>
-          </div>
-          <div>
-            <span className="muted">Over (restant → volgende dag)</span>
-            <strong>{formatGeld(dag.totaalOver, dag.valuta)}</strong>
-            <span className="fin-kpi-hint muted">= beginsaldo + erbij − eruit</span>
+            <span className="fin-kpi-hint muted">verplaatst tussen medewerkers · kas totaal blijft gelijk</span>
           </div>
         </div>
       </section>
@@ -1239,7 +1242,7 @@ export function FollowTheMoneyPanel({
                     <dd className="financieel-uitgave">−{formatGeld(p.uit, dag.valuta)}</dd>
                   </div>
                   <div>
-                    <dt>Over</dt>
+                    <dt>Over (→ volgende dag)</dt>
                     <dd>
                       <strong>{formatGeld(p.over, dag.valuta)}</strong>
                     </dd>

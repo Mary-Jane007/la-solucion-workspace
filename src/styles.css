@@ -2573,6 +2573,16 @@ textarea.form-input {
   background: color-mix(in srgb, currentColor 5%, transparent);
 }
 
+.fin-today-metrics .fin-metric-primary {
+  grid-column: 1 / -1;
+  background: color-mix(in srgb, var(--accent, #1e3a5f) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent, #1e3a5f) 18%, transparent);
+}
+
+.fin-today-metrics .fin-metric-primary strong {
+  font-size: 1.35rem;
+}
+
 .fin-today-metrics strong {
   font-size: 1.05rem;
 }

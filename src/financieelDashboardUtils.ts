@@ -1528,7 +1528,9 @@ export type FollowMoneyDag = {
   totaalOntvangen: number;
   totaalBesteed: number;
   totaalOverdracht: number;
+  /** Som van Over per medewerker — totaal contant einde geselecteerde dag. */
   totaalOver: number;
+  totaalInKas: number;
 };
 
 function followSleutel(naam: string, userId: string | null): string {
@@ -1673,23 +1675,28 @@ function followOpsVanPost(p: FinancieelPost, valuta: FinancieelValuta): FollowOp
         handmatigeDeltas: deltas.length ? deltas : undefined
       });
     } else if (p.type === "INKOMST" || p.type === "KASGELD") {
-      ops.push({
-        at: postDatum(p),
-        post: p,
-        bedrag: p.bedrag,
-        id: p.id,
-        soort: "binnen",
-        titel: p.type === "KASGELD" ? "Kasgeld erbij" : "Geld ontvangen",
-        uitleg: [
-          p.klantNaam ? `Van klant ${p.klantNaam}` : "Bron onbekend",
-          naar ? `nu bij ${naar.naam}` : null,
-          p.omschrijving
-        ]
-          .filter(Boolean)
-          .join(" · "),
-        bedragLabel: `+${formatGeld(p.bedrag, valuta)}`,
-        besteedCategorie: null
-      });
+      // Inkomst via gebruiksregels op hun eigen datum — geen dubbele telling op postdatum.
+      if (p.type === "INKOMST" && heeftInkomstKasGebruik(p)) {
+        /* alleen ERBIJ-inkomst-kas regels hieronder */
+      } else {
+        ops.push({
+          at: postDatum(p),
+          post: p,
+          bedrag: p.bedrag,
+          id: p.id,
+          soort: "binnen",
+          titel: p.type === "KASGELD" ? "Kasgeld erbij" : "Geld ontvangen",
+          uitleg: [
+            p.klantNaam ? `Van klant ${p.klantNaam}` : "Bron onbekend",
+            naar ? `nu bij ${naar.naam}` : null,
+            p.omschrijving
+          ]
+            .filter(Boolean)
+            .join(" · "),
+          bedragLabel: `+${formatGeld(p.bedrag, valuta)}`,
+          besteedCategorie: null
+        });
+      }
     } else if (p.type === "UITGAVE") {
       const cat = (p.categorie || "").trim() || "Overige";
       const alBesteed = totaalBesteedUitGebruik(p);
@@ -1923,7 +1930,8 @@ function legeFollowMoneyDag(dagIso: string, valuta: FinancieelValuta): FollowMon
     totaalOntvangen: 0,
     totaalBesteed: 0,
     totaalOverdracht: 0,
-    totaalOver: 0
+    totaalOver: 0,
+    totaalInKas: 0
   };
 }
 
@@ -2113,7 +2121,8 @@ function berekenFollowTheMoneyDag(
     totaalOntvangen,
     totaalBesteed: Math.max(0, totaalBesteed),
     totaalOverdracht,
-    totaalOver: geldRond(personen.reduce((s, p) => s + p.over, 0))
+    totaalOver: geldRond(personen.reduce((s, p) => s + p.over, 0)),
+    totaalInKas: geldRond(personen.reduce((s, p) => s + p.over, 0))
   };
 }
 
