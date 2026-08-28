@@ -40,6 +40,7 @@ export function LoginScherm({ onLogin }: Props) {
   const [foutmelding, setFoutmelding] = useState<string | null>(null);
   const [registratieSucces, setRegistratieSucces] = useState<string | null>(null);
   const [isBezig, setIsBezig] = useState(false);
+  const [serverOk, setServerOk] = useState<boolean | null>(null);
 
   const resetToken = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
@@ -49,6 +50,25 @@ export function LoginScherm({ onLogin }: Props) {
   useEffect(() => {
     const saved = getRememberedEmailForLogin();
     if (saved) setEmail(saved);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const checkServer = async () => {
+      try {
+        const res = await fetch("/api/health", { cache: "no-store" });
+        const data = await res.json();
+        if (!cancelled) setServerOk(res.ok && Boolean(data.ok));
+      } catch {
+        if (!cancelled) setServerOk(false);
+      }
+    };
+    checkServer();
+    const interval = window.setInterval(checkServer, 4000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
   }, []);
 
   useEffect(() => {
@@ -199,6 +219,13 @@ export function LoginScherm({ onLogin }: Props) {
               ? "Vraag een account aan voor toegang tot opdrachten, afspraken en klantdossiers."
               : "Meld je aan om de opdrachten, afspraken en klantdossiers te beheren."}
           </p>
+          {serverOk === false && (
+            <p className="login-hint login-error" role="alert">
+              De backend is offline — inloggen lukt nu niet. Start alles met{" "}
+              <code>npm run dev</code> (frontend + backend samen), of alleen de backend met{" "}
+              <code>npm run dev:server</code>. We proberen elke paar seconden opnieuw te verbinden.
+            </p>
+          )}
           <form onSubmit={handleSubmit} className="form">
             {resetToken ? (
               <label className="form-label">

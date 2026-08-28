@@ -65,14 +65,20 @@ Installeer dependencies in de hoofdmap van het project:
 npm install
 ```
 
-Start daarna de frontend en de backend:
+Start alles in één terminal (aanbevolen — frontend + backend samen):
 
 ```bash
-# Terminal 1: backend (API + beveiligde login)
+npm run dev
+```
+
+Of apart:
+
+```bash
+# Terminal 1: backend (API + beveiligde login, herstart automatisch bij crash)
 npm run dev:server
 
 # Terminal 2: frontend
-npm run dev
+npm run dev:web
 ```
 
 Open in je browser:
