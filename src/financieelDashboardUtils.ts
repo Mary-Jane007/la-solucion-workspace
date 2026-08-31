@@ -1565,6 +1565,11 @@ function heeftValutaOmzettingNaar(p: FinancieelPost, valuta: FinancieelValuta): 
 
 type FollowSaldo = { naam: string; saldo: number };
 
+/** Kas in Follow the money kan niet negatief zijn — nul blijft nul. */
+function followKasSaldo(saldo: number): number {
+  return geldRond(Math.max(0, saldo));
+}
+
 function bumpFollowSaldo(saldi: Map<string, FollowSaldo>, wie: { naam: string; userId: string | null }, delta: number) {
   const key = followSleutel(wie.naam, wie.userId);
   const cur = saldi.get(key) || { naam: wie.naam, saldo: 0 };
@@ -1938,8 +1943,9 @@ function legeFollowMoneyDag(dagIso: string, valuta: FinancieelValuta): FollowMon
 function followCarryVanDag(dag: FollowMoneyDag): Map<string, FollowSaldo> {
   const carry = new Map<string, FollowSaldo>();
   for (const p of dag.personen) {
-    if (p.over !== 0) {
-      carry.set(p.key, { naam: p.naam, saldo: p.over });
+    const saldo = followKasSaldo(p.over);
+    if (saldo !== 0) {
+      carry.set(p.key, { naam: p.naam, saldo });
     }
   }
   return carry;
@@ -1955,7 +1961,7 @@ function berekenFollowTheMoneyDag(
   const heeftCarry = openingCarry.size > 0;
   const opening = new Map<string, FollowSaldo>();
   for (const [key, saldo] of openingCarry) {
-    opening.set(key, { naam: saldo.naam, saldo: geldRond(saldo.saldo) });
+    opening.set(key, { naam: saldo.naam, saldo: followKasSaldo(saldo.saldo) });
   }
 
   const dagOps = ops.filter((op) => isZelfdeLokaleDag(op.at, dag));
@@ -2084,11 +2090,11 @@ function berekenFollowTheMoneyDag(
   const personen: FollowMoneyPersoon[] = [...keys]
     .map((key) => {
       const naam = running.get(key)?.naam || opening.get(key)?.naam || key;
-      const beginsaldo = opening.get(key)?.saldo || 0;
+      const beginsaldo = followKasSaldo(opening.get(key)?.saldo || 0);
       const binnen = binnenPer.get(key) || 0;
       const uit = uitPer.get(key) || 0;
-      // Niet verbruikt beginsaldo blijft automatisch in Over.
-      const over = geldRond(beginsaldo + binnen - uit);
+      // Niet verbruikt beginsaldo blijft automatisch in Over; kas kan niet onder nul.
+      const over = followKasSaldo(beginsaldo + binnen - uit);
       return {
         key,
         naam,
