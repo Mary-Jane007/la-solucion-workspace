@@ -2162,3 +2162,78 @@ export function berekenFollowTheMoney(
 
   return result;
 }
+
+export type FinancieExportValutaRij = {
+  valuta: FinancieelValuta;
+  inkomsten: number;
+  uitgaven: number;
+  ontvangen: number;
+  nogTeOntvangen: number;
+  nogTeBetalen: number;
+  momenteelInKas: number;
+  nettoResultaat: number;
+  ftmDatum: string;
+  ftmDatumLabel: string;
+  ftmBeginsaldo: number;
+  ftmErbij: number;
+  ftmEruit: number;
+  ftmOverdracht: number;
+  ftmTotaalInKas: number;
+};
+
+/** Totalen voor export/PDF — zelfde logica als het Financiën-dashboard. */
+export function berekenFinancieExportOverzicht(
+  allePosten: FinancieelPost[],
+  ftmDagIso = lokaleDatumIso(new Date())
+): FinancieExportValutaRij[] {
+  const rijen: FinancieExportValutaRij[] = [];
+
+  for (const valuta of FINANCIEEL_VALUTAS) {
+    const posten = allePosten.filter((p) => normalizeValuta(p.valuta) === valuta);
+    const inKas = huidigKasSaldo(allePosten, valuta);
+    const ftm = berekenFollowTheMoney(allePosten, ftmDagIso, valuta);
+    const heeftData =
+      posten.length > 0 ||
+      inKas !== 0 ||
+      ftm.totaalBegin !== 0 ||
+      ftm.totaalOntvangen !== 0 ||
+      ftm.totaalBesteed !== 0 ||
+      ftm.totaalInKas !== 0;
+    if (!heeftData) continue;
+
+    const b = basisTotalen(posten);
+    let nogTeBetalen = 0;
+    for (const p of posten) {
+      if (p.type === "UITGAVE" && p.status === "OPEN") {
+        nogTeBetalen = geldRond(nogTeBetalen + p.bedrag);
+      }
+    }
+
+    const datumLabel = parseLokaleDatum(ftmDagIso).toLocaleDateString("nl-NL", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric"
+    });
+
+    rijen.push({
+      valuta,
+      inkomsten: b.inkomsten,
+      uitgaven: b.uitgaven,
+      ontvangen: b.ontvangen,
+      nogTeOntvangen: b.teOntvangen,
+      nogTeBetalen,
+      momenteelInKas: inKas,
+      nettoResultaat: geldRond(b.inkomsten + inKas - b.uitgaven),
+      ftmDatum: ftmDagIso,
+      ftmDatumLabel: datumLabel,
+      ftmBeginsaldo: ftm.totaalBegin,
+      ftmErbij: ftm.totaalOntvangen,
+      ftmEruit: ftm.totaalBesteed,
+      ftmOverdracht: ftm.totaalOverdracht,
+      ftmTotaalInKas: ftm.totaalInKas
+    });
+  }
+
+  return rijen;
+}

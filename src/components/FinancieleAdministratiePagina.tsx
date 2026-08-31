@@ -470,6 +470,24 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
     () => berekenFollowTheMoney(posten, overzichtDag, dashboardValuta),
     [posten, overzichtDag, dashboardValuta]
   );
+  const financieelExportOpties = useMemo(
+    () => ({
+      ftmDagIso: overzichtDag,
+      valuta: dashboardValuta,
+      periodeLabel: bereik.label,
+      kpis: {
+        inkomsten: kpis.inkomsten,
+        uitgaven: kpis.uitgaven,
+        inKas: kpis.inKas,
+        netto: kpis.netto,
+        ontvangen: kpis.ontvangen,
+        teOntvangen: kpis.teOntvangen,
+        openstaand: kpis.openstaand
+      },
+      followTheMoney: followMoney
+    }),
+    [overzichtDag, dashboardValuta, bereik.label, kpis, followMoney]
+  );
   const openstaand = useMemo(() => berekenOpenstaandeBetalingen(gezochtePosten), [gezochtePosten]);
   const facturen = useMemo(() => berekenFacturen(gezochtePosten), [gezochtePosten]);
   const wv = useMemo(() => berekenWinstVerlies(periodePosten, dashboardValuta), [periodePosten, dashboardValuta]);
@@ -1089,9 +1107,9 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
             onExportPosten={() => exportFinancieelPostenCsv(posten, opdrachtenById)}
             onExportKlant={() => exportKlantSaldiCsv(posten)}
             onExportDossier={() => exportDossierSaldiCsv(posten, opdrachtenById)}
-            onExportExcel={() => exportFinancieelExcel(posten, opdrachtenById)}
-            onExportWord={() => exportFinancieelWord(posten, opdrachtenById)}
-            onExportPdf={() => exportFinancieelPdf(posten, opdrachtenById)}
+            onExportExcel={() => exportFinancieelExcel(posten, opdrachtenById, financieelExportOpties)}
+            onExportWord={() => exportFinancieelWord(posten, opdrachtenById, financieelExportOpties)}
+            onExportPdf={() => exportFinancieelPdf(posten, opdrachtenById, financieelExportOpties)}
             disabled={laden || posten.length === 0}
           />
         )}

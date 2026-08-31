@@ -1,15 +1,20 @@
-import { FinancieelGebruik, FinancieelPost } from "./api";
+import { FinancieelGebruik, FinancieelPost, FinancieelValuta } from "./api";
 import { Opdracht } from "./types";
+import {
+  berekenFinancieExportOverzicht,
+  berekenFollowTheMoney,
+  DashboardKpis,
+  FollowMoneyDag,
+  lokaleDatumIso
+} from "./financieelDashboardUtils";
 import {
   betalingsLabel,
   berekenDossierSaldi,
   berekenGeldBijTotalen,
   berekenKlantSaldi,
-  berekenTotalenPerValuta,
   formatDatumTijd,
   formatGeld,
   gebruikWaaraanTekst,
-  huidigKasSaldo,
   isInkomstKas,
   normaliseerGebruikingen,
   normalizeValuta,
@@ -21,6 +26,22 @@ import {
   typeLabel,
   VALUTA_LABELS
 } from "./financieelUtils";
+
+export type FinancieelExportOpties = {
+  /** Geselecteerde dag voor Follow the money (ISO yyyy-mm-dd). */
+  ftmDagIso?: string;
+  /** Valuta zoals in het dashboard. */
+  valuta?: FinancieelValuta;
+  /** Label van de geselecteerde periode in Financiën. */
+  periodeLabel?: string;
+  /** KPI's van de geselecteerde periode — exact zoals op het scherm. */
+  kpis?: Pick<
+    DashboardKpis,
+    "inkomsten" | "uitgaven" | "inKas" | "netto" | "ontvangen" | "teOntvangen" | "openstaand"
+  >;
+  /** Follow-the-money snapshot van de geselecteerde dag. */
+  followTheMoney?: FollowMoneyDag;
+};
 
 function gebruikingenVanPost(p: FinancieelPost): FinancieelGebruik[] {
   return normaliseerGebruikingen(p.gebruikingen);
@@ -217,24 +238,79 @@ function rapportStijl(): string {
 function bouwRapportHtml(
   posten: FinancieelPost[],
   opdrachtenById: Map<string, Opdracht>,
-  opties: { voorWord?: boolean; printen?: boolean }
+  opties: { voorWord?: boolean; printen?: boolean },
+  exportOpties?: FinancieelExportOpties
 ): string {
   const gesorteerd = sorteerPosten(posten);
-  const totalen = berekenTotalenPerValuta(posten);
+  const ftmDagIso = exportOpties?.ftmDagIso || lokaleDatumIso(new Date());
+  const overzicht = berekenFinancieExportOverzicht(posten, ftmDagIso);
+  const valuta = exportOpties?.valuta;
+  const follow =
+    exportOpties?.followTheMoney ??
+    (valuta ? berekenFollowTheMoney(posten, ftmDagIso, valuta) : null);
   const geldBij = berekenGeldBijTotalen(posten);
   const klantSaldi = berekenKlantSaldi(posten);
   const dossierSaldi = berekenDossierSaldi(posten, opdrachtenById);
   const stamp = new Date().toLocaleString("nl-NL");
 
-  const overzichtRijen = totalen.map((t) => [
+  const huidigeStandHtml =
+    valuta && (exportOpties?.kpis || follow)
+      ? `<h2>1. Huidige stand</h2>
+  <p class="muted">Zelfde bedragen als in Financiën · ${
+    exportOpties?.periodeLabel ? `periode <strong>${htmlEscape(exportOpties.periodeLabel)}</strong> · ` : ""
+  }valuta <strong>${htmlEscape(VALUTA_LABELS[valuta])}</strong>${
+    follow ? ` · Follow the money: <strong>${htmlEscape(follow.datumLabel)}</strong>` : ""
+  }</p>
+  ${
+    exportOpties?.kpis
+      ? `<table>
+    <tbody>
+      <tr><th>Inkomsten (periode)</th><td>${geldTekst(exportOpties.kpis.inkomsten, valuta)}</td></tr>
+      <tr><th>Uitgaven (periode)</th><td>${geldTekst(exportOpties.kpis.uitgaven, valuta)}</td></tr>
+      <tr><th>Momenteel in kas</th><td>${geldTekst(exportOpties.kpis.inKas, valuta)}</td></tr>
+      <tr><th>Nettoresultaat (periode)</th><td>${geldTekst(exportOpties.kpis.netto, valuta)}</td></tr>
+      <tr><th>Ontvangen</th><td>${geldTekst(exportOpties.kpis.ontvangen, valuta)}</td></tr>
+      <tr><th>Nog te ontvangen</th><td>${geldTekst(exportOpties.kpis.teOntvangen, valuta)}</td></tr>
+      <tr><th>Openstaand</th><td>${geldTekst(exportOpties.kpis.openstaand, valuta)}</td></tr>
+    </tbody>
+  </table>`
+      : ""
+  }
+  ${
+    follow
+      ? `<table>
+    <caption class="muted">Follow the money — einde van de geselecteerde dag</caption>
+    <tbody>
+      <tr><th>Totaal in kas (alle medewerkers)</th><td><strong>${geldTekst(follow.totaalInKas, follow.valuta)}</strong></td></tr>
+      <tr><th>Beginsaldo / Begon met</th><td>${geldTekst(follow.totaalBegin, follow.valuta)}</td></tr>
+      <tr><th>Deze dag erbij</th><td>${geldTekst(follow.totaalOntvangen, follow.valuta)}</td></tr>
+      <tr><th>Deze dag eruit</th><td>${geldTekst(follow.totaalBesteed, follow.valuta)}</td></tr>
+      <tr><th>Overgedragen intern</th><td>${geldTekst(follow.totaalOverdracht, follow.valuta)}</td></tr>
+    </tbody>
+  </table>`
+      : ""
+  }`
+      : "";
+
+  const overzichtRijen = overzicht.map((t) => [
     VALUTA_LABELS[t.valuta],
     geldTekst(t.inkomsten, t.valuta),
-    geldTekst(t.kasgeld, t.valuta),
     geldTekst(t.uitgaven, t.valuta),
-    geldTekst(t.saldo, t.valuta),
-    geldTekst(huidigKasSaldo(posten, t.valuta), t.valuta),
-    geldTekst(t.teOntvangen, t.valuta),
-    geldTekst(t.teBetalen, t.valuta)
+    geldTekst(t.ontvangen, t.valuta),
+    geldTekst(t.momenteelInKas, t.valuta),
+    geldTekst(t.nettoResultaat, t.valuta),
+    geldTekst(t.nogTeOntvangen, t.valuta),
+    geldTekst(t.nogTeBetalen, t.valuta)
+  ]);
+
+  const ftmRijen = overzicht.map((t) => [
+    VALUTA_LABELS[t.valuta],
+    t.ftmDatumLabel,
+    geldTekst(t.ftmBeginsaldo, t.valuta),
+    geldTekst(t.ftmErbij, t.valuta),
+    geldTekst(t.ftmEruit, t.valuta),
+    geldTekst(t.ftmOverdracht, t.valuta),
+    geldTekst(t.ftmTotaalInKas, t.valuta)
   ]);
 
   const gebruikRijen: string[][] = [];
@@ -301,19 +377,22 @@ function bouwRapportHtml(
   <div class="meta">
     <p>Volledig rapport: overzicht, dagboek en alle ingevulde velden per post.</p>
     <p>Exportdatum: <strong>${htmlEscape(stamp)}</strong> · Posten: <strong>${gesorteerd.length}</strong></p>
+    <p class="muted">Totalen en kasbedragen gebruiken dezelfde berekening als het Financiën-dashboard.</p>
   </div>
 
-  <h2>1. Overzicht</h2>
+  ${huidigeStandHtml}
+
+  <h2>${huidigeStandHtml ? "2" : "1"}. Overzicht per valuta</h2>
   ${
     overzichtRijen.length
       ? tabelHtml(
           [
             "Valuta",
             "Inkomsten",
-            "Kasgeld-posten",
             "Uitgaven",
-            "Saldo (P&L)",
+            "Ontvangen",
             "Momenteel in kas",
+            "Nettoresultaat",
             "Nog te ontvangen",
             "Nog te betalen"
           ],
@@ -322,7 +401,26 @@ function bouwRapportHtml(
       : "<p>Geen totalen.</p>"
   }
 
-  <h2>2. Geld bij personen</h2>
+  <h2>${huidigeStandHtml ? "3" : "2"}. Follow the money per valuta</h2>
+  <p class="muted">Kasstand einde dag ${htmlEscape(ftmDagIso)} — opgeteld per medewerker, niet de hele periode.</p>
+  ${
+    ftmRijen.length
+      ? tabelHtml(
+          [
+            "Valuta",
+            "Dag",
+            "Beginsaldo",
+            "Deze dag erbij",
+            "Deze dag eruit",
+            "Overgedragen intern",
+            "Totaal in kas"
+          ],
+          ftmRijen
+        )
+      : "<p>Geen kasbewegingen.</p>"
+  }
+
+  <h2>${huidigeStandHtml ? "4" : "3"}. Geld bij personen</h2>
   ${
     geldBij.length
       ? tabelHtml(
@@ -340,7 +438,7 @@ function bouwRapportHtml(
       : "<p>Geen bedragen bij personen.</p>"
   }
 
-  <h2>3. Klantsaldo’s</h2>
+  <h2>${huidigeStandHtml ? "5" : "4"}. Klantsaldo’s</h2>
   ${
     klantSaldi.length
       ? tabelHtml(
@@ -368,7 +466,7 @@ function bouwRapportHtml(
       : "<p>Geen klantsaldo’s.</p>"
   }
 
-  <h2>4. Dossiersaldo’s</h2>
+  <h2>${huidigeStandHtml ? "6" : "5"}. Dossiersaldo’s</h2>
   ${
     dossierSaldi.length
       ? tabelHtml(
@@ -396,7 +494,7 @@ function bouwRapportHtml(
       : "<p>Geen dossiersaldo’s.</p>"
   }
 
-  <h2>5. Dagboek</h2>
+  <h2>${huidigeStandHtml ? "7" : "6"}. Dagboek</h2>
   ${
     gesorteerd.length
       ? tabelHtml(
@@ -406,7 +504,7 @@ function bouwRapportHtml(
       : "<p>Geen posten.</p>"
   }
 
-  <h2>6. Gebruiksregels (van dit bedrag gebruikt)</h2>
+  <h2>${huidigeStandHtml ? "8" : "7"}. Gebruiksregels (van dit bedrag gebruikt)</h2>
   ${
     gebruikRijen.length
       ? tabelHtml(
@@ -428,7 +526,7 @@ function bouwRapportHtml(
       : "<p>Geen gebruiksregels.</p>"
   }
 
-  <h2>7. Alle posten met vulvakken</h2>
+  <h2>${huidigeStandHtml ? "9" : "8"}. Alle posten met vulvakken</h2>
   ${detailHtml || "<p>Geen posten.</p>"}
 
   ${
@@ -442,9 +540,10 @@ function bouwRapportHtml(
 
 export function exportFinancieelPdf(
   posten: FinancieelPost[],
-  opdrachtenById: Map<string, Opdracht>
+  opdrachtenById: Map<string, Opdracht>,
+  exportOpties?: FinancieelExportOpties
 ) {
-  const html = bouwRapportHtml(posten, opdrachtenById, { printen: true });
+  const html = bouwRapportHtml(posten, opdrachtenById, { printen: true }, exportOpties);
   const win = window.open("", "_blank");
   if (!win) {
     window.alert("Pop-up geblokkeerd. Sta pop-ups toe om de PDF-export te openen.");
@@ -457,9 +556,10 @@ export function exportFinancieelPdf(
 
 export function exportFinancieelWord(
   posten: FinancieelPost[],
-  opdrachtenById: Map<string, Opdracht>
+  opdrachtenById: Map<string, Opdracht>,
+  exportOpties?: FinancieelExportOpties
 ) {
-  const html = bouwRapportHtml(posten, opdrachtenById, { voorWord: true });
+  const html = bouwRapportHtml(posten, opdrachtenById, { voorWord: true }, exportOpties);
   downloadBestand(
     `La-Solucion-financieel-${vandaagIso()}.doc`,
     "application/msword",
@@ -505,35 +605,94 @@ function ssBlad(naam: string, headers: string[], rijen: string[][], getalKolomme
 
 export function exportFinancieelExcel(
   posten: FinancieelPost[],
-  opdrachtenById: Map<string, Opdracht>
+  opdrachtenById: Map<string, Opdracht>,
+  exportOpties?: FinancieelExportOpties
 ) {
   const gesorteerd = sorteerPosten(posten);
-  const totalen = berekenTotalenPerValuta(posten);
+  const ftmDagIso = exportOpties?.ftmDagIso || lokaleDatumIso(new Date());
+  const overzicht = berekenFinancieExportOverzicht(posten, ftmDagIso);
+  const valuta = exportOpties?.valuta;
+  const follow =
+    exportOpties?.followTheMoney ??
+    (valuta ? berekenFollowTheMoney(posten, ftmDagIso, valuta) : null);
   const geldBij = berekenGeldBijTotalen(posten);
   const klantSaldi = berekenKlantSaldi(posten);
   const dossierSaldi = berekenDossierSaldi(posten, opdrachtenById);
 
-  const overzicht = ssBlad(
+  const huidigeStand =
+    valuta && exportOpties?.kpis
+      ? ssBlad(
+          "Huidige stand",
+          ["Onderdeel", "Bedrag"],
+          [
+            ...(exportOpties.periodeLabel
+              ? [["Periode", exportOpties.periodeLabel]]
+              : []),
+            ["Valuta", VALUTA_LABELS[valuta]],
+            ...(follow ? [["Follow the money-dag", follow.datumLabel]] : []),
+            ["Inkomsten (periode)", geldTekst(exportOpties.kpis.inkomsten, valuta)],
+            ["Uitgaven (periode)", geldTekst(exportOpties.kpis.uitgaven, valuta)],
+            ["Momenteel in kas", geldTekst(exportOpties.kpis.inKas, valuta)],
+            ["Nettoresultaat (periode)", geldTekst(exportOpties.kpis.netto, valuta)],
+            ["Ontvangen", geldTekst(exportOpties.kpis.ontvangen, valuta)],
+            ["Nog te ontvangen", geldTekst(exportOpties.kpis.teOntvangen, valuta)],
+            ["Openstaand", geldTekst(exportOpties.kpis.openstaand, valuta)],
+            ...(follow
+              ? [
+                  ["FTM — Totaal in kas", geldTekst(follow.totaalInKas, follow.valuta)],
+                  ["FTM — Beginsaldo", geldTekst(follow.totaalBegin, follow.valuta)],
+                  ["FTM — Deze dag erbij", geldTekst(follow.totaalOntvangen, follow.valuta)],
+                  ["FTM — Deze dag eruit", geldTekst(follow.totaalBesteed, follow.valuta)],
+                  ["FTM — Overgedragen intern", geldTekst(follow.totaalOverdracht, follow.valuta)]
+                ]
+              : [])
+          ]
+        )
+      : "";
+
+  const overzichtBlad = ssBlad(
     "Overzicht",
     [
       "Valuta",
       "Inkomsten",
-      "Kasgeld-posten",
       "Uitgaven",
-      "Saldo P&L",
+      "Ontvangen",
       "Momenteel in kas",
+      "Nettoresultaat",
       "Nog te ontvangen",
       "Nog te betalen"
     ],
-    totalen.map((t) => [
+    overzicht.map((t) => [
       VALUTA_LABELS[t.valuta],
       geldTekst(t.inkomsten, t.valuta),
-      geldTekst(t.kasgeld, t.valuta),
       geldTekst(t.uitgaven, t.valuta),
-      geldTekst(t.saldo, t.valuta),
-      geldTekst(huidigKasSaldo(posten, t.valuta), t.valuta),
-      geldTekst(t.teOntvangen, t.valuta),
-      geldTekst(t.teBetalen, t.valuta)
+      geldTekst(t.ontvangen, t.valuta),
+      geldTekst(t.momenteelInKas, t.valuta),
+      geldTekst(t.nettoResultaat, t.valuta),
+      geldTekst(t.nogTeOntvangen, t.valuta),
+      geldTekst(t.nogTeBetalen, t.valuta)
+    ])
+  );
+
+  const ftmBlad = ssBlad(
+    "Follow the money",
+    [
+      "Valuta",
+      "Dag",
+      "Beginsaldo",
+      "Deze dag erbij",
+      "Deze dag eruit",
+      "Overgedragen intern",
+      "Totaal in kas"
+    ],
+    overzicht.map((t) => [
+      VALUTA_LABELS[t.valuta],
+      t.ftmDatumLabel,
+      geldTekst(t.ftmBeginsaldo, t.valuta),
+      geldTekst(t.ftmErbij, t.valuta),
+      geldTekst(t.ftmEruit, t.valuta),
+      geldTekst(t.ftmOverdracht, t.valuta),
+      geldTekst(t.ftmTotaalInKas, t.valuta)
     ])
   );
 
@@ -666,7 +825,9 @@ export function exportFinancieelExcel(
   <Styles>
     <Style ss:ID="kop"><Font ss:Bold="1"/><Interior ss:Color="#E8EEF8" ss:Pattern="Solid"/></Style>
   </Styles>
-  ${overzicht}
+  ${huidigeStand}
+  ${overzichtBlad}
+  ${ftmBlad}
   ${dagboek}
   ${vulvakken}
   ${gebruik}
