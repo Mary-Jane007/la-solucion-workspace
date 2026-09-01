@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ScannerCropEditor } from "./ScannerCropEditor";
 import { detectDocumentCorners, detectDocumentCornersMetFallback, hoekenNaarPolygonString, hoekenNaarVideoOverlay, overlayNaarVideoHoeken, smoothHoeken } from "./documentDetection";
 import {
@@ -97,6 +98,19 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
     setOcrTekst(null);
     setFilterPreviews({});
   }, []);
+
+  const sluitScanner = useCallback(() => {
+    if (detectTimer.current) {
+      window.clearInterval(detectTimer.current);
+      detectTimer.current = null;
+    }
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+    smoothCornersRef.current = null;
+    setCameraKlaar(false);
+    onSluit();
+  }, [onSluit]);
 
   useEffect(() => {
     if (!open) {
@@ -350,7 +364,7 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
     const file = files[0];
     if (file.type === "application/pdf") {
       onPdfKlaar(file);
-      onSluit();
+      sluitScanner();
       return;
     }
     setBezig(true);
@@ -448,12 +462,24 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
   const overlayPolygon =
     liveCorners?.length === 4 ? hoekenNaarPolygonString(liveCorners) : null;
 
-  return (
-    <div className="document-scanner" role="dialog" aria-modal="true" aria-label="Document scanner">
+  const scannerUi = (
+    <div
+      className="document-scanner"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Document scanner"
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
       {step === "camera" && cameraSupported && !cameraFout && (
         <div className="scanner-screen scanner-camera-screen">
           <header className="scanner-top">
-            <button type="button" className="scanner-icon-btn" onClick={onSluit} aria-label="Terug">
+            <button
+              type="button"
+              className="scanner-icon-btn"
+              onClick={sluitScanner}
+              aria-label="Terug"
+            >
               ←
             </button>
             <span className="scanner-title">Scan document</span>
@@ -521,7 +547,9 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
       {(step === "camera" && (!cameraSupported || cameraFout)) && (
         <div className="scanner-screen scanner-fallback">
           <header className="scanner-top">
-            <button type="button" className="scanner-icon-btn" onClick={onSluit}>←</button>
+            <button type="button" className="scanner-icon-btn" onClick={sluitScanner} aria-label="Terug">
+              ←
+            </button>
             <span className="scanner-title">Document uploaden</span>
           </header>
           <div className="scanner-fallback-body">
@@ -615,7 +643,9 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
       {(step === "pages" || step === "preview") && (
         <div className="scanner-screen">
           <header className="scanner-top">
-            <button type="button" className="scanner-icon-btn" onClick={onSluit}>←</button>
+            <button type="button" className="scanner-icon-btn" onClick={sluitScanner} aria-label="Terug">
+              ←
+            </button>
             <span className="scanner-title">{step === "preview" ? "Document bekijken" : "Document"}</span>
             {step === "pages" && (
               <button type="button" className="scanner-btn primary small" disabled={!paginas.length || bezig} onClick={() => void genereerPdf()}>
@@ -721,7 +751,9 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
             <button type="button" className="scanner-btn primary" onClick={() => pdfBlob && void downloadPdf(pdfBlob, scanNaam)}>Openen</button>
             <button type="button" className="scanner-btn secondary" onClick={() => pdfBlob && void deelPdf(pdfBlob, scanNaam)}>Delen</button>
             <button type="button" className="scanner-btn ghost" onClick={() => { resetScanner(); setStep("camera"); }}>Nieuwe scan</button>
-            <button type="button" className="scanner-btn ghost" onClick={onSluit}>Sluiten</button>
+            <button type="button" className="scanner-btn ghost" onClick={sluitScanner}>
+              Sluiten
+            </button>
           </div>
         </div>
       )}
@@ -763,4 +795,6 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
       )}
     </div>
   );
+
+  return createPortal(scannerUi, document.body);
 }
