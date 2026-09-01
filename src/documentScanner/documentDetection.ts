@@ -104,3 +104,53 @@ export function hoekenNaarOverlay(
   const sy = overlayH / bronH;
   return corners.map((p) => ({ x: p.x * sx, y: p.y * sy }));
 }
+
+/** Map hoeken van videoframe naar zichtbaar camerabeeld (object-fit: cover). */
+export function hoekenNaarVideoOverlay(
+  corners: Point[],
+  videoW: number,
+  videoH: number,
+  displayW: number,
+  displayH: number
+): Point[] {
+  if (!videoW || !videoH || !displayW || !displayH) return corners;
+  const scale = Math.max(displayW / videoW, displayH / videoH);
+  const renderedW = videoW * scale;
+  const renderedH = videoH * scale;
+  const offsetX = (displayW - renderedW) / 2;
+  const offsetY = (displayH - renderedH) / 2;
+  return corners.map((p) => ({
+    x: p.x * scale + offsetX,
+    y: p.y * scale + offsetY
+  }));
+}
+
+/** Vloeiende overgang zodat het kader het document volgt zonder te schokken. */
+export function smoothHoeken(vorige: Point[] | null, volgende: Point[], factor = 0.38): Point[] {
+  if (!vorige || vorige.length !== 4) return volgende;
+  return volgende.map((p, i) => ({
+    x: vorige[i].x + (p.x - vorige[i].x) * factor,
+    y: vorige[i].y + (p.y - vorige[i].y) * factor
+  }));
+}
+
+/** Omgekeerde mapping: van overlay-coördinaten terug naar videoframe. */
+export function overlayNaarVideoHoeken(
+  corners: Point[],
+  videoW: number,
+  videoH: number,
+  displayW: number,
+  displayH: number
+): Point[] {
+  const scale = Math.max(displayW / videoW, displayH / videoH);
+  const offsetX = (displayW - videoW * scale) / 2;
+  const offsetY = (displayH - videoH * scale) / 2;
+  return corners.map((p) => ({
+    x: (p.x - offsetX) / scale,
+    y: (p.y - offsetY) / scale
+  }));
+}
+
+export function hoekenNaarPolygonString(corners: Point[]): string {
+  return corners.map((p) => `${p.x},${p.y}`).join(" ");
+}
