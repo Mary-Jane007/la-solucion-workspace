@@ -3506,33 +3506,55 @@ textarea.form-input {
 }
 
 .scanner-doc-frame {
-  fill: rgba(37, 99, 235, 0.08);
-  stroke: rgba(147, 197, 253, 0.85);
-  stroke-width: 3;
-  transition: d 0.2s ease, stroke 0.25s ease, fill 0.25s ease;
-}
-
-.scanner-doc-frame.found {
-  fill: rgba(74, 222, 128, 0.1);
-  stroke: #4ade80;
-  stroke-width: 3.5;
-  filter: drop-shadow(0 0 8px rgba(74, 222, 128, 0.45));
-}
-
-.scanner-corner-dot {
-  fill: #4ade80;
-  stroke: #fff;
-  stroke-width: 2;
-  transition: cx 0.2s ease, cy 0.2s ease;
+  fill: rgba(59, 130, 246, 0.06);
+  stroke: rgba(96, 165, 250, 0.75);
+  stroke-width: 2.5;
+  vector-effect: non-scaling-stroke;
 }
 
 .scanner-doc-frame.guide {
-  stroke-dasharray: 8 6;
+  stroke-dasharray: 10 8;
+  stroke: rgba(147, 197, 253, 0.55);
+  fill: rgba(59, 130, 246, 0.04);
 }
 
-@keyframes scanner-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.72; }
+.scanner-doc-frame.guide.faint {
+  stroke-dasharray: 6 6;
+  stroke: rgba(147, 197, 253, 0.25);
+  fill: none;
+  stroke-width: 1.5;
+}
+
+.scanner-doc-frame.detect-tracking {
+  fill: rgba(59, 130, 246, 0.1);
+  stroke: #60a5fa;
+  stroke-width: 3;
+  filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.35));
+}
+
+.scanner-doc-frame.detect-locked {
+  fill: rgba(59, 130, 246, 0.14);
+  stroke: #3b82f6;
+  stroke-width: 3.5;
+  filter: drop-shadow(0 0 10px rgba(59, 130, 246, 0.55));
+  animation: scanner-lock-pulse 1.6s ease-in-out infinite;
+}
+
+.scanner-corner-dot {
+  fill: #3b82f6;
+  stroke: #fff;
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.6));
+}
+
+.scanner-corner-dot-core {
+  fill: #fff;
+  stroke: none;
+}
+
+@keyframes scanner-lock-pulse {
+  0%, 100% { stroke-opacity: 1; }
+  50% { stroke-opacity: 0.72; }
 }
 
 .scanner-shutter-bar {

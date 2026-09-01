@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ScannerCropEditor } from "./ScannerCropEditor";
-import { detectDocumentCorners, detectDocumentCornersMetFallback, hoekenNaarPolygonString, hoekenNaarVideoOverlay, overlayNaarVideoHoeken, smoothHoeken } from "./documentDetection";
+import { detectDocumentCornersMetFallback, detectDocumentWithConfidence, hoekenNaarVideoOverlay, overlayNaarVideoHoeken } from "./documentDetection";
+import {
+  berekenGuideHoeken,
+  LiveDocumentTracker,
+  type DetectieFase
+} from "./liveDetection";
+import { ScannerCameraOverlay } from "./ScannerCameraOverlay";
 import {
   canvasFromImage,
   canvasToDataUrl,
@@ -47,7 +53,7 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
   const cameraWrapRef = useRef<HTMLDivElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const detectTimer = useRef<number | null>(null);
-  const smoothCornersRef = useRef<Point[] | null>(null);
+  const detectieTracker = useRef(new LiveDocumentTracker());
   const maskId = useId().replace(/:/g, "");
 
   const [step, setStep] = useState<ScannerStep>("camera");
@@ -57,7 +63,10 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [waarschuwing, setWaarschuwing] = useState<string | null>(null);
   const [documentGevonden, setDocumentGevonden] = useState(false);
-  const [liveCorners, setLiveCorners] = useState<Point[] | null>(null);
+  const [liveCorners, setLiveCorners] = useState<Point[]>([]);
+  const [guideCorners, setGuideCorners] = useState<Point[]>([]);
+  const [detectieFase, setDetectieFase] = useState<DetectieFase>("guide");
+  const [detectieConfidence, setDetectieConfidence] = useState(0);
   const [overlaySize, setOverlaySize] = useState({ w: 0, h: 0 });
 
   const [rawDataUrl, setRawDataUrl] = useState<string | null>(null);
@@ -93,8 +102,11 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
     setFeedback(null);
     setWaarschuwing(null);
     setDocumentGevonden(false);
-    setLiveCorners(null);
-    smoothCornersRef.current = null;
+    setLiveCorners([]);
+    setGuideCorners([]);
+    setDetectieFase("guide");
+    setDetectieConfidence(0);
+    detectieTracker.current.reset();
     setOcrTekst(null);
     setFilterPreviews({});
   }, []);
@@ -107,7 +119,7 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
-    smoothCornersRef.current = null;
+    detectieTracker.current.reset();
     setCameraKlaar(false);
     onSluit();
   }, [onSluit]);
@@ -192,38 +204,47 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
       if (!video?.videoWidth) return;
       try {
         const canvas = canvasFromImage(video, 640);
-        const corners = await detectDocumentCorners(canvas);
         const displayW = video.clientWidth;
         const displayH = video.clientHeight;
         if (displayW > 0 && displayH > 0) {
           setOverlaySize({ w: displayW, h: displayH });
         }
-        if (corners?.length === 4) {
+
+        const guide = berekenGuideHoeken(displayW || 1, displayH || 1);
+        setGuideCorners(guide);
+
+        const detectie = await detectDocumentWithConfidence(canvas);
+        let mapped: Point[] | null = null;
+        if (detectie?.corners.length === 4) {
           const inVideoSpace = schaalHoeken(
-            corners,
+            detectie.corners,
             canvas.width,
             canvas.height,
             video.videoWidth,
             video.videoHeight
           );
-          const mapped = hoekenNaarVideoOverlay(
+          mapped = hoekenNaarVideoOverlay(
             inVideoSpace,
             video.videoWidth,
             video.videoHeight,
             displayW,
             displayH
           );
-          const smoothed = smoothHoeken(smoothCornersRef.current, mapped);
-          smoothCornersRef.current = smoothed;
-          setLiveCorners(smoothed);
-          setDocumentGevonden(true);
-          setFeedback("Document gevonden");
-        } else {
-          smoothCornersRef.current = null;
-          setLiveCorners(null);
-          setDocumentGevonden(false);
-          setFeedback(null);
         }
+
+        const live = detectieTracker.current.tick(guide, mapped, detectie?.confidence ?? 0);
+        setLiveCorners(live.corners);
+        setDetectieFase(live.fase);
+        setDetectieConfidence(live.confidence);
+        setDocumentGevonden(live.documentGevonden);
+        setFeedback(
+          live.fase === "locked"
+            ? "Document gedetecteerd"
+            : live.fase === "tracking"
+              ? null
+              : null
+        );
+
         const helder = gemiddeldeHelderheid(canvas);
         if (helder < 70) setWaarschuwing("⚠️ Meer licht nodig");
         else if (helder > 230) setWaarschuwing("⚠️ Minder direct licht op het document");
@@ -231,7 +252,7 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
       } catch {
         /* stille detectie */
       }
-    }, 450);
+    }, 120);
 
     return () => {
       if (detectTimer.current) window.clearInterval(detectTimer.current);
@@ -277,9 +298,10 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
       setRawDataUrl(canvasToDataUrl(canvas));
 
       let corners: Point[] | null = null;
-      if (documentGevonden && smoothCornersRef.current?.length === 4) {
+      const overlayCorners = detectieTracker.current.getSmoothedCorners();
+      if (detectieTracker.current.kanScannen() && overlayCorners?.length === 4) {
         const inVideoSpace = overlayNaarVideoHoeken(
-          smoothCornersRef.current,
+          overlayCorners,
           video.videoWidth,
           video.videoHeight,
           video.clientWidth,
@@ -459,9 +481,6 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
 
   if (!open) return null;
 
-  const overlayPolygon =
-    liveCorners?.length === 4 ? hoekenNaarPolygonString(liveCorners) : null;
-
   const scannerUi = (
     <div
       className="document-scanner"
@@ -493,48 +512,21 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
             </div>
           </header>
           <p className="scanner-instructie">Plaats het document binnen het kader</p>
-          {feedback && documentGevonden && <p className="scanner-feedback success">{feedback}</p>}
+          {feedback && detectieFase === "locked" && (
+            <p className="scanner-feedback success">{feedback}</p>
+          )}
           {waarschuwing && <p className="scanner-feedback warn">{waarschuwing}</p>}
           <div className="scanner-camera-wrap" ref={cameraWrapRef}>
             <video ref={videoRef} className="scanner-video" playsInline muted />
-            <svg
-              className="scanner-overlay"
-              viewBox={`0 0 ${Math.max(overlaySize.w, 1)} ${Math.max(overlaySize.h, 1)}`}
-              preserveAspectRatio="none"
-            >
-              {overlayPolygon && documentGevonden ? (
-                <>
-                  <defs>
-                    <mask id={maskId}>
-                      <rect width="100%" height="100%" fill="white" />
-                      <polygon points={overlayPolygon} fill="black" />
-                    </mask>
-                  </defs>
-                  <rect
-                    width="100%"
-                    height="100%"
-                    className="scanner-overlay-dim"
-                    mask={`url(#${maskId})`}
-                  />
-                  <polygon points={overlayPolygon} className="scanner-doc-frame found" />
-                  {liveCorners?.map((p, i) => (
-                    <circle key={i} cx={p.x} cy={p.y} r="7" className="scanner-corner-dot" />
-                  ))}
-                </>
-              ) : (
-                <>
-                  <rect width="100%" height="100%" className="scanner-overlay-dim" />
-                  <rect
-                    x={overlaySize.w * 0.08}
-                    y={overlaySize.h * 0.18}
-                    width={overlaySize.w * 0.84}
-                    height={overlaySize.h * 0.55}
-                    rx="12"
-                    className="scanner-doc-frame guide"
-                  />
-                </>
-              )}
-            </svg>
+            <ScannerCameraOverlay
+              overlayW={overlaySize.w}
+              overlayH={overlaySize.h}
+              corners={liveCorners.length === 4 ? liveCorners : guideCorners}
+              guideCorners={guideCorners.length === 4 ? guideCorners : berekenGuideHoeken(overlaySize.w || 1, overlaySize.h || 1)}
+              fase={detectieFase}
+              confidence={detectieConfidence}
+              maskId={maskId}
+            />
           </div>
           <footer className="scanner-shutter-bar">
             <button type="button" className="scanner-shutter" disabled={!cameraKlaar || bezig} onClick={() => void maakScan()} aria-label="Scan maken">
