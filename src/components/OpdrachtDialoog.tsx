@@ -1,8 +1,9 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Opdracht, OpdrachtStatus, Prioriteit } from "../types";
 import { downloadBestand, uploadBestand } from "../api";
 import { opdrachtVerwijderBevestiging } from "../opdrachtVerwijderen";
 import { statusLabel, vindOvereenkomstigeOpdrachten } from "../opdrachtenUtils";
+import { DocumentenToevoegen } from "./DocumentenToevoegen";
 
 type DialoogMode = "toevoegen" | "bewerken" | "bekijken";
 
@@ -14,7 +15,7 @@ interface OpdrachtDialoogProps {
   bestaandeOpdrachten?: Opdracht[];
   onSluit: () => void;
   onBewaar: (opdracht: Opdracht) => Promise<Opdracht>;
-  onCreate?: (draft: Opdracht) => Promise<void>;
+  onCreate?: (draft: Opdracht) => Promise<Opdracht>;
   onDelete?: (id: string) => Promise<void>;
 }
 
@@ -32,6 +33,21 @@ export function OpdrachtDialoog({
   const [bewerkt, setBewerkt] = useState<Opdracht>(opdracht);
   const [isBezig, setIsBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
+  const [wachtendeBestanden, setWachtendeBestanden] = useState<File[]>([]);
+  const [wachtendePreviews, setWachtendePreviews] = useState<Array<{ url: string; naam: string }>>(
+    []
+  );
+
+  useEffect(() => {
+    const urls = wachtendeBestanden.map((file) => ({
+      url: URL.createObjectURL(file),
+      naam: file.name
+    }));
+    setWachtendePreviews(urls);
+    return () => {
+      urls.forEach((item) => URL.revokeObjectURL(item.url));
+    };
+  }, [wachtendeBestanden]);
 
   const actieveMedewerkers = useMemo(
     () => teamGebruikers.filter((u) => u.active && u.role !== "EIGENAAR"),
@@ -41,7 +57,7 @@ export function OpdrachtDialoog({
   const isToevoegen = mode === "toevoegen";
   const isBekijken = mode === "bekijken";
   const alleenLezen = isBekijken;
-  const kanBestandenToevoegen = mode === "bewerken" && bewerkt.id;
+  const kanDocumentenToevoegen = !alleenLezen;
   const kanVerwijderen = isEigenaar && Boolean(bewerkt.id) && !isToevoegen && Boolean(onDelete);
 
   const overeenkomstigeOpdrachten = useMemo(() => {
@@ -83,7 +99,15 @@ export function OpdrachtDialoog({
       }
       setIsBezig(true);
       if (isToevoegen && onCreate) {
-        await onCreate(bewerkt);
+        const created = await onCreate(bewerkt);
+        if (wachtendeBestanden.length) {
+          for (const file of wachtendeBestanden) {
+            await uploadBestand(created.id, file);
+          }
+          await onBewaar(created);
+        }
+        setWachtendeBestanden([]);
+        onSluit();
       } else {
         const saved = await onBewaar(bewerkt);
         setBewerkt(saved);
@@ -113,21 +137,29 @@ export function OpdrachtDialoog({
     }
   };
 
-  const handleBestanden = async (files: FileList | null) => {
-    if (!files?.length || !bewerkt.id) return;
-    try {
-      setFout(null);
-      setIsBezig(true);
-      for (const file of Array.from(files)) {
-        await uploadBestand(bewerkt.id, file);
+  const uploadBestanden = async (files: File[]) => {
+    if (!files.length) return;
+    if (bewerkt.id) {
+      try {
+        setFout(null);
+        setIsBezig(true);
+        for (const file of files) {
+          await uploadBestand(bewerkt.id, file);
+        }
+        const refreshed = await onBewaar(bewerkt);
+        setBewerkt(refreshed);
+      } catch {
+        setFout("Upload mislukt. Controleer bestandstype (PDF/JPG/PNG/DOC/DOCX) en probeer opnieuw.");
+      } finally {
+        setIsBezig(false);
       }
-      const refreshed = await onBewaar(bewerkt);
-      setBewerkt(refreshed);
-    } catch {
-      setFout("Upload mislukt. Controleer bestandstype (PDF/JPG/PNG/DOC/DOCX) en probeer opnieuw.");
-    } finally {
-      setIsBezig(false);
+      return;
     }
+    setWachtendeBestanden((huidig) => [...huidig, ...files]);
+  };
+
+  const verwijderWachtendBestand = (index: number) => {
+    setWachtendeBestanden((huidig) => huidig.filter((_, i) => i !== index));
   };
 
   const titel =
@@ -145,7 +177,7 @@ export function OpdrachtDialoog({
             <h2>{titel}</h2>
             <p className="muted">
               {isToevoegen &&
-                "Vul alle gegevens in. Na opslaan kun je via Bewerken bestanden toevoegen."}
+                "Vul alle gegevens in. Je kunt direct documenten uploaden of een foto maken."}
               {mode === "bewerken" && "Pas gegevens, toegewezen medewerker en documenten aan."}
               {isBekijken &&
                 "Je kunt alleen aangeven of je deze opdracht hebt uitgevoerd (status op Afgerond zetten)."}
@@ -310,26 +342,40 @@ export function OpdrachtDialoog({
                 disabled={alleenLezen}
               />
 
-              {kanBestandenToevoegen && (
-                <>
-                  <label className="form-label">Documenten uploaden</label>
-                  <input
-                    type="file"
-                    multiple
-                    className="form-input"
-                    onChange={(e) => handleBestanden(e.target.files)}
-                  />
-                  <span className="help-text">
-                    PDF, JPG, PNG, DOC. Alleen zichtbaar voor toegewezen medewerker en eigenaar.
-                  </span>
-                </>
-              )}
-              {isToevoegen && (
-                <p className="muted">
-                  Na het opslaan kun je bij Bewerken bestanden aan deze opdracht koppelen.
-                </p>
+              {kanDocumentenToevoegen && (
+                <DocumentenToevoegen disabled={isBezig} onBestanden={uploadBestanden} />
               )}
               <div className="files-list">
+                {wachtendePreviews.length > 0 && (
+                  <div className="documenten-wachtrij">
+                    <p className="muted">
+                      {isToevoegen
+                        ? "Wordt gekoppeld na opslaan:"
+                        : "Klaar om te uploaden:"}
+                    </p>
+                    <div className="inzending-fotos inzending-fotos-preview">
+                      {wachtendePreviews.map((item, index) => (
+                        <figure key={`${item.naam}-${index}`} className="inzending-foto">
+                          {item.naam.match(/\.(jpe?g|png|webp|gif)$/i) ? (
+                            <img src={item.url} alt={item.naam} />
+                          ) : (
+                            <div className="inzending-foto-placeholder">{item.naam}</div>
+                          )}
+                          <figcaption>
+                            <span>{item.naam}</span>
+                            <button
+                              type="button"
+                              className="link-btn"
+                              onClick={() => verwijderWachtendBestand(index)}
+                            >
+                              Verwijderen
+                            </button>
+                          </figcaption>
+                        </figure>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {bewerkt.bestanden?.length ? (
                   <ul>
                     {bewerkt.bestanden.map((b) => (

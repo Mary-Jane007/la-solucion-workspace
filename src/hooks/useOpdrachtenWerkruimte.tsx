@@ -113,7 +113,7 @@ export function useOpdrachtenWerkruimte({
     setGeselecteerdeOpdracht(null);
   };
 
-  const handleCreateOpdracht = async (draft: Opdracht) => {
+  const handleCreateOpdracht = async (draft: Opdracht): Promise<Opdracht> => {
     setOpdrachtFout(null);
     const nieuw = await createOpdracht({
       klantNaam: draft.klantNaam || "Naam klant",
@@ -129,7 +129,7 @@ export function useOpdrachtenWerkruimte({
       bestanden: []
     });
     onOpdrachtenWijzig([nieuw, ...opdrachten]);
-    sluitDialoog();
+    return nieuw;
   };
 
   const handleDeleteOpdracht = async (opdrachtId: string) => {
