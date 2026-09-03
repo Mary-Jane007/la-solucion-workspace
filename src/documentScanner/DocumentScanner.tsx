@@ -318,8 +318,13 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
 
       setStep("processing");
       if (corners) {
+        // Document was gedetecteerd — automatisch bijsnijden, crop overslaan
         setCropCorners(corners);
-        setStep("crop");
+        const src = await canvasFromDataUrl(canvasToDataUrl(canvas));
+        const warped = await warpDocument(src, corners);
+        setWarpedDataUrl(canvasToDataUrl(warped));
+        setStep("filter");
+        setFeedback("Scan gemaakt");
       } else {
         const { corners: detected, auto } = await detectDocumentCornersMetFallback(canvas);
         setCropCorners(detected);
