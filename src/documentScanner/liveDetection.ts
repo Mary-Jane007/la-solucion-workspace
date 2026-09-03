@@ -53,28 +53,31 @@ export class LiveDocumentTracker {
     detectedOverlay: Point[] | null,
     rawConfidence: number
   ): LiveDetectieState {
-    const heeftDetectie = Boolean(detectedOverlay?.length === 4 && rawConfidence > 0.12);
+    const heeftDetectie = Boolean(detectedOverlay?.length === 4 && rawConfidence > 0.05);
 
     if (heeftDetectie && detectedOverlay) {
-      const stijging = 0.08 + rawConfidence * 0.22;
+      // Snelle opbouw — 2-3 frames met detectie → groen
+      const stijging = 0.2 + rawConfidence * 0.35;
       this.confidence = Math.min(1, this.confidence + stijging);
     } else {
-      this.confidence = Math.max(0, this.confidence - 0.1);
+      // Langzame afname zodat het niet direct terugspringt naar rood
+      this.confidence = Math.max(0, this.confidence - 0.06);
     }
 
-    const blend = easeOutCubic(Math.min(1, this.confidence * 1.15));
+    const blend = easeOutCubic(Math.min(1, this.confidence * 1.3));
     const doel = heeftDetectie && detectedOverlay
       ? interpoleerHoeken(guide, detectedOverlay, blend)
       : guide;
 
-    const smoothFactor = 0.12 + blend * 0.38;
+    const smoothFactor = 0.15 + blend * 0.45;
     this.smoothed = smoothHoeken(this.smoothed, doel, smoothFactor);
 
+    // Lage drempels: snel groen
     let fase: DetectieFase = "guide";
-    if (this.confidence >= 0.62) {
+    if (this.confidence >= 0.3) {
       fase = "locked";
       this.lockedFrames++;
-    } else if (this.confidence >= 0.22) {
+    } else if (this.confidence >= 0.1) {
       fase = "tracking";
       this.lockedFrames = 0;
     } else {
@@ -82,7 +85,7 @@ export class LiveDocumentTracker {
       this.lockedFrames = 0;
     }
 
-    const documentGevonden = fase === "locked" || (fase === "tracking" && this.confidence >= 0.38);
+    const documentGevonden = this.confidence >= 0.2;
 
     return {
       corners: this.smoothed ?? guide,
@@ -93,7 +96,7 @@ export class LiveDocumentTracker {
   }
 
   kanScannen(): boolean {
-    return this.confidence >= 0.42 && this.smoothed !== null;
+    return this.confidence >= 0.2 && this.smoothed !== null;
   }
 
   getSmoothedCorners(): Point[] | null {

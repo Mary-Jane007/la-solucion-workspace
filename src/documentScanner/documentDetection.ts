@@ -36,16 +36,15 @@ function isConvexQuad(corners: Point[]): boolean {
 }
 
 function scoreQuadrilateral(corners: Point[], frameW: number, frameH: number): number {
-  if (!isConvexQuad(corners)) return 0;
-
+  // Convexiteit niet verplicht — elk vierkant-achtig object telt
   const area = contourArea(corners);
   const frameArea = frameW * frameH;
   const areaRatio = area / frameArea;
-  if (areaRatio < 0.05 || areaRatio > 0.94) return 0;
+  if (areaRatio < 0.02 || areaRatio > 0.97) return 0;
 
   let areaScore = 1;
-  if (areaRatio < 0.1) areaScore = areaRatio / 0.1;
-  else if (areaRatio > 0.82) areaScore = (1 - areaRatio) / 0.18;
+  if (areaRatio < 0.06) areaScore = areaRatio / 0.06;
+  else if (areaRatio > 0.88) areaScore = (1 - areaRatio) / 0.12;
 
   const [tl, tr, br, bl] = sorteerHoeken(corners);
   const widthTop = afstand(tl, tr);
@@ -54,24 +53,18 @@ function scoreQuadrilateral(corners: Point[], frameW: number, frameH: number): n
   const heightRight = afstand(tr, br);
   const avgW = (widthTop + widthBot) / 2;
   const avgH = (heightLeft + heightRight) / 2;
-  if (avgW < 20 || avgH < 20) return 0;
+  if (avgW < 12 || avgH < 12) return 0;
 
   const aspect = avgW / avgH;
-  if (aspect < 0.2 || aspect > 5) return 0;
-  const aspectScore = aspect < 0.45 || aspect > 2.2 ? 0.65 : 1;
+  if (aspect < 0.1 || aspect > 10) return 0;
 
   const widthSym = Math.min(widthTop, widthBot) / Math.max(widthTop, widthBot);
   const heightSym = Math.min(heightLeft, heightRight) / Math.max(heightLeft, heightRight);
   const symmetryScore = (widthSym + heightSym) / 2;
 
-  const diag1 = afstand(tl, br);
-  const diag2 = afstand(tr, bl);
-  const diagSym = Math.min(diag1, diag2) / Math.max(diag1, diag2);
+  const convexBonus = isConvexQuad(corners) ? 0.15 : 0;
 
-  return Math.min(
-    1,
-    areaScore * 0.35 + symmetryScore * 0.3 + diagSym * 0.15 + aspectScore * 0.2
-  );
+  return Math.min(1, areaScore * 0.4 + symmetryScore * 0.35 + convexBonus + 0.1);
 }
 
 function matNaarHoeken(cv: any, contour: any, scaleX: number, scaleY: number): Point[] {
@@ -110,12 +103,14 @@ export async function detectDocumentWithConfidence(
     cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
 
     let best: DocumentDetectieResult | null = null;
-    const minArea = work.width * work.height * 0.06;
+    const minArea = work.width * work.height * 0.02;
 
     for (const [low, high] of [
+      [20, 80],
+      [30, 100],
       [40, 120],
       [50, 150],
-      [60, 180]
+      [70, 200]
     ] as const) {
       cv.Canny(blurred, edges, low, high);
       cv.findContours(edges, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
@@ -123,7 +118,7 @@ export async function detectDocumentWithConfidence(
       for (let i = 0; i < contours.size(); i++) {
         const contour = contours.get(i);
         const peri = cv.arcLength(contour, true);
-        for (const eps of [0.015, 0.02, 0.03]) {
+        for (const eps of [0.01, 0.015, 0.02, 0.03, 0.04, 0.05]) {
           const approx = new cv.Mat();
           cv.approxPolyDP(contour, approx, eps * peri, true);
           if (approx.rows === 4) {
