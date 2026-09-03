@@ -78,9 +78,57 @@ function matNaarHoeken(cv: any, contour: any, scaleX: number, scaleY: number): P
   return sorteerHoeken(points);
 }
 
+/**
+ * Snelle contrast-gebaseerde detectie: kijkt of er genoeg randen zijn in het beeld.
+ * Als er iets in het camerabeeld zit dat contrast heeft, geeft het een score.
+ */
+function snelleContrastDetectie(canvas: HTMLCanvasElement): DocumentDetectieResult {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return { corners: standaardHoeken(canvas.width, canvas.height), confidence: 0.35 };
+
+  const w = canvas.width;
+  const h = canvas.height;
+  const data = ctx.getImageData(0, 0, w, h).data;
+
+  // Bereken gemiddelde helderheid en variantie in het centrale deel
+  const cx1 = Math.floor(w * 0.15);
+  const cx2 = Math.floor(w * 0.85);
+  const cy1 = Math.floor(h * 0.15);
+  const cy2 = Math.floor(h * 0.85);
+  let sum = 0;
+  let sumSq = 0;
+  let n = 0;
+  for (let y = cy1; y < cy2; y += 4) {
+    for (let x = cx1; x < cx2; x += 4) {
+      const idx = (y * w + x) * 4;
+      const lum = data[idx] * 0.299 + data[idx + 1] * 0.587 + data[idx + 2] * 0.114;
+      sum += lum;
+      sumSq += lum * lum;
+      n++;
+    }
+  }
+  const mean = sum / n;
+  const variance = sumSq / n - mean * mean;
+
+  // Als er variantie is (= er is iets met contrast in beeld), hoge confidence
+  const conf = variance > 200 ? 0.65 : variance > 80 ? 0.45 : variance > 30 ? 0.3 : 0.1;
+
+  const m = 0.08;
+  return {
+    corners: [
+      { x: w * m, y: h * m },
+      { x: w * (1 - m), y: h * m },
+      { x: w * (1 - m), y: h * (1 - m) },
+      { x: w * m, y: h * (1 - m) }
+    ],
+    confidence: conf
+  };
+}
+
 export async function detectDocumentWithConfidence(
   canvas: HTMLCanvasElement
-): Promise<DocumentDetectieResult | null> {
+): Promise<DocumentDetectieResult> {
+  // Probeer OpenCV detectie
   try {
     const cv = await loadOpenCV();
     const maxSide = 800;
@@ -89,7 +137,7 @@ export async function detectDocumentWithConfidence(
     work.width = Math.round(canvas.width * scale);
     work.height = Math.round(canvas.height * scale);
     const wctx = work.getContext("2d");
-    if (!wctx) return null;
+    if (!wctx) return snelleContrastDetectie(canvas);
     wctx.drawImage(canvas, 0, 0, work.width, work.height);
 
     const src = cv.imread(work);
@@ -106,6 +154,7 @@ export async function detectDocumentWithConfidence(
     const minArea = work.width * work.height * 0.02;
 
     for (const [low, high] of [
+      [15, 60],
       [20, 80],
       [30, 100],
       [40, 120],
@@ -144,9 +193,10 @@ export async function detectDocumentWithConfidence(
     contours.delete();
     hierarchy.delete();
 
-    return best;
+    // Als OpenCV iets vond, gebruik dat. Anders fallback op contrast-detectie.
+    return best ?? snelleContrastDetectie(canvas);
   } catch {
-    return null;
+    return snelleContrastDetectie(canvas);
   }
 }
 
