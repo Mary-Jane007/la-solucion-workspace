@@ -9,6 +9,7 @@ interface Props {
   guideCorners: Point[];
   fase: DetectieFase;
   confidence: number;
+  documentGevonden: boolean;
   maskId: string;
 }
 
@@ -19,14 +20,17 @@ export function ScannerCameraOverlay({
   guideCorners,
   fase,
   confidence,
+  documentGevonden,
   maskId
 }: Props) {
   const w = Math.max(overlayW, 1);
   const h = Math.max(overlayH, 1);
   const polygon = hoekenNaarPolygonString(corners);
   const guidePolygon = hoekenNaarPolygonString(guideCorners);
-  const toonCutout = fase !== "guide" && confidence >= 0.28;
-  const toonHoekpunten = fase !== "guide" && confidence >= 0.35;
+
+  const kleur = documentGevonden ? "groen" : "rood";
+  const toonCutout = documentGevonden && confidence >= 0.28;
+  const toonHoekpunten = confidence >= 0.2;
 
   return (
     <svg
@@ -49,26 +53,26 @@ export function ScannerCameraOverlay({
       )}
 
       {fase === "guide" && (
-        <polygon points={guidePolygon} className="scanner-doc-frame guide" />
+        <polygon points={guidePolygon} className="scanner-doc-frame scan-rood" />
       )}
 
       {fase !== "guide" && (
-        <>
-          <polygon
-            points={polygon}
-            className={`scanner-doc-frame detect-${fase}`}
-            style={{ opacity: 0.35 + confidence * 0.65 }}
-          />
-          {fase === "tracking" && (
-            <polygon points={guidePolygon} className="scanner-doc-frame guide faint" />
-          )}
-        </>
+        <polygon
+          points={polygon}
+          className={`scanner-doc-frame scan-${kleur}`}
+          style={{ opacity: 0.4 + confidence * 0.6 }}
+        />
       )}
 
       {toonHoekpunten &&
         corners.map((p, i) => (
           <g key={i}>
-            <circle cx={p.x} cy={p.y} r={fase === "locked" ? 9 : 7} className="scanner-corner-dot" />
+            <circle
+              cx={p.x}
+              cy={p.y}
+              r={documentGevonden ? 9 : 7}
+              className={`scanner-corner-dot scan-dot-${kleur}`}
+            />
             <circle cx={p.x} cy={p.y} r={3} className="scanner-corner-dot-core" />
           </g>
         ))}

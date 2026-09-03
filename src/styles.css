@@ -3505,46 +3505,41 @@ textarea.form-input {
   fill: rgba(0, 0, 0, 0.35);
 }
 
-.scanner-doc-frame {
-  fill: rgba(59, 130, 246, 0.06);
-  stroke: rgba(96, 165, 250, 0.75);
-  stroke-width: 2.5;
-  vector-effect: non-scaling-stroke;
-}
-
-.scanner-doc-frame.guide {
-  stroke-dasharray: 10 8;
-  stroke: rgba(147, 197, 253, 0.55);
-  fill: rgba(59, 130, 246, 0.04);
-}
-
-.scanner-doc-frame.guide.faint {
-  stroke-dasharray: 6 6;
-  stroke: rgba(147, 197, 253, 0.25);
-  fill: none;
-  stroke-width: 1.5;
-}
-
-.scanner-doc-frame.detect-tracking {
-  fill: rgba(59, 130, 246, 0.1);
-  stroke: #60a5fa;
+/* Rood kader — geen document gedetecteerd */
+.scanner-doc-frame.scan-rood {
+  fill: rgba(239, 68, 68, 0.06);
+  stroke: #ef4444;
   stroke-width: 3;
-  filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.35));
+  stroke-dasharray: 10 8;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 6px rgba(239, 68, 68, 0.4));
 }
 
-.scanner-doc-frame.detect-locked {
-  fill: rgba(59, 130, 246, 0.14);
-  stroke: #3b82f6;
+/* Groen kader — document gedetecteerd */
+.scanner-doc-frame.scan-groen {
+  fill: rgba(34, 197, 94, 0.1);
+  stroke: #22c55e;
   stroke-width: 3.5;
-  filter: drop-shadow(0 0 10px rgba(59, 130, 246, 0.55));
-  animation: scanner-lock-pulse 1.6s ease-in-out infinite;
+  stroke-dasharray: none;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 10px rgba(34, 197, 94, 0.5));
+  animation: scanner-groen-pulse 1.4s ease-in-out infinite;
 }
 
-.scanner-corner-dot {
-  fill: #3b82f6;
+/* Hoekpunten rood */
+.scanner-corner-dot.scan-dot-rood {
+  fill: #ef4444;
+  stroke: #fff;
+  stroke-width: 2;
+  filter: drop-shadow(0 0 3px rgba(239, 68, 68, 0.5));
+}
+
+/* Hoekpunten groen */
+.scanner-corner-dot.scan-dot-groen {
+  fill: #22c55e;
   stroke: #fff;
   stroke-width: 2.5;
-  filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.6));
+  filter: drop-shadow(0 0 5px rgba(34, 197, 94, 0.6));
 }
 
 .scanner-corner-dot-core {
@@ -3552,9 +3547,9 @@ textarea.form-input {
   stroke: none;
 }
 
-@keyframes scanner-lock-pulse {
+@keyframes scanner-groen-pulse {
   0%, 100% { stroke-opacity: 1; }
-  50% { stroke-opacity: 0.72; }
+  50% { stroke-opacity: 0.7; }
 }
 
 .scanner-shutter-bar {

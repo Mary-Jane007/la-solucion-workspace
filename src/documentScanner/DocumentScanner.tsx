@@ -530,6 +530,7 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
               guideCorners={guideCorners.length === 4 ? guideCorners : berekenGuideHoeken(overlaySize.w || 1, overlaySize.h || 1)}
               fase={detectieFase}
               confidence={detectieConfidence}
+              documentGevonden={documentGevonden}
               maskId={maskId}
             />
           </div>
