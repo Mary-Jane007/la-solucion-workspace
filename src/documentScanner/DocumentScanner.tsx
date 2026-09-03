@@ -54,6 +54,7 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
   const streamRef = useRef<MediaStream | null>(null);
   const detectTimer = useRef<number | null>(null);
   const detectieTracker = useRef(new LiveDocumentTracker());
+  const laatsteExacteContour = useRef(false);
   const maskId = useId().replace(/:/g, "");
 
   const [step, setStep] = useState<ScannerStep>("camera");
@@ -214,6 +215,7 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
         setGuideCorners(guide);
 
         const detectie = await detectDocumentWithConfidence(canvas);
+        laatsteExacteContour.current = detectie?.exacteContour ?? false;
         let mapped: Point[] | null = null;
         if (detectie?.corners.length === 4) {
           const inVideoSpace = schaalHoeken(
@@ -297,43 +299,43 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
       setRawSize({ w: canvas.width, h: canvas.height });
       setRawDataUrl(canvasToDataUrl(canvas));
 
-      let corners: Point[] | null = null;
-      const overlayCorners = detectieTracker.current.getSmoothedCorners();
-      if (detectieTracker.current.kanScannen() && overlayCorners?.length === 4) {
-        const inVideoSpace = overlayNaarVideoHoeken(
-          overlayCorners,
-          video.videoWidth,
-          video.videoHeight,
-          video.clientWidth,
-          video.clientHeight
-        );
-        corners = schaalHoeken(
-          inVideoSpace,
-          video.videoWidth,
-          video.videoHeight,
-          canvas.width,
-          canvas.height
-        );
-      }
-
       setStep("processing");
-      if (corners) {
-        // Document was gedetecteerd — automatisch bijsnijden, crop overslaan
-        setCropCorners(corners);
-        const src = await canvasFromDataUrl(canvasToDataUrl(canvas));
-        const warped = await warpDocument(src, corners);
-        setWarpedDataUrl(canvasToDataUrl(warped));
+
+      if (laatsteExacteContour.current) {
+        // Echte contour gevonden — auto-crop met de gedetecteerde hoeken
+        const overlayCorners = detectieTracker.current.getSmoothedCorners();
+        if (overlayCorners?.length === 4) {
+          const inVideoSpace = overlayNaarVideoHoeken(
+            overlayCorners,
+            video.videoWidth,
+            video.videoHeight,
+            video.clientWidth,
+            video.clientHeight
+          );
+          const corners = schaalHoeken(
+            inVideoSpace,
+            video.videoWidth,
+            video.videoHeight,
+            canvas.width,
+            canvas.height
+          );
+          setCropCorners(corners);
+          const src = await canvasFromDataUrl(canvasToDataUrl(canvas));
+          const warped = await warpDocument(src, corners);
+          setWarpedDataUrl(canvasToDataUrl(warped));
+          setStep("filter");
+          setFeedback("Scan gemaakt");
+        } else {
+          // Fallback: hele foto als scan
+          setWarpedDataUrl(canvasToDataUrl(canvas));
+          setStep("filter");
+          setFeedback("Scan gemaakt");
+        }
+      } else {
+        // Geen exacte contour — gebruik gewoon de hele foto zonder warp
+        setWarpedDataUrl(canvasToDataUrl(canvas));
         setStep("filter");
         setFeedback("Scan gemaakt");
-      } else {
-        const { corners: detected, auto } = await detectDocumentCornersMetFallback(canvas);
-        setCropCorners(detected);
-        if (!auto) {
-          setWaarschuwing(
-            "We konden het document niet goed herkennen. Pas de hoeken handmatig aan of plaats het document vlakker en beter verlicht."
-          );
-        }
-        setStep("crop");
       }
     } catch {
       setCameraFout("Scan maken mislukt. Probeer opnieuw.");

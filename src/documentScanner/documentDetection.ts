@@ -5,6 +5,7 @@ import { sorteerHoeken, standaardHoeken } from "./imageUtils";
 export type DocumentDetectieResult = {
   corners: Point[];
   confidence: number;
+  exacteContour: boolean;
 };
 
 function contourArea(points: Point[]): number {
@@ -110,7 +111,6 @@ function snelleContrastDetectie(canvas: HTMLCanvasElement): DocumentDetectieResu
   const mean = sum / n;
   const variance = sumSq / n - mean * mean;
 
-  // Als er variantie is (= er is iets met contrast in beeld), hoge confidence
   const conf = variance > 200 ? 0.65 : variance > 80 ? 0.45 : variance > 30 ? 0.3 : 0.1;
 
   const m = 0.08;
@@ -121,7 +121,8 @@ function snelleContrastDetectie(canvas: HTMLCanvasElement): DocumentDetectieResu
       { x: w * (1 - m), y: h * (1 - m) },
       { x: w * m, y: h * (1 - m) }
     ],
-    confidence: conf
+    confidence: conf,
+    exacteContour: false
   };
 }
 
@@ -176,7 +177,7 @@ export async function detectDocumentWithConfidence(
             if (area >= minArea / (scale * scale)) {
               const conf = scoreQuadrilateral(pts, canvas.width, canvas.height);
               if (conf > 0 && (!best || conf > best.confidence)) {
-                best = { corners: pts, confidence: conf };
+                best = { corners: pts, confidence: conf, exacteContour: true };
               }
             }
           }
