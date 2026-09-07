@@ -21,7 +21,8 @@ import {
   nuDateTimeLocal,
   SURINAAME_BANKEN,
   typeLabel,
-  VALUTA_LABELS
+  VALUTA_LABELS,
+  FINANCIEEL_VASTE_MEDEWERKERS
 } from "../financieelUtils";
 import { Gebruiker } from "../types";
 import { InzendingBijlagen } from "./financieel/InzendingBijlagen";
@@ -325,18 +326,32 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
               Bij wie is het geld nu?
               <input
                 className="form-input"
+                list="medewerker-fin-bij-wie"
                 value={geldBijNaam}
                 onChange={(e) => setGeldBijNaam(e.target.value)}
+                placeholder="Kies of typ een naam"
               />
+              <datalist id="medewerker-fin-bij-wie">
+                {FINANCIEEL_VASTE_MEDEWERKERS.map((naam) => (
+                  <option key={naam} value={naam} />
+                ))}
+              </datalist>
             </label>
             {(type === "OVERDRACHT" || type === "UITGAVE") && (
               <label className="form-label">
                 Van wie kwam het geld?
                 <input
                   className="form-input"
+                  list="medewerker-fin-van-wie"
                   value={geldVanNaam}
                   onChange={(e) => setGeldVanNaam(e.target.value)}
+                  placeholder="Kies of typ een naam"
                 />
+                <datalist id="medewerker-fin-van-wie">
+                  {FINANCIEEL_VASTE_MEDEWERKERS.map((naam) => (
+                    <option key={naam} value={naam} />
+                  ))}
+                </datalist>
               </label>
             )}
             <label className="form-label financieel-span-2">

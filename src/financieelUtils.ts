@@ -22,6 +22,54 @@ export const BETALINGSWIJZE_LABELS: Record<FinancieelBetalingswijze, string> = {
   GESTORT: "Gestort op bank"
 };
 
+/** Medewerkers die in financiële vulvelden altijd kiezenbaar zijn, ook zonder login-account. */
+export const FINANCIEEL_VASTE_MEDEWERKERS = ["Natasha", "Vanessa"] as const;
+
+const VASTE_MEDEWERKER_ID_PREFIX = "naam:";
+
+export function vasteMedewerkerSelectId(naam: string): string {
+  return `${VASTE_MEDEWERKER_ID_PREFIX}${naam}`;
+}
+
+export function isVasteMedewerkerSelectId(id?: string | null): boolean {
+  return Boolean(id && id.startsWith(VASTE_MEDEWERKER_ID_PREFIX));
+}
+
+/** Alleen echte team-accounts mogen als user-id worden opgeslagen. */
+export function echteMedewerkerUserId(id?: string | null): string | null {
+  if (!id || isVasteMedewerkerSelectId(id)) return null;
+  return id;
+}
+
+export type FinancieelMedewerkerOptie = {
+  id: string;
+  name: string;
+  role: string;
+  active: boolean;
+};
+
+export function voegVasteMedewerkersToe(
+  team: Array<{ id: string; name: string; role?: string; active?: boolean }>
+): FinancieelMedewerkerOptie[] {
+  const opties: FinancieelMedewerkerOptie[] = team.map((u) => ({
+    id: u.id,
+    name: u.name,
+    role: u.role || "MEDEWERKER",
+    active: u.active !== false
+  }));
+  const bestaande = new Set(opties.map((u) => u.name.trim().toLowerCase()));
+  for (const naam of FINANCIEEL_VASTE_MEDEWERKERS) {
+    if (bestaande.has(naam.toLowerCase())) continue;
+    opties.push({
+      id: vasteMedewerkerSelectId(naam),
+      name: naam,
+      role: "MEDEWERKER",
+      active: true
+    });
+  }
+  return opties.sort((a, b) => a.name.localeCompare(b.name, "nl"));
+}
+
 /** Banken in Suriname (SBV-leden, verkorte namen). */
 export const SURINAAME_BANKEN = [
   "De Surinaamsche Bank (DSB)",

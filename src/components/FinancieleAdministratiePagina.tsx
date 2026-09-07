@@ -55,6 +55,8 @@ import {
   restantBedrag,
   totaalInkomstKas,
   extraUitgaveUitGebruik,
+  echteMedewerkerUserId,
+  voegVasteMedewerkersToe,
   SaldoCijfers,
   SURINAAME_BANKEN,
   VALUTA_LABELS
@@ -346,12 +348,19 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
     return klant ? dossierOpties.filter((o) => o.klantNaam.trim().toLowerCase() === klant) : dossierOpties;
   }, [dossierOpties, form.klantNaam]);
   const medewerkerOpties = useMemo(() => {
-    const actief = team.filter((u) => u.active).slice().sort((a, b) => a.name.localeCompare(b.name, "nl"));
-    if (!form.afgehandeldDoorUserId || actief.some((u) => u.id === form.afgehandeldDoorUserId)) return actief;
+    const actief = voegVasteMedewerkersToe(team.filter((u) => u.active));
+    if (!form.afgehandeldDoorUserId || actief.some((u) => u.id === form.afgehandeldDoorUserId)) {
+      return actief;
+    }
     const gekozen = team.find((u) => u.id === form.afgehandeldDoorUserId);
-    if (gekozen) return [gekozen, ...actief];
-    const naam = (bewerkId && posten.find((p) => p.id === bewerkId)?.afgehandeldDoorNaam) || "Onbekende medewerker";
-    return [{ id: form.afgehandeldDoorUserId, name: naam, role: "", active: false }, ...actief];
+    if (gekozen) return voegVasteMedewerkersToe([gekozen, ...team.filter((u) => u.active)]);
+    const naam =
+      (bewerkId && posten.find((p) => p.id === bewerkId)?.afgehandeldDoorNaam) ||
+      "Onbekende medewerker";
+    return [
+      { id: form.afgehandeldDoorUserId, name: naam, role: "", active: false },
+      ...actief
+    ];
   }, [team, form.afgehandeldDoorUserId, bewerkId, posten]);
 
   const laad = async () => {
@@ -727,7 +736,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
     }
     const gekozen = form.opdrachtId ? opdrachtenById.get(form.opdrachtId) : undefined;
     const medewerker = form.afgehandeldDoorUserId
-      ? team.find((u) => u.id === form.afgehandeldDoorUserId)
+      ? medewerkerOpties.find((u) => u.id === form.afgehandeldDoorUserId)
       : undefined;
     const wijze = form.betalingswijze || null;
     const medewerkerNaam =
@@ -735,10 +744,10 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
         ? medewerker?.name || form.afgehandeldDoorNaam.trim()
         : "";
     const geldBijPersoon = form.geldBijUserId
-      ? team.find((u) => u.id === form.geldBijUserId)
+      ? medewerkerOpties.find((u) => u.id === form.geldBijUserId)
       : undefined;
     const geldVanPersoonTeam = form.geldVanUserId
-      ? team.find((u) => u.id === form.geldVanUserId)
+      ? medewerkerOpties.find((u) => u.id === form.geldVanUserId)
       : undefined;
     const geldVanNaam = geldVanPersoonTeam?.name || form.geldVanNaam.trim();
     const geldBijNaam = geldBijPersoon?.name || form.geldBijNaam.trim();
@@ -875,13 +884,13 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       klantNaam: (gekozen?.klantNaam || form.klantNaam).trim(),
       opdrachtId: form.opdrachtId || null,
       afgehandeldDoorUserId:
-        wijze === "OPGEHAALD" || !wijze ? form.afgehandeldDoorUserId || null : null,
+        wijze === "OPGEHAALD" || !wijze ? echteMedewerkerUserId(form.afgehandeldDoorUserId) : null,
       afgehandeldDoorNaam: medewerkerNaam,
       betalingswijze: wijze,
       bank: toontBank ? form.bank.trim() : "",
-      geldBijUserId: form.geldBijUserId || null,
+      geldBijUserId: echteMedewerkerUserId(form.geldBijUserId),
       geldBijNaam,
-      geldVanUserId: form.geldVanUserId || null,
+      geldVanUserId: echteMedewerkerUserId(form.geldVanUserId),
       geldVanNaam,
       status: form.type === "OVERDRACHT" || form.type === "KASGELD" ? "BETAALD" : form.status,
       notities: form.notities.trim(),
@@ -1218,7 +1227,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                 {toontMedewerker && (
                   <label className="form-label financieel-span-2">Of typ medewerkernaam<input className="form-input" list="financieel-afgehandeld-door" value={form.afgehandeldDoorNaam} onChange={(e) => {
                     const naam = e.target.value;
-                    const match = team.find((u) => u.name.trim().toLowerCase() === naam.trim().toLowerCase());
+                    const match = medewerkerOpties.find((u) => u.name.trim().toLowerCase() === naam.trim().toLowerCase());
                     setForm({ ...form, afgehandeldDoorNaam: naam, afgehandeldDoorUserId: match?.id || "", betalingswijze: form.betalingswijze || (naam ? "OPGEHAALD" : "") });
                   }} /><datalist id="financieel-afgehandeld-door">{medewerkerOpties.map((u) => <option key={u.id} value={u.name} />)}</datalist></label>
                 )}
@@ -1243,7 +1252,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                   Of typ van-wie-naam
                   <input className="form-input" list="financieel-geld-van" value={form.geldVanNaam} onChange={(e) => {
                     const naam = e.target.value;
-                    const match = team.find((u) => u.name.trim().toLowerCase() === naam.trim().toLowerCase());
+                    const match = medewerkerOpties.find((u) => u.name.trim().toLowerCase() === naam.trim().toLowerCase());
                     setForm({ ...form, geldVanNaam: naam, geldVanUserId: match?.id || "" });
                   }} />
                   <datalist id="financieel-geld-van">{medewerkerOpties.map((u) => <option key={u.id} value={u.name} />)}</datalist>
@@ -1262,7 +1271,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                 </label>
                 <label className="form-label">Of typ een naam<input className="form-input" list="financieel-geld-bij" value={form.geldBijNaam} onChange={(e) => {
                   const naam = e.target.value;
-                  const match = team.find((u) => u.name.trim().toLowerCase() === naam.trim().toLowerCase());
+                  const match = medewerkerOpties.find((u) => u.name.trim().toLowerCase() === naam.trim().toLowerCase());
                   setForm({ ...form, geldBijNaam: naam, geldBijUserId: match?.id || "" });
                 }} /><datalist id="financieel-geld-bij">{medewerkerOpties.map((u) => <option key={u.id} value={u.name} />)}</datalist></label>
                   </>
@@ -1676,11 +1685,9 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                     ))}
                   </datalist>
                   <datalist id="financieel-gebruik-medewerker">
-                    {team
-                      .filter((u) => u.active !== false)
-                      .map((u) => (
-                        <option key={u.id} value={u.name} />
-                      ))}
+                    {medewerkerOpties.map((u) => (
+                      <option key={u.id} value={u.name} />
+                    ))}
                   </datalist>
                   <datalist id="financieel-gebruik-klanten">
                     {klantOpties.map((naam) => (
