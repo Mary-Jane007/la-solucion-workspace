@@ -24,8 +24,8 @@ export function DocumentenToevoegen({ disabled, onBestanden }: Props) {
   const hint = useMemo(
     () =>
       cameraSupported
-        ? "PDF, JPG, PNG of DOC — of scan een document met de camera."
-        : "PDF, JPG, PNG of DOC. Op desktop kun je ook via de scanner uploaden.",
+        ? "PDF, JPG, PNG of DOC — of scan een document met de camera. Daarna kun je de naam aanpassen of een bestand verwijderen."
+        : "PDF, JPG, PNG of DOC. Daarna kun je de naam aanpassen of een bestand verwijderen.",
     [cameraSupported]
   );
 

@@ -1,11 +1,76 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Opdracht, OpdrachtStatus, Prioriteit } from "../types";
-import { downloadBestand, uploadBestand } from "../api";
+import { downloadBestand, hernoemBestand, uploadBestand, verwijderBestand } from "../api";
 import { opdrachtVerwijderBevestiging } from "../opdrachtVerwijderen";
 import { statusLabel, vindOvereenkomstigeOpdrachten } from "../opdrachtenUtils";
 import { DocumentenToevoegen } from "./DocumentenToevoegen";
 
 type DialoogMode = "toevoegen" | "bewerken" | "bekijken";
+
+type WachtendBestand = {
+  id: string;
+  file: File;
+  url: string;
+};
+
+function nieuwWachtendId(): string {
+  return typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `wachtend-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function normaliseerBestandsnaam(huidigeNaam: string, nieuweNaam: string): string {
+  const trimmed = nieuweNaam.trim().replace(/[\\/:*?"<>|]/g, "_");
+  if (!trimmed) return huidigeNaam;
+  const oudeExtMatch = huidigeNaam.match(/(\.[a-z0-9]{1,8})$/i);
+  const oudeExt = oudeExtMatch ? oudeExtMatch[1] : "";
+  const heeftExt = /\.[a-z0-9]{1,8}$/i.test(trimmed);
+  return (heeftExt ? trimmed : `${trimmed}${oudeExt}`).slice(0, 200);
+}
+
+function hernoemFile(file: File, nieuweNaam: string): File {
+  const naam = normaliseerBestandsnaam(file.name, nieuweNaam);
+  if (naam === file.name) return file;
+  return new File([file], naam, { type: file.type, lastModified: file.lastModified });
+}
+
+function isAfbeeldingBestand(naam: string, mime?: string): boolean {
+  if (mime?.startsWith("image/")) return true;
+  return /\.(jpe?g|png|webp|gif|heic|heif)$/i.test(naam);
+}
+
+function BestandNaamVeld({
+  naam,
+  disabled,
+  onOpslaan
+}: {
+  naam: string;
+  disabled?: boolean;
+  onOpslaan: (naam: string) => void;
+}) {
+  const [waarde, setWaarde] = useState(naam);
+
+  useEffect(() => {
+    setWaarde(naam);
+  }, [naam]);
+
+  return (
+    <input
+      className="form-input file-rename-input"
+      value={waarde}
+      disabled={disabled}
+      aria-label="Bestandsnaam"
+      onChange={(e) => setWaarde(e.target.value)}
+      onBlur={() => onOpslaan(waarde)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          (e.currentTarget as HTMLInputElement).blur();
+        }
+      }}
+    />
+  );
+}
 
 interface OpdrachtDialoogProps {
   mode: DialoogMode;
@@ -33,21 +98,15 @@ export function OpdrachtDialoog({
   const [bewerkt, setBewerkt] = useState<Opdracht>(opdracht);
   const [isBezig, setIsBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
-  const [wachtendeBestanden, setWachtendeBestanden] = useState<File[]>([]);
-  const [wachtendePreviews, setWachtendePreviews] = useState<Array<{ url: string; naam: string }>>(
-    []
-  );
+  const [wachtendeBestanden, setWachtendeBestanden] = useState<WachtendBestand[]>([]);
+  const wachtendeBestandenRef = useRef<WachtendBestand[]>([]);
+  wachtendeBestandenRef.current = wachtendeBestanden;
 
   useEffect(() => {
-    const urls = wachtendeBestanden.map((file) => ({
-      url: URL.createObjectURL(file),
-      naam: file.name
-    }));
-    setWachtendePreviews(urls);
     return () => {
-      urls.forEach((item) => URL.revokeObjectURL(item.url));
+      wachtendeBestandenRef.current.forEach((item) => URL.revokeObjectURL(item.url));
     };
-  }, [wachtendeBestanden]);
+  }, []);
 
   const actieveMedewerkers = useMemo(
     () => teamGebruikers.filter((u) => u.active && u.role !== "EIGENAAR"),
@@ -101,15 +160,22 @@ export function OpdrachtDialoog({
       if (isToevoegen && onCreate) {
         const created = await onCreate(bewerkt);
         if (wachtendeBestanden.length) {
-          for (const file of wachtendeBestanden) {
-            await uploadBestand(created.id, file);
+          for (const item of wachtendeBestanden) {
+            await uploadBestand(created.id, item.file);
           }
           await onBewaar(created);
         }
-        setWachtendeBestanden([]);
+        wisWachtendeBestanden();
         onSluit();
       } else {
-        const saved = await onBewaar(bewerkt);
+        let saved = await onBewaar(bewerkt);
+        if (wachtendeBestanden.length) {
+          for (const item of wachtendeBestanden) {
+            await uploadBestand(saved.id, item.file);
+          }
+          saved = await onBewaar(saved);
+        }
+        wisWachtendeBestanden();
         setBewerkt(saved);
         onSluit();
       }
@@ -122,6 +188,11 @@ export function OpdrachtDialoog({
     } finally {
       setIsBezig(false);
     }
+  };
+
+  const wisWachtendeBestanden = () => {
+    wachtendeBestandenRef.current.forEach((item) => URL.revokeObjectURL(item.url));
+    setWachtendeBestanden([]);
   };
 
   const handleMarkeerUitgevoerd = async () => {
@@ -137,29 +208,86 @@ export function OpdrachtDialoog({
     }
   };
 
-  const uploadBestanden = async (files: File[]) => {
+  const uploadBestanden = (files: File[]) => {
     if (!files.length) return;
-    if (bewerkt.id) {
-      try {
-        setFout(null);
-        setIsBezig(true);
-        for (const file of files) {
-          await uploadBestand(bewerkt.id, file);
-        }
-        const refreshed = await onBewaar(bewerkt);
-        setBewerkt(refreshed);
-      } catch {
-        setFout("Upload mislukt. Controleer bestandstype (PDF/JPG/PNG/DOC/DOCX) en probeer opnieuw.");
-      } finally {
-        setIsBezig(false);
-      }
-      return;
-    }
-    setWachtendeBestanden((huidig) => [...huidig, ...files]);
+    setWachtendeBestanden((huidig) => [
+      ...huidig,
+      ...files.map((file) => ({
+        id: nieuwWachtendId(),
+        file,
+        url: URL.createObjectURL(file)
+      }))
+    ]);
   };
 
-  const verwijderWachtendBestand = (index: number) => {
-    setWachtendeBestanden((huidig) => huidig.filter((_, i) => i !== index));
+  const hernoemWachtendBestand = (id: string, nieuweNaam: string) => {
+    setWachtendeBestanden((huidig) =>
+      huidig.map((item) => {
+        if (item.id !== id) return item;
+        const file = hernoemFile(item.file, nieuweNaam);
+        return file === item.file ? item : { ...item, file };
+      })
+    );
+  };
+
+  const verwijderWachtendBestand = (id: string) => {
+    setWachtendeBestanden((huidig) => {
+      const item = huidig.find((x) => x.id === id);
+      if (item) URL.revokeObjectURL(item.url);
+      return huidig.filter((x) => x.id !== id);
+    });
+  };
+
+  const hernoemGekoppeldBestand = async (bestandId: string, nieuweNaam: string) => {
+    const huidig = bewerkt.bestanden.find((b) => b.id === bestandId);
+    if (!huidig) return;
+    const naam = normaliseerBestandsnaam(huidig.origineleNaam, nieuweNaam);
+    if (naam === huidig.origineleNaam) return;
+    try {
+      setFout(null);
+      setIsBezig(true);
+      const result = await hernoemBestand(bestandId, naam);
+      const next = {
+        ...bewerkt,
+        bestanden: bewerkt.bestanden.map((b) =>
+          b.id === bestandId ? { ...b, origineleNaam: result.bestand.origineleNaam } : b
+        )
+      };
+      setBewerkt(next);
+      try {
+        setBewerkt(await onBewaar(next));
+      } catch {
+        /* naam is al op de server aangepast */
+      }
+    } catch {
+      setFout("Hernoemen mislukt. Probeer opnieuw.");
+    } finally {
+      setIsBezig(false);
+    }
+  };
+
+  const verwijderGekoppeldBestand = async (bestandId: string, naam: string) => {
+    const bevestigd = window.confirm(`Bestand “${naam}” verwijderen?`);
+    if (!bevestigd) return;
+    try {
+      setFout(null);
+      setIsBezig(true);
+      await verwijderBestand(bestandId);
+      const next = {
+        ...bewerkt,
+        bestanden: bewerkt.bestanden.filter((b) => b.id !== bestandId)
+      };
+      setBewerkt(next);
+      try {
+        setBewerkt(await onBewaar(next));
+      } catch {
+        /* bestand is al op de server verwijderd */
+      }
+    } catch {
+      setFout("Verwijderen mislukt. Probeer opnieuw.");
+    } finally {
+      setIsBezig(false);
+    }
   };
 
   const titel =
@@ -346,41 +474,61 @@ export function OpdrachtDialoog({
                 <DocumentenToevoegen disabled={isBezig} onBestanden={uploadBestanden} />
               )}
               <div className="files-list">
-                {wachtendePreviews.length > 0 && (
+                {wachtendeBestanden.length > 0 && (
                   <div className="documenten-wachtrij">
                     <p className="muted">
                       {isToevoegen
-                        ? "Wordt gekoppeld na opslaan:"
-                        : "Klaar om te uploaden:"}
+                        ? "Wordt gekoppeld na opslaan. Pas de naam aan of verwijder een bestand."
+                        : "Nieuw toegevoegd — wordt gekoppeld na opslaan. Pas de naam aan of verwijder een bestand."}
                     </p>
-                    <div className="inzending-fotos inzending-fotos-preview">
-                      {wachtendePreviews.map((item, index) => (
-                        <figure key={`${item.naam}-${index}`} className="inzending-foto">
-                          {item.naam.match(/\.(jpe?g|png|webp|gif)$/i) ? (
-                            <img src={item.url} alt={item.naam} />
+                    <ul className="files-edit-list">
+                      {wachtendeBestanden.map((item) => (
+                        <li key={item.id} className="file-row file-row-edit">
+                          {isAfbeeldingBestand(item.file.name, item.file.type) ? (
+                            <img
+                              className="file-row-thumb"
+                              src={item.url}
+                              alt=""
+                            />
                           ) : (
-                            <div className="inzending-foto-placeholder">{item.naam}</div>
+                            <span className="file-row-icon" aria-hidden>
+                              📄
+                            </span>
                           )}
-                          <figcaption>
-                            <span>{item.naam}</span>
-                            <button
-                              type="button"
-                              className="link-btn"
-                              onClick={() => verwijderWachtendBestand(index)}
-                            >
-                              Verwijderen
-                            </button>
-                          </figcaption>
-                        </figure>
+                          <BestandNaamVeld
+                            naam={item.file.name}
+                            disabled={isBezig}
+                            onOpslaan={(naam) => hernoemWachtendBestand(item.id, naam)}
+                          />
+                          <button
+                            type="button"
+                            className="link-btn file-row-verwijder"
+                            disabled={isBezig}
+                            onClick={() => verwijderWachtendBestand(item.id)}
+                          >
+                            Verwijderen
+                          </button>
+                        </li>
                       ))}
-                    </div>
+                    </ul>
                   </div>
                 )}
                 {bewerkt.bestanden?.length ? (
-                  <ul>
+                  <ul className="files-edit-list">
                     {bewerkt.bestanden.map((b) => (
-                      <li key={b.id} className="file-row">
-                        <span className="file-name">{b.origineleNaam}</span>
+                      <li key={b.id} className="file-row file-row-edit">
+                        <span className="file-row-icon" aria-hidden>
+                          📄
+                        </span>
+                        {kanDocumentenToevoegen ? (
+                          <BestandNaamVeld
+                            naam={b.origineleNaam}
+                            disabled={isBezig}
+                            onOpslaan={(naam) => void hernoemGekoppeldBestand(b.id, naam)}
+                          />
+                        ) : (
+                          <span className="file-name">{b.origineleNaam}</span>
+                        )}
                         <span className="file-meta">
                           {(b.grootte / 1024).toFixed(1)} kB
                           <button
@@ -396,12 +544,24 @@ export function OpdrachtDialoog({
                           >
                             Download
                           </button>
+                          {kanDocumentenToevoegen && (
+                            <button
+                              type="button"
+                              className="link-btn file-row-verwijder"
+                              disabled={isBezig}
+                              onClick={() => void verwijderGekoppeldBestand(b.id, b.origineleNaam)}
+                            >
+                              Verwijderen
+                            </button>
+                          )}
                         </span>
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <p className="muted">Nog geen documenten gekoppeld.</p>
+                  wachtendeBestanden.length === 0 && (
+                    <p className="muted">Nog geen documenten gekoppeld.</p>
+                  )
                 )}
               </div>
             </div>

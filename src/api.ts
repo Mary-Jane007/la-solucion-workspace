@@ -1,4 +1,4 @@
-import { Gebruiker, Opdracht } from "./types";
+import { BestandsKoppeling, Gebruiker, Opdracht } from "./types";
 
 export function getToken() {
   return window.localStorage.getItem("la-solucion-token");
@@ -128,6 +128,23 @@ export async function uploadBestand(opdrachtId: string, file: File) {
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Upload mislukt.");
   return data as { ok: true; bestandId: string };
+}
+
+export async function hernoemBestand(bestandId: string, origineleNaam: string) {
+  const res = await apiFetch(`/api/bestanden/${bestandId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ origineleNaam })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Hernoemen mislukt.");
+  return data as { ok: true; bestand: BestandsKoppeling };
+}
+
+export async function verwijderBestand(bestandId: string) {
+  const res = await apiFetch(`/api/bestanden/${bestandId}`, { method: "DELETE" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as { error?: string }).error || "Verwijderen mislukt.");
 }
 
 /** Download een bestand via de beveiligde API (Authorization-header). */

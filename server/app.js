@@ -55,6 +55,8 @@ const {
   listBestandenForOpdrachtIds,
   getBestandById,
   createBestand,
+  updateBestandNaam,
+  deleteBestandById,
   deleteBestandenForOpdrachtIds
 } = require("./bestandenStore");
 const {
@@ -857,6 +859,66 @@ app.post(
     }
   }
 );
+
+function sanitizeOrigineleNaam(naam) {
+  const cleaned = String(naam || "")
+    .replace(/[\u0000-\u001f]/g, "")
+    .replace(/[\\/:*?"<>|]/g, "_")
+    .replace(/^\.+/, "")
+    .trim()
+    .slice(0, 200);
+  return cleaned || null;
+}
+
+app.patch("/api/bestanden/:id", authRequired, async (req, res) => {
+  try {
+    if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
+    const bestand = await getBestandById(req.params.id);
+    if (!bestand) return res.status(404).json({ error: "Bestand niet gevonden." });
+
+    const opdracht = await getOpdrachtById(bestand.opdrachtId);
+    if (!opdracht) return res.status(404).json({ error: "Opdracht niet gevonden." });
+    if (!canAccessOpdracht(req.user, opdracht)) {
+      return res.status(403).json({ error: "Geen toegang tot dit bestand." });
+    }
+
+    const origineleNaam = sanitizeOrigineleNaam(req.body?.origineleNaam);
+    if (!origineleNaam) return res.status(400).json({ error: "Ongeldige bestandsnaam." });
+
+    const updated = await updateBestandNaam(bestand.id, origineleNaam);
+    if (!updated) return res.status(404).json({ error: "Bestand niet gevonden." });
+    return res.json({ ok: true, bestand: { ...bestand, origineleNaam: updated.origineleNaam } });
+  } catch (err) {
+    console.error("Fout bij hernoemen bestand:", err);
+    return res.status(500).json({ error: "Interne serverfout." });
+  }
+});
+
+app.delete("/api/bestanden/:id", authRequired, async (req, res) => {
+  try {
+    if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
+    const bestand = await getBestandById(req.params.id);
+    if (!bestand) return res.status(404).json({ error: "Bestand niet gevonden." });
+
+    const opdracht = await getOpdrachtById(bestand.opdrachtId);
+    if (!opdracht) return res.status(404).json({ error: "Opdracht niet gevonden." });
+    if (!canAccessOpdracht(req.user, opdracht)) {
+      return res.status(403).json({ error: "Geen toegang tot dit bestand." });
+    }
+
+    await deleteBestandById(bestand.id);
+    const filePath = path.join(uploadDir, bestand.opslagNaam);
+    try {
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    } catch (unlinkErr) {
+      console.warn("Kon bestand niet van schijf verwijderen:", filePath, unlinkErr);
+    }
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("Fout bij verwijderen bestand:", err);
+    return res.status(500).json({ error: "Interne serverfout." });
+  }
+});
 
 app.get("/api/bestanden/:id/download", authRequired, async (req, res) => {
   try {

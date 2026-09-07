@@ -97,11 +97,37 @@ async function deleteBestandenForOpdrachtIds(opdrachtIds) {
   await query("delete from bestanden where opdracht_id = any($1::text[])", [opdrachtIds]);
 }
 
+async function updateBestandNaam(id, origineleNaam) {
+  if (!hasDb()) return null;
+  const res = await query(
+    `
+    update bestanden
+    set originele_naam = $2
+    where id = $1
+    returning
+      id,
+      originele_naam as "origineleNaam"
+    `,
+    [id, origineleNaam]
+  );
+  return res.rows[0] || null;
+}
+
+async function deleteBestandById(id) {
+  if (!hasDb()) return null;
+  const bestaande = await getBestandById(id);
+  if (!bestaande) return null;
+  await query("delete from bestanden where id = $1", [id]);
+  return bestaande;
+}
+
 module.exports = {
   listBestandenForOpdracht,
   listBestandenForOpdrachtIds,
   getBestandById,
   createBestand,
+  updateBestandNaam,
+  deleteBestandById,
   deleteBestandenForOpdrachtIds
 };
 
