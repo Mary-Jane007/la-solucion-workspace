@@ -191,6 +191,8 @@ export interface FinancieelGebruik {
   klantNaam?: string;
   /** JA = betaling op bestaand klantsaldo, NEE = nieuwe inkomst. */
   heeftSaldo?: "JA" | "NEE" | "";
+  /** Openstaand saldo dat later nog betaald moet worden. */
+  saldoBedrag?: number | null;
   toelichting?: string;
 }
 

@@ -23,6 +23,7 @@ import {
   normaliseerGebruikingen,
   normalizeValuta,
   omzettingDoelBedrag,
+  openstaandSaldoBedrag,
   postStatusLabel,
   totaalInkomstKas,
   totaalBesteedUitGebruik,
@@ -87,6 +88,8 @@ export const PERIODE_OPTIES: Array<{ id: PeriodeSleutel; label: string }> = [
 ];
 
 export const UITGAVE_CATEGORIEEN = [
+  "Benzine",
+  "Uitprinten",
   "Kantoor",
   "Personeel",
   "Software",
@@ -1882,6 +1885,9 @@ function followOpsVanPost(p: FinancieelPost, valuta: FinancieelValuta): FollowOp
         uitleg: [
           `−${formatGeld(g.bedrag, valuta)}`,
           kasHouder ? `uit kas van ${kasHouder.naam}` : null,
+          openstaandSaldoBedrag(g) > 0
+            ? `openstaand saldo ${formatGeld(openstaandSaldoBedrag(g), valuta)}`
+            : null,
           `van post “${p.omschrijving}”`,
           g.toelichting || null
         ]

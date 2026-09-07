@@ -71,6 +71,9 @@ function normalizeGebruikingen(waarde) {
         heeftSaldo: ["JA", "NEE"].includes(String(item.heeftSaldo || "").toUpperCase())
           ? String(item.heeftSaldo).toUpperCase()
           : "",
+        saldoBedrag: Number.isFinite(Number(item.saldoBedrag)) && Number(item.saldoBedrag) > 0
+          ? Math.round(Number(item.saldoBedrag) * 100) / 100
+          : null,
         toelichting: String(item.toelichting || "").trim()
       };
     })

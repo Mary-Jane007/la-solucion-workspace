@@ -994,6 +994,7 @@ const financieelSchema = z.object({
         doelBedrag: z.number().finite().positive().optional().nullable(),
         klantNaam: z.string().optional().nullable(),
         heeftSaldo: z.enum(["JA", "NEE", ""]).optional().nullable(),
+        saldoBedrag: z.number().finite().nonnegative().optional().nullable(),
         toelichting: z.string().optional().nullable()
       })
     )

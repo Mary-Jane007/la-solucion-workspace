@@ -208,6 +208,12 @@ export function normaliseerHeeftSaldo(waarde: unknown): "JA" | "NEE" | "" {
   return "";
 }
 
+export function openstaandSaldoBedrag(g: { heeftSaldo?: string; saldoBedrag?: number | null }): number {
+  if (g.heeftSaldo !== "JA") return 0;
+  const n = Number(g.saldoBedrag);
+  return Number.isFinite(n) && n > 0 ? geldRondCents(n) : 0;
+}
+
 export function bankUitWaaraan(waaraan?: string | null): string {
   const tekst = (waaraan || "").trim();
   if (!isBankstorting(tekst)) return "";
@@ -318,6 +324,9 @@ export function normaliseerGebruikingen(waarde: unknown): FinancieelGebruik[] {
         : null,
       klantNaam: String(item.klantNaam || "").trim(),
       heeftSaldo: normaliseerHeeftSaldo(item.heeftSaldo),
+      saldoBedrag: Number.isFinite(Number(item.saldoBedrag)) && Number(item.saldoBedrag) > 0
+        ? geldRondCents(Number(item.saldoBedrag))
+        : null,
       toelichting: String(item.toelichting || "").trim()
     });
   }
@@ -430,7 +439,14 @@ export function gebruikingenSamenvatting(p: { gebruikingen?: FinancieelGebruik[]
     .map((g) => {
       const waar = gebruikWaaraanTekst(g);
       const richting = g.soort === "ERBIJ" ? (isInkomstKas(g.waaraan) ? "inkomst in kas" : "erbij") : "af";
-      const saldo = g.heeftSaldo === "JA" ? "op saldo" : g.heeftSaldo === "NEE" ? "geen saldo" : "";
+      const saldo =
+        g.heeftSaldo === "JA"
+          ? openstaandSaldoBedrag(g) > 0
+            ? `saldo ${openstaandSaldoBedrag(g)}`
+            : "op saldo"
+          : g.heeftSaldo === "NEE"
+            ? "geen saldo"
+            : "";
       return [richting, String(g.bedrag), waar, saldo].filter(Boolean).join(" · ");
     })
     .join("; ");
@@ -799,6 +815,16 @@ export function berekenKlantSaldi(posten: FinancieelPost[]): KlantSaldo[] {
       map.set(key, { ...telPostOp(bestaand, p), klantNaam: naam, valuta });
     }
     for (const g of normaliseerGebruikingen(p.gebruikingen)) {
+      if (g.soort === "AF") {
+        const extra = openstaandSaldoBedrag(g);
+        const klant = (g.klantNaam || naam).trim();
+        if (extra > 0 && klant) {
+          const { key, bestaand } = bumpKlantSaldo(map, klant, valuta);
+          bestaand.teOntvangen += extra;
+          map.set(key, { ...bestaand, klantNaam: klant, valuta });
+        }
+        continue;
+      }
       if (g.soort !== "ERBIJ" || !isInkomstKas(g.waaraan)) continue;
       const klant = (g.klantNaam || "").trim();
       if (!klant) continue;
@@ -841,6 +867,25 @@ export function berekenDossierSaldi(
     const key = `${id}||${valuta}`;
     const bestaand = map.get(key) || { opdrachtId: id, valuta, ...leegSaldo() };
     map.set(key, { ...telPostOp(bestaand, p), opdrachtId: id, valuta });
+    for (const g of normaliseerGebruikingen(p.gebruikingen)) {
+      const huidig = map.get(key);
+      if (!huidig) continue;
+      if (g.soort === "AF") {
+        const extra = openstaandSaldoBedrag(g);
+        if (extra > 0) {
+          huidig.teOntvangen += extra;
+          map.set(key, { ...huidig, opdrachtId: id, valuta });
+        }
+        continue;
+      }
+      if (g.soort === "ERBIJ" && isInkomstKas(g.waaraan)) {
+        const settle = Math.min(huidig.teOntvangen, g.bedrag);
+        huidig.teOntvangen = geldRondCents(huidig.teOntvangen - settle);
+        if (p.type === "INKOMST") huidig.ontvangen += settle;
+        else huidig.ontvangen += g.bedrag;
+        map.set(key, { ...huidig, opdrachtId: id, valuta });
+      }
+    }
   }
 
   return [...map.values()]
