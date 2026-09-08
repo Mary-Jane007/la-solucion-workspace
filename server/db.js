@@ -209,13 +209,14 @@ async function migrate() {
     exception
       when duplicate_object then null;
     end $$;
+    alter table financiele_posten drop constraint if exists financiele_posten_betalingswijze_check;
     do $$
     begin
       alter table financiele_posten
         add constraint financiele_posten_betalingswijze_check
         check (
           betalingswijze is null
-          or betalingswijze in ('OPGEHAALD', 'OVERGEMAAKT', 'GESTORT')
+          or betalingswijze in ('OPGEHAALD', 'OVERGEMAAKT', 'GESTORT', 'PINPAS')
         );
     exception
       when duplicate_object then null;

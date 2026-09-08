@@ -59,6 +59,9 @@ import {
   extraUitgaveUitGebruik,
   echteMedewerkerUserId,
   voegVasteMedewerkersToe,
+  isBankBetaling,
+  isContantBetaling,
+  isPinpasBetaling,
   SaldoCijfers,
   SURINAAME_BANKEN,
   VALUTA_LABELS
@@ -560,8 +563,9 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
     [alleKlantSaldi, form.klantNaam, form.valuta]
   );
 
-  const toontMedewerker = form.betalingswijze === "OPGEHAALD" || form.betalingswijze === "";
-  const toontBank = form.betalingswijze === "OVERGEMAAKT" || form.betalingswijze === "GESTORT";
+  const toontMedewerker = isContantBetaling(form.betalingswijze);
+  const toontBank = isBankBetaling(form.betalingswijze);
+  const pinpas = isPinpasBetaling(form.betalingswijze);
   const resetForm = () => {
     setForm(leegFormulier(form.valuta));
     setBewerkId(null);
@@ -758,7 +762,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       : undefined;
     const wijze = form.betalingswijze || null;
     const medewerkerNaam =
-      wijze === "OPGEHAALD" || !wijze
+      isContantBetaling(wijze)
         ? medewerker?.name || form.afgehandeldDoorNaam.trim()
         : "";
     const geldBijPersoon = form.geldBijUserId
@@ -767,8 +771,12 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
     const geldVanPersoonTeam = form.geldVanUserId
       ? medewerkerOpties.find((u) => u.id === form.geldVanUserId)
       : undefined;
-    const geldVanNaam = geldVanPersoonTeam?.name || form.geldVanNaam.trim();
-    const geldBijNaam = geldBijPersoon?.name || form.geldBijNaam.trim();
+    const geldVanNaam = pinpas
+      ? ""
+      : geldVanPersoonTeam?.name || form.geldVanNaam.trim();
+    const geldBijNaam = pinpas && form.type !== "OVERDRACHT"
+      ? ""
+      : geldBijPersoon?.name || form.geldBijNaam.trim();
     if (form.type === "OVERDRACHT" && (!geldVanNaam || !geldBijNaam)) {
       setFout("Bij een overdracht vul je in van wie het geld komt én bij wie het nu is.");
       return;
@@ -924,13 +932,13 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       klantNaam: (gekozen?.klantNaam || form.klantNaam).trim(),
       opdrachtId: form.opdrachtId || null,
       afgehandeldDoorUserId:
-        wijze === "OPGEHAALD" || !wijze ? echteMedewerkerUserId(form.afgehandeldDoorUserId) : null,
+        isContantBetaling(wijze) ? echteMedewerkerUserId(form.afgehandeldDoorUserId) : null,
       afgehandeldDoorNaam: medewerkerNaam,
       betalingswijze: wijze,
       bank: toontBank ? form.bank.trim() : "",
-      geldBijUserId: echteMedewerkerUserId(form.geldBijUserId),
+      geldBijUserId: pinpas && form.type !== "OVERDRACHT" ? null : echteMedewerkerUserId(form.geldBijUserId),
       geldBijNaam,
-      geldVanUserId: echteMedewerkerUserId(form.geldVanUserId),
+      geldVanUserId: pinpas ? null : echteMedewerkerUserId(form.geldVanUserId),
       geldVanNaam,
       status: form.type === "OVERDRACHT" || form.type === "KASGELD" ? "BETAALD" : form.status,
       notities: form.notities.trim(),
@@ -1372,17 +1380,25 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                   Betalingswijze
                   <select className="form-input" value={form.betalingswijze} onChange={(e) => {
                     const betalingswijze = e.target.value as "" | FinancieelBetalingswijze;
+                    const pin = isPinpasBetaling(betalingswijze);
                     setForm({
                       ...form,
                       betalingswijze,
-                      bank: betalingswijze === "OVERGEMAAKT" || betalingswijze === "GESTORT" ? form.bank : "",
-                      afgehandeldDoorUserId: betalingswijze === "OPGEHAALD" || betalingswijze === "" ? form.afgehandeldDoorUserId : "",
-                      afgehandeldDoorNaam: betalingswijze === "OPGEHAALD" || betalingswijze === "" ? form.afgehandeldDoorNaam : ""
+                      bank: isBankBetaling(betalingswijze) ? form.bank : "",
+                      afgehandeldDoorUserId: isContantBetaling(betalingswijze) ? form.afgehandeldDoorUserId : "",
+                      afgehandeldDoorNaam: isContantBetaling(betalingswijze) ? form.afgehandeldDoorNaam : "",
+                      geldVanUserId: pin ? "" : form.geldVanUserId,
+                      geldVanNaam: pin ? "" : form.geldVanNaam,
+                      geldBijUserId: pin && form.type !== "OVERDRACHT" ? "" : form.geldBijUserId,
+                      geldBijNaam: pin && form.type !== "OVERDRACHT" ? "" : form.geldBijNaam
                     });
                   }}>
                     <option value="">— Niet gekozen —</option>
                     {(Object.keys(BETALINGSWIJZE_LABELS) as FinancieelBetalingswijze[]).map((wijze) => <option key={wijze} value={wijze}>{BETALINGSWIJZE_LABELS[wijze]}</option>)}
                   </select>
+                  {pinpas && (
+                    <span className="help-text">Pinpas gaat niet van het kasgeld bij een medewerker af.</span>
+                  )}
                 </label>
                 {toontBank ? (
                   <label className="form-label">Bank (Suriname)<select className="form-input" value={form.bank} onChange={(e) => setForm({ ...form, bank: e.target.value })}><option value="">— Kies bank —</option>{SURINAAME_BANKEN.map((bank) => <option key={bank} value={bank}>{bank}</option>)}</select></label>
@@ -1400,7 +1416,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                     setForm({ ...form, afgehandeldDoorNaam: naam, afgehandeldDoorUserId: match?.id || "", betalingswijze: form.betalingswijze || (naam ? "OPGEHAALD" : "") });
                   }} /><datalist id="financieel-afgehandeld-door">{medewerkerOpties.map((u) => <option key={u.id} value={u.name} />)}</datalist></label>
                 )}
-                {(form.type === "OVERDRACHT" || form.type === "UITGAVE") && (
+                {(form.type === "OVERDRACHT" || (form.type === "UITGAVE" && !pinpas)) && (
                   <>
                 <label className="form-label">
                   {form.type === "OVERDRACHT"
@@ -1428,7 +1444,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                 </label>
                   </>
                 )}
-                {form.type !== "UITGAVE" && (
+                {(form.type === "OVERDRACHT" || (form.type !== "UITGAVE" && !pinpas)) && (
                   <>
                 <label className="form-label">
                   {form.type === "OVERDRACHT" ? "Bij wie is het geld nu?" : "Bij wie is het geld?"}

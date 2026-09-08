@@ -25,6 +25,7 @@ import {
   omzettingDoelBedrag,
   openstaandSaldoBedrag,
   postStatusLabel,
+  teltMeeInMedewerkerKas,
   totaalInkomstKas,
   totaalBesteedUitGebruik,
   typeLabel
@@ -1567,6 +1568,7 @@ function followSleutel(naam: string, userId: string | null): string {
 }
 
 function isCashBeweging(p: FinancieelPost): boolean {
+  if (!teltMeeInMedewerkerKas(p)) return false;
   if (p.type === "KASGELD" || p.type === "OVERDRACHT") return true;
   return p.status === "BETAALD" && (p.type === "INKOMST" || p.type === "UITGAVE");
 }
@@ -1616,6 +1618,7 @@ function zetFollowSaldo(saldi: Map<string, FollowSaldo>, wie: { naam: string; us
 }
 
 function applyFollowSaldo(saldi: Map<string, FollowSaldo>, p: FinancieelPost, bedrag = p.bedrag) {
+  if (!teltMeeInMedewerkerKas(p)) return;
   const amount = geldRond(bedrag);
   if (amount === 0) return;
   if (p.type === "INKOMST" || p.type === "KASGELD") {
@@ -1633,6 +1636,7 @@ function applyFollowSaldo(saldi: Map<string, FollowSaldo>, p: FinancieelPost, be
 }
 
 function followPersoonDeltas(p: FinancieelPost, bedrag: number): Array<{ key: string; naam: string; delta: number }> {
+  if (!teltMeeInMedewerkerKas(p)) return [];
   const amount = geldRond(bedrag);
   if (amount === 0) return [];
   const uit: Array<{ key: string; naam: string; delta: number }> = [];
@@ -1681,6 +1685,7 @@ export function verschuifDag(iso: string, delta: number): string {
 }
 
 function followOpsVanPost(p: FinancieelPost, valuta: FinancieelValuta): FollowOp[] {
+  if (!teltMeeInMedewerkerKas(p)) return [];
   const ops: FollowOp[] = [];
   const naar = geldNaarPersoon(p);
   const van = geldVanPersoon(p);

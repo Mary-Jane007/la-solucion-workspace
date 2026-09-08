@@ -171,7 +171,7 @@ export async function downloadBestand(bestandId: string, bestandsnaam: string): 
 export type FinancieelType = "INKOMST" | "UITGAVE" | "KASGELD" | "OVERDRACHT";
 export type FinancieelStatus = "OPEN" | "BETAALD";
 export type FinancieelValuta = "EUR" | "USD" | "SRD" | "XCG";
-export type FinancieelBetalingswijze = "OPGEHAALD" | "OVERGEMAAKT" | "GESTORT";
+export type FinancieelBetalingswijze = "OPGEHAALD" | "PINPAS" | "OVERGEMAAKT" | "GESTORT";
 export type FinancieelGebruikSoort = "AF" | "ERBIJ";
 
 export interface FinancieelGebruik {

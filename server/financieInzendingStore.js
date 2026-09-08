@@ -12,7 +12,7 @@ function normalizeValuta(waarde) {
 
 function normalizeBetalingswijze(waarde) {
   const v = String(waarde || "").toUpperCase();
-  return ["OPGEHAALD", "OVERGEMAAKT", "GESTORT"].includes(v) ? v : null;
+  return ["OPGEHAALD", "PINPAS", "OVERGEMAAKT", "GESTORT"].includes(v) ? v : null;
 }
 
 function rowToInzending(row) {

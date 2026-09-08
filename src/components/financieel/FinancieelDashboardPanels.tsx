@@ -1119,8 +1119,8 @@ export function InstellingenPanel({
         </p>
         <p className="muted">Inkomstdiensten: {INKOMST_DIENSTEN.join(", ")}.</p>
         <p className="muted">
-          Betalingswijzen: Opgehaald (contant), Overgemaakt (bank), Gestort. Banklijst is uitbreidbaar
-          in het registratieformulier.
+          Betalingswijzen: Opgehaald (contant), Pinpas, Overgemaakt (bank), Gestort. Pinpas gaat niet
+          van het kasgeld bij een medewerker af. Banklijst is uitbreidbaar in het registratieformulier.
         </p>
       </section>
       <section className="card page-card">

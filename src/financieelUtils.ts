@@ -18,9 +18,29 @@ export const VALUTA_LABELS: Record<FinancieelValuta, string> = {
 
 export const BETALINGSWIJZE_LABELS: Record<FinancieelBetalingswijze, string> = {
   OPGEHAALD: "Opgehaald door medewerker",
+  PINPAS: "Pinpas",
   OVERGEMAAKT: "Overgemaakt",
   GESTORT: "Gestort op bank"
 };
+
+export function isPinpasBetaling(wijze?: string | null): boolean {
+  return String(wijze || "").toUpperCase() === "PINPAS";
+}
+
+export function isBankBetaling(wijze?: string | null): boolean {
+  const v = String(wijze || "").toUpperCase();
+  return v === "OVERGEMAAKT" || v === "GESTORT";
+}
+
+export function isContantBetaling(wijze?: string | null): boolean {
+  const v = String(wijze || "").toUpperCase();
+  return v === "" || v === "OPGEHAALD";
+}
+
+/** Pinpas gaat via de bankrekening, niet via kasgeld bij een medewerker. */
+export function teltMeeInMedewerkerKas(p: { betalingswijze?: string | null }): boolean {
+  return !isPinpasBetaling(p.betalingswijze);
+}
 
 /** Medewerkers die in financiële vulvelden altijd kiezenbaar zijn, ook zonder login-account. */
 export const FINANCIEEL_VASTE_MEDEWERKERS = ["Natasha", "Vanessa"] as const;
@@ -681,6 +701,7 @@ export function berekenGeldBijTotalen(posten: FinancieelPost[]): GeldBijTotaal[]
   >();
 
   for (const p of posten) {
+    if (!teltMeeInMedewerkerKas(p)) continue;
     const valuta = normalizeValuta(p.valuta);
     const teltAlsKas = p.type === "KASGELD" || p.type === "OVERDRACHT" || p.status === "BETAALD";
     if (teltAlsKas) {
@@ -953,6 +974,7 @@ export function betalingsLabel(p: FinancieelPost): string {
   if (wijze === "OVERGEMAAKT") {
     return bank ? `Overgemaakt · ${bank}` : BETALINGSWIJZE_LABELS.OVERGEMAAKT;
   }
+  if (wijze === "PINPAS") return BETALINGSWIJZE_LABELS.PINPAS;
   return bank ? `Gestort · ${bank}` : BETALINGSWIJZE_LABELS.GESTORT;
 }
 
