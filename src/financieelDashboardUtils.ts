@@ -1407,6 +1407,32 @@ export function bewaarAfsluiting(rapport: AfsluitingRapport): AfsluitingRapport[
   return all;
 }
 
+export function voegAfsluitingenSamen(
+  a: AfsluitingRapport[],
+  b: AfsluitingRapport[]
+): AfsluitingRapport[] {
+  const map = new Map<string, AfsluitingRapport>();
+  for (const item of [...a, ...b]) {
+    if (!item?.id) continue;
+    const bestaand = map.get(item.id);
+    if (
+      !bestaand ||
+      new Date(item.opgeslagenOp).getTime() >= new Date(bestaand.opgeslagenOp).getTime()
+    ) {
+      map.set(item.id, item);
+    }
+  }
+  return [...map.values()]
+    .sort((x, y) => new Date(y.opgeslagenOp).getTime() - new Date(x.opgeslagenOp).getTime())
+    .slice(0, 120);
+}
+
+export function vervangAfsluitingen(rapporten: AfsluitingRapport[]): AfsluitingRapport[] {
+  const all = voegAfsluitingenSamen(rapporten, []).slice(0, 120);
+  localStorage.setItem(AFSLUITING_KEY, JSON.stringify(all));
+  return all;
+}
+
 export function maakDagAfsluiting(verslag: DagVerslag, valuta: FinancieelValuta): AfsluitingRapport {
   const id = `dag-${new Date().toISOString().slice(0, 10)}-${valuta}`;
   return {

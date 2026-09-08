@@ -77,6 +77,7 @@ const {
   getInzendingById,
   getInzendingBijlageById
 } = require("./financieInzendingStore");
+const { buildBackup, restoreBackup, parseBackupError } = require("./financieBackup");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -159,10 +160,10 @@ if (process.env.VERCEL) {
       }
       return next();
     }
-    return express.json()(req, res, next);
+    return express.json({ limit: "50mb" })(req, res, next);
   });
 } else {
-  app.use(express.json());
+  app.use(express.json({ limit: "50mb" }));
 }
 
 const uploadDir = path.join(__dirname, "uploads");
@@ -955,6 +956,39 @@ app.get("/api/admin/financieel", authRequired, requireOwner, async (req, res) =>
   } catch (err) {
     console.error("Fout bij GET /api/admin/financieel:", err);
     return res.status(500).json({ error: "Interne serverfout." });
+  }
+});
+
+app.get("/api/admin/financieel/backup", authRequired, requireOwner, async (_req, res) => {
+  try {
+    if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
+    const backup = await buildBackup(uploadDir);
+    return res.json(backup);
+  } catch (err) {
+    console.error("Fout bij GET /api/admin/financieel/backup:", err);
+    return res.status(500).json({ error: "Kon financiële backup niet maken." });
+  }
+});
+
+app.post("/api/admin/financieel/backup/restore", authRequired, requireOwner, async (req, res) => {
+  try {
+    if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
+    const result = await restoreBackup(req.body || {}, uploadDir);
+    return res.json({
+      ok: true,
+      posten: result.posten,
+      postBijlagen: result.postBijlagen,
+      inzendingen: result.inzendingen,
+      inzendingBijlagen: result.inzendingBijlagen,
+      afsluitingen: result.afsluitingen,
+      instellingen: result.instellingen
+    });
+  } catch (err) {
+    const parsedErr = parseBackupError(err);
+    if (parsedErr.status >= 500) {
+      console.error("Fout bij POST /api/admin/financieel/backup/restore:", err);
+    }
+    return res.status(parsedErr.status).json({ error: parsedErr.message });
   }
 });
 

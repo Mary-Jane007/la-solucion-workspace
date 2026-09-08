@@ -17,7 +17,9 @@ import {
   fetchFinancieelPostBijlageBlob,
   fetchFinancieelInzendingen,
   FinancieelInzending,
-  updateFinancieelInzendingStatus
+  updateFinancieelInzendingStatus,
+  fetchFinancieelBackup,
+  restoreFinancieelBackup
 } from "../api";
 import {
   berekenDossierSaldi,
@@ -97,6 +99,7 @@ import {
   standaardValutaLaden,
   standaardValutaOpslaan,
   UITGAVE_CATEGORIEEN,
+  vervangAfsluitingen,
   vorigePeriode
 } from "../financieelDashboardUtils";
 import { groepeerPerKlant, statusLabel } from "../opdrachtenUtils";
@@ -120,6 +123,11 @@ import {
 } from "./financieel/FinancieelDashboardPanels";
 import { FinancieelInzendingenPanel } from "./financieel/FinancieelInzendingenPanel";
 import { FinancieelFotos } from "./financieel/InzendingBijlagen";
+import {
+  downloadFinancieelBackupBestand,
+  parseFinancieelBackupTekst,
+  vulLokaleBackupGegevens
+} from "../financieelBackup";
 
 const MAX_POST_FOTOS = 5;
 const MAX_POST_FOTO_BYTES = 8 * 1024 * 1024;
@@ -316,6 +324,8 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
   const [zoekterm, setZoekterm] = useState("");
   const [laden, setLaden] = useState(true);
   const [bezig, setBezig] = useState(false);
+  const [backupBezig, setBackupBezig] = useState(false);
+  const [backupMelding, setBackupMelding] = useState<string | null>(null);
   const [fout, setFout] = useState<string | null>(null);
   const [overzichtDag, setOverzichtDag] = useState(() => lokaleDatumIso(new Date()));
   const formulierRef = useRef<HTMLElement>(null);
@@ -972,6 +982,55 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
     if (!window.confirm(`De geselecteerde periode “${bereik.label}” als maandafsluiting bewaren?`)) return;
     setAfsluitingen(bewaarAfsluiting(maakMaandAfsluiting(kpis, wv, bereik.label)));
   };
+  const handleBackupOpslaan = async () => {
+    try {
+      setBackupBezig(true);
+      setFout(null);
+      setBackupMelding(null);
+      const serverBackup = await fetchFinancieelBackup();
+      const volledig = vulLokaleBackupGegevens(serverBackup, afsluitingen, dashboardValuta);
+      downloadFinancieelBackupBestand(volledig);
+      setBackupMelding("Backup opgeslagen. Bewaar dit bestand om later alles terug te zetten.");
+    } catch (error) {
+      setFout(error instanceof Error ? error.message : "Kon backup niet opslaan.");
+    } finally {
+      setBackupBezig(false);
+    }
+  };
+  const handleBackupTerugzetten = async (bestand: File) => {
+    if (
+      !window.confirm(
+        "Dit vervangt alle huidige financiële posten, foto’s, inzendingen en afsluitingen door de inhoud van dit bestand. Alleen een eerdere backup kan dit ongedaan maken. Doorgaan?"
+      )
+    ) {
+      return;
+    }
+    try {
+      setBackupBezig(true);
+      setFout(null);
+      setBackupMelding(null);
+      const backup = parseFinancieelBackupTekst(await bestand.text());
+      const result = await restoreFinancieelBackup(backup);
+      setAfsluitingen(vervangAfsluitingen(result.afsluitingen || backup.afsluitingen || []));
+      const valuta = result.instellingen?.standaardValuta || backup.instellingen?.standaardValuta;
+      if (valuta) {
+        standaardValutaOpslaan(valuta);
+        setDashboardValuta(valuta);
+        setFilterValuta(valuta);
+      }
+      setBewerkId(null);
+      setFotos([]);
+      resetForm();
+      await laad();
+      setBackupMelding(
+        `Teruggezet: ${result.posten} posten, ${result.postBijlagen} foto’s, ${result.inzendingen} inzendingen.`
+      );
+    } catch (error) {
+      setFout(error instanceof Error ? error.message : "Terugzetten mislukt.");
+    } finally {
+      setBackupBezig(false);
+    }
+  };
   const toonFormulier =
     tab === "dagboek" || tab === "inkomsten" || tab === "uitgaven" || tab === "followmoney" || bewerkId !== null;
   const categorieOpties = form.type === "UITGAVE" ? UITGAVE_CATEGORIEEN : INKOMST_DIENSTEN;
@@ -1144,6 +1203,10 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
             onExportExcel={() => exportFinancieelExcel(posten, opdrachtenById, financieelExportOpties)}
             onExportWord={() => exportFinancieelWord(posten, opdrachtenById, financieelExportOpties)}
             onExportPdf={() => exportFinancieelPdf(posten, opdrachtenById, financieelExportOpties)}
+            onBackupOpslaan={() => void handleBackupOpslaan()}
+            onBackupTerugzetten={(file) => void handleBackupTerugzetten(file)}
+            backupBezig={backupBezig}
+            backupMelding={backupMelding}
             disabled={laden || posten.length === 0}
           />
         )}

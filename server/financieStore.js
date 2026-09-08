@@ -324,5 +324,9 @@ module.exports = {
   getFinancielePostById,
   createFinancielePostBijlagen,
   getFinancielePostBijlageById,
-  deleteFinancielePostBijlage
+  deleteFinancielePostBijlage,
+  normalizeValuta,
+  normalizeBetalingswijze,
+  normalizeWisselkoers,
+  normalizeGebruikingen
 };

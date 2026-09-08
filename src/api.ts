@@ -1,4 +1,6 @@
 import { BestandsKoppeling, Gebruiker, Opdracht } from "./types";
+import type { AfsluitingRapport } from "./financieelDashboardUtils";
+import type { FinancieelBackupBestand } from "./financieelBackup";
 
 export function getToken() {
   return window.localStorage.getItem("la-solucion-token");
@@ -271,6 +273,38 @@ export async function deleteFinancieelPost(id: string): Promise<void> {
     const data = await res.json().catch(() => ({}));
     throw new Error((data as { error?: string }).error || "Kon financiële post niet verwijderen.");
   }
+}
+
+export async function fetchFinancieelBackup(): Promise<FinancieelBackupBestand> {
+  const res = await apiFetch("/api/admin/financieel/backup");
+  const data = await readApiJson(res);
+  if (!res.ok) throw new Error(String(data.error || "Kon financiële backup niet maken."));
+  return data as unknown as FinancieelBackupBestand;
+}
+
+export async function restoreFinancieelBackup(backup: FinancieelBackupBestand): Promise<{
+  posten: number;
+  postBijlagen: number;
+  inzendingen: number;
+  inzendingBijlagen: number;
+  afsluitingen?: AfsluitingRapport[];
+  instellingen?: { standaardValuta?: FinancieelValuta };
+}> {
+  const res = await apiFetch("/api/admin/financieel/backup/restore", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(backup)
+  });
+  const data = await readApiJson(res);
+  if (!res.ok) throw new Error(String(data.error || "Kon financiële backup niet terugzetten."));
+  return {
+    posten: Number(data.posten) || 0,
+    postBijlagen: Number(data.postBijlagen) || 0,
+    inzendingen: Number(data.inzendingen) || 0,
+    inzendingBijlagen: Number(data.inzendingBijlagen) || 0,
+    afsluitingen: (data.afsluitingen || []) as AfsluitingRapport[],
+    instellingen: (data.instellingen || {}) as { standaardValuta?: FinancieelValuta }
+  };
 }
 
 export async function uploadFinancieelPostBestanden(
