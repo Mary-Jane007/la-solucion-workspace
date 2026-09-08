@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ScannerCropEditor } from "./ScannerCropEditor";
-import { detectDocumentCornersMetFallback, detectDocumentWithConfidence, hoekenNaarVideoOverlay, overlayNaarVideoHoeken } from "./documentDetection";
+import {
+  detectDocumentCornersMetFallback,
+  detectDocumentWithConfidence,
+  hoekenNaarVideoOverlay,
+  overlayKaderNaarCanvas,
+  scoreKaderVulling
+} from "./documentDetection";
 import {
   berekenGuideHoeken,
+  kaderBevatDocument,
+  documentSteektBuitenKader,
   LiveDocumentTracker,
   type DetectieFase
 } from "./liveDetection";
@@ -16,6 +24,7 @@ import {
   nieuwScanId,
   vandaagScanNaam,
   gemiddeldeHelderheid,
+  knipNaarKader,
   schaalHoeken
 } from "./imageUtils";
 import { loadOpenCV } from "./opencvLoader";
@@ -54,7 +63,6 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
   const streamRef = useRef<MediaStream | null>(null);
   const detectTimer = useRef<number | null>(null);
   const detectieTracker = useRef(new LiveDocumentTracker());
-  const laatsteExacteContour = useRef(false);
   const maskId = useId().replace(/:/g, "");
 
   const [step, setStep] = useState<ScannerStep>("camera");
@@ -64,10 +72,7 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [waarschuwing, setWaarschuwing] = useState<string | null>(null);
   const [documentGevonden, setDocumentGevonden] = useState(false);
-  const [liveCorners, setLiveCorners] = useState<Point[]>([]);
-  const [guideCorners, setGuideCorners] = useState<Point[]>([]);
   const [detectieFase, setDetectieFase] = useState<DetectieFase>("guide");
-  const [detectieConfidence, setDetectieConfidence] = useState(0);
   const [overlaySize, setOverlaySize] = useState({ w: 0, h: 0 });
 
   const [rawDataUrl, setRawDataUrl] = useState<string | null>(null);
@@ -103,10 +108,7 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
     setFeedback(null);
     setWaarschuwing(null);
     setDocumentGevonden(false);
-    setLiveCorners([]);
-    setGuideCorners([]);
     setDetectieFase("guide");
-    setDetectieConfidence(0);
     detectieTracker.current.reset();
     setOcrTekst(null);
     setFilterPreviews({});
@@ -160,7 +162,7 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
           video.srcObject = stream;
           await video.play();
           setCameraKlaar(true);
-          setOverlaySize({ w: video.clientWidth, h: video.clientHeight });
+          setOverlaySize({ w: video.clientWidth || 1, h: video.clientHeight || 1 });
         }
       } catch {
         if (!cancelled) {
@@ -185,9 +187,11 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
     if (!wrap) return;
 
     const updateSize = () => {
-      const w = video?.clientWidth || wrap.clientWidth;
-      const h = video?.clientHeight || wrap.clientHeight;
-      if (w > 0 && h > 0) setOverlaySize({ w, h });
+      const w = wrap.clientWidth;
+      const h = wrap.clientHeight;
+      if (w > 0 && h > 0) {
+        setOverlaySize({ w, h });
+      }
     };
 
     updateSize();
@@ -205,19 +209,27 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
       if (!video?.videoWidth) return;
       try {
         const canvas = canvasFromImage(video, 640);
-        const displayW = video.clientWidth;
-        const displayH = video.clientHeight;
+        const wrap = cameraWrapRef.current;
+        const displayW = wrap?.clientWidth || video.clientWidth;
+        const displayH = wrap?.clientHeight || video.clientHeight;
         if (displayW > 0 && displayH > 0) {
           setOverlaySize({ w: displayW, h: displayH });
         }
 
         const guide = berekenGuideHoeken(displayW || 1, displayH || 1);
-        setGuideCorners(guide);
 
+        const weergave = {
+          videoWidth: video.videoWidth,
+          videoHeight: video.videoHeight,
+          clientWidth: displayW,
+          clientHeight: displayH
+        };
+        const guideOpCanvas = overlayKaderNaarCanvas(guide, weergave, canvas.width, canvas.height);
         const detectie = await detectDocumentWithConfidence(canvas);
-        laatsteExacteContour.current = detectie?.exacteContour ?? false;
-        let mapped: Point[] | null = null;
-        if (detectie?.corners.length === 4) {
+
+        const vulling = scoreKaderVulling(canvas, guideOpCanvas);
+        let inKader = vulling >= 0.28;
+        if (detectie?.exacteContour && detectie.corners.length === 4) {
           const inVideoSpace = schaalHoeken(
             detectie.corners,
             canvas.width,
@@ -225,26 +237,27 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
             video.videoWidth,
             video.videoHeight
           );
-          mapped = hoekenNaarVideoOverlay(
+          const mapped = hoekenNaarVideoOverlay(
             inVideoSpace,
             video.videoWidth,
             video.videoHeight,
             displayW,
             displayH
           );
+          if (documentSteektBuitenKader(mapped, guide)) {
+            inKader = false;
+          } else if (kaderBevatDocument(mapped, guide)) {
+            inKader = true;
+          }
         }
 
-        const live = detectieTracker.current.tick(guide, mapped, detectie?.confidence ?? 0);
-        setLiveCorners(live.corners);
+        const live = detectieTracker.current.tick(guide, inKader);
         setDetectieFase(live.fase);
-        setDetectieConfidence(live.confidence);
         setDocumentGevonden(live.documentGevonden);
         setFeedback(
           live.fase === "locked"
-            ? "Document gedetecteerd"
-            : live.fase === "tracking"
-              ? null
-              : null
+            ? "Document staat goed in het kader"
+            : null
         );
 
         const helder = gemiddeldeHelderheid(canvas);
@@ -301,42 +314,26 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
 
       setStep("processing");
 
-      if (laatsteExacteContour.current) {
-        // Echte contour gevonden — auto-crop met de gedetecteerde hoeken
-        const overlayCorners = detectieTracker.current.getSmoothedCorners();
-        if (overlayCorners?.length === 4) {
-          const inVideoSpace = overlayNaarVideoHoeken(
-            overlayCorners,
-            video.videoWidth,
-            video.videoHeight,
-            video.clientWidth,
-            video.clientHeight
-          );
-          const corners = schaalHoeken(
-            inVideoSpace,
-            video.videoWidth,
-            video.videoHeight,
-            canvas.width,
-            canvas.height
-          );
-          setCropCorners(corners);
-          const src = await canvasFromDataUrl(canvasToDataUrl(canvas));
-          const warped = await warpDocument(src, corners);
-          setWarpedDataUrl(canvasToDataUrl(warped));
-          setStep("filter");
-          setFeedback("Scan gemaakt");
-        } else {
-          // Fallback: hele foto als scan
-          setWarpedDataUrl(canvasToDataUrl(canvas));
-          setStep("filter");
-          setFeedback("Scan gemaakt");
-        }
-      } else {
-        // Geen exacte contour — gebruik gewoon de hele foto zonder warp
-        setWarpedDataUrl(canvasToDataUrl(canvas));
-        setStep("filter");
-        setFeedback("Scan gemaakt");
-      }
+      const wrap = cameraWrapRef.current;
+      const displayW = overlaySize.w || wrap?.clientWidth || video.clientWidth || 1;
+      const displayH = overlaySize.h || wrap?.clientHeight || video.clientHeight || 1;
+      const guide = berekenGuideHoeken(displayW, displayH);
+      const kaderOpCanvas = overlayKaderNaarCanvas(
+        guide,
+        {
+          videoWidth: video.videoWidth,
+          videoHeight: video.videoHeight,
+          clientWidth: displayW,
+          clientHeight: displayH
+        },
+        canvas.width,
+        canvas.height
+      );
+      setCropCorners(kaderOpCanvas);
+      const geknipt = knipNaarKader(canvas, kaderOpCanvas);
+      setWarpedDataUrl(canvasToDataUrl(geknipt));
+      setStep("filter");
+      setFeedback("Scan gemaakt — alles buiten het kader is weggeknipt");
     } catch {
       setCameraFout("Scan maken mislukt. Probeer opnieuw.");
     } finally {
@@ -518,7 +515,7 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
               </button>
             </div>
           </header>
-          <p className="scanner-instructie">Plaats het document binnen het kader</p>
+          <p className="scanner-instructie">Plaats het document volledig in het kader. Alles erbuiten wordt weggeknipt.</p>
           {feedback && detectieFase === "locked" && (
             <p className="scanner-feedback success">{feedback}</p>
           )}
@@ -528,10 +525,6 @@ export function DocumentScanner({ open, onSluit, onPdfKlaar }: Props) {
             <ScannerCameraOverlay
               overlayW={overlaySize.w}
               overlayH={overlaySize.h}
-              corners={liveCorners.length === 4 ? liveCorners : guideCorners}
-              guideCorners={guideCorners.length === 4 ? guideCorners : berekenGuideHoeken(overlaySize.w || 1, overlaySize.h || 1)}
-              fase={detectieFase}
-              confidence={detectieConfidence}
               documentGevonden={documentGevonden}
               maskId={maskId}
             />

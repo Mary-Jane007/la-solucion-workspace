@@ -91,6 +91,26 @@ export function schaalHoeken(points: Point[], vanW: number, vanH: number, naarW:
   return points.map((p) => ({ x: p.x * sx, y: p.y * sy }));
 }
 
+/** Rechthoekige crop: alles buiten het kader wordt weggeknipt. */
+export function knipNaarKader(source: HTMLCanvasElement, corners: Point[]): HTMLCanvasElement {
+  if (corners.length !== 4) return source;
+  const pts = sorteerHoeken(corners);
+  const left = Math.max(0, Math.floor(Math.min(pts[0].x, pts[3].x)));
+  const top = Math.max(0, Math.floor(Math.min(pts[0].y, pts[1].y)));
+  const right = Math.min(source.width, Math.ceil(Math.max(pts[1].x, pts[2].x)));
+  const bottom = Math.min(source.height, Math.ceil(Math.max(pts[2].y, pts[3].y)));
+  const width = right - left;
+  const height = bottom - top;
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width < 8 || height < 8) return source;
+  const out = document.createElement("canvas");
+  out.width = width;
+  out.height = height;
+  const ctx = out.getContext("2d");
+  if (!ctx) return source;
+  ctx.drawImage(source, left, top, width, height, 0, 0, width, height);
+  return out;
+}
+
 export function gemiddeldeHelderheid(canvas: HTMLCanvasElement): number {
   const ctx = canvas.getContext("2d");
   if (!ctx) return 128;

@@ -1,6 +1,6 @@
 import { loadOpenCV } from "./opencvLoader";
 import type { Point } from "./types";
-import { sorteerHoeken, standaardHoeken } from "./imageUtils";
+import { schaalHoeken, sorteerHoeken, standaardHoeken } from "./imageUtils";
 
 export type DocumentDetectieResult = {
   corners: Point[];
@@ -85,7 +85,7 @@ function matNaarHoeken(cv: any, contour: any, scaleX: number, scaleY: number): P
  */
 function snelleContrastDetectie(canvas: HTMLCanvasElement): DocumentDetectieResult {
   const ctx = canvas.getContext("2d");
-  if (!ctx) return { corners: standaardHoeken(canvas.width, canvas.height), confidence: 0.35 };
+  if (!ctx) return { corners: standaardHoeken(canvas.width, canvas.height), confidence: 0.35, exacteContour: false };
 
   const w = canvas.width;
   const h = canvas.height;
@@ -275,6 +275,110 @@ export function overlayNaarVideoHoeken(
     x: (p.x - offsetX) / scale,
     y: (p.y - offsetY) / scale
   }));
+}
+
+/** Overlay-kader → pixelcoördinaten op het (vastgelegde) canvas. */
+export function overlayKaderNaarCanvas(
+  overlayCorners: Point[],
+  video: Pick<HTMLVideoElement, "videoWidth" | "videoHeight" | "clientWidth" | "clientHeight">,
+  canvasW: number,
+  canvasH: number
+): Point[] {
+  const displayW = video.clientWidth;
+  const displayH = video.clientHeight;
+  if (!video.videoWidth || !video.videoHeight || !displayW || !displayH) return overlayCorners;
+  const inVideo = overlayNaarVideoHoeken(
+    overlayCorners,
+    video.videoWidth,
+    video.videoHeight,
+    displayW,
+    displayH
+  );
+  return schaalHoeken(inVideo, video.videoWidth, video.videoHeight, canvasW, canvasH);
+}
+
+/**
+ * Score of er een document in het kader zit (papier/tekst binnen de box vs achtergrond erbuiten).
+ * Het blad hoeft de randen van het kader niet te raken.
+ */
+export function scoreKaderVulling(canvas: HTMLCanvasElement, guide: Point[]): number {
+  const ctx = canvas.getContext("2d");
+  if (!ctx || guide.length !== 4) return 0;
+
+  const pts = sorteerHoeken(guide);
+  const x0 = Math.round(Math.min(pts[0].x, pts[3].x));
+  const y0 = Math.round(Math.min(pts[0].y, pts[1].y));
+  const x1 = Math.round(Math.max(pts[1].x, pts[2].x));
+  const y1 = Math.round(Math.max(pts[2].y, pts[3].y));
+  const boxW = x1 - x0;
+  const boxH = y1 - y0;
+  if (boxW < 24 || boxH < 24) return 0;
+
+  let image: ImageData;
+  try {
+    image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  } catch {
+    return 0;
+  }
+  const { data, width, height } = image;
+  const lumAt = (x: number, y: number) => {
+    const xi = Math.max(0, Math.min(width - 1, Math.round(x)));
+    const yi = Math.max(0, Math.min(height - 1, Math.round(y)));
+    const i = (yi * width + xi) * 4;
+    return data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+  };
+
+  const sampleStats = (sx0: number, sy0: number, sx1: number, sy1: number, step = 4) => {
+    let sum = 0;
+    let sq = 0;
+    let n = 0;
+    for (let y = sy0; y < sy1; y += step) {
+      for (let x = sx0; x < sx1; x += step) {
+        const L = lumAt(x, y);
+        sum += L;
+        sq += L * L;
+        n++;
+      }
+    }
+    const mean = n ? sum / n : 0;
+    return { mean, variance: n ? sq / n - mean * mean : 0, n };
+  };
+
+  const insetX = boxW * 0.08;
+  const insetY = boxH * 0.08;
+  const inside = sampleStats(x0 + insetX, y0 + insetY, x1 - insetX, y1 - insetY);
+  if (inside.n < 8) return 0;
+
+  const padX = Math.max(8, boxW * 0.12);
+  const padY = Math.max(8, boxH * 0.12);
+  const outsideTop = sampleStats(x0, Math.max(0, y0 - padY), x1, y0, 5);
+  const outsideBot = sampleStats(x0, y1, x1, Math.min(height, y1 + padY), 5);
+  const outsideLeft = sampleStats(Math.max(0, x0 - padX), y0, x0, y1, 5);
+  const outsideRight = sampleStats(x1, y0, Math.min(width, x1 + padX), y1, 5);
+  const oN = outsideTop.n + outsideBot.n + outsideLeft.n + outsideRight.n;
+  const oMean = oN
+    ? (outsideTop.mean * outsideTop.n +
+        outsideBot.mean * outsideBot.n +
+        outsideLeft.mean * outsideLeft.n +
+        outsideRight.mean * outsideRight.n) /
+      oN
+    : inside.mean;
+  const oVar = oN
+    ? (outsideTop.variance * outsideTop.n +
+        outsideBot.variance * outsideBot.n +
+        outsideLeft.variance * outsideLeft.n +
+        outsideRight.variance * outsideRight.n) /
+      oN
+    : 0;
+
+  const contrastScore = Math.min(1, Math.abs(inside.mean - oMean) / 36);
+  const paperScore = Math.min(1, Math.max(0, inside.mean - oMean) / 28);
+  const contentScore = Math.min(1, inside.variance / 180);
+  const textureGap = Math.min(1, Math.max(0, inside.variance - oVar) / 160);
+
+  if (contrastScore < 0.16 && contentScore < 0.18) return 0;
+
+  return Math.min(1, contrastScore * 0.38 + paperScore * 0.22 + contentScore * 0.25 + textureGap * 0.15);
 }
 
 export function hoekenNaarPolygonString(corners: Point[]): string {
