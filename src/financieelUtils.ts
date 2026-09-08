@@ -782,13 +782,26 @@ export function financieelPostMatchtZoekterm(
     p.notities,
     p.bank,
     gebruikingenSamenvatting(p),
-    typeLabel(p.type),
+    typeLabel(p.type, p),
     postStatusLabel(p),
     betalingsLabel(p),
     normalizeValuta(p.valuta),
+    VALUTA_LABELS[normalizeValuta(p.valuta)],
     String(p.bedrag).replace(".", ","),
+    String(p.bedrag),
+    formatDatumTijd(p.datum),
     ...extra
   ];
+  for (const g of normaliseerGebruikingen(p.gebruikingen)) {
+    velden.push(
+      g.klantNaam,
+      g.waaraan,
+      g.medewerker,
+      g.bank,
+      g.toelichting,
+      gebruikWaaraanTekst(g)
+    );
+  }
   return velden.some((v) => (v || "").toLowerCase().includes(q));
 }
 

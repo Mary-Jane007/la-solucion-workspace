@@ -13,6 +13,32 @@ export const INZENDING_STATUS_LABEL: Record<FinancieelInzending["status"], strin
   VERWERKT: "Verwerkt"
 };
 
+export function inzendingMatchtZoekterm(item: FinancieelInzending, zoekterm: string): boolean {
+  const q = zoekterm.trim().toLowerCase();
+  if (!q) return true;
+  const velden = [
+    item.vanNaam,
+    item.klantNaam,
+    item.omschrijving,
+    item.categorie,
+    item.referentie,
+    item.notities,
+    item.bank,
+    item.geldBijNaam,
+    item.geldVanNaam,
+    item.waaraan,
+    typeLabel(item.type),
+    VALUTA_LABELS[item.valuta],
+    item.valuta,
+    String(item.bedrag).replace(".", ","),
+    String(item.bedrag),
+    formatDatumTijd(item.datum),
+    formatDatumTijd(item.createdAt),
+    inzendingSamenvatting(item)
+  ];
+  return velden.some((v) => (v || "").toLowerCase().includes(q));
+}
+
 export function inzendingSamenvatting(item: FinancieelInzending): string {
   return [
     `${typeLabel(item.type)} ${formatGeld(item.bedrag, item.valuta)}`,

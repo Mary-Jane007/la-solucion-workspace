@@ -123,6 +123,7 @@ import {
 } from "./financieel/FinancieelDashboardPanels";
 import { FinancieelInzendingenPanel } from "./financieel/FinancieelInzendingenPanel";
 import { FinancieelFotos } from "./financieel/InzendingBijlagen";
+import { inzendingMatchtZoekterm } from "../financieelInzendingUtils";
 import {
   downloadFinancieelBackupBestand,
   parseFinancieelBackupTekst,
@@ -428,6 +429,10 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
         financieelPostMatchtZoekterm(p, zoekQuery, extraZoekvelden(p, opdrachtenById))
       ),
     [posten, zoekQuery, opdrachtenById]
+  );
+  const gezochteInzendingen = useMemo(
+    () => (zoekQuery ? inzendingen.filter((item) => inzendingMatchtZoekterm(item, zoekQuery)) : inzendingen),
+    [inzendingen, zoekQuery]
   );
   const zichtbaar = useMemo(
     () =>
@@ -970,6 +975,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
   };
 
   const openNieuwFormulier = () => {
+    setZoekterm("");
     setTab("dagboek");
     if (!bewerkId) setForm(leegFormulier(filterValuta));
     window.setTimeout(() => formulierRef.current?.scrollIntoView({ behavior: "smooth" }), 0);
@@ -1032,7 +1038,9 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
     }
   };
   const toonFormulier =
-    tab === "dagboek" || tab === "inkomsten" || tab === "uitgaven" || tab === "followmoney" || bewerkId !== null;
+    bewerkId !== null ||
+    (!zoekQuery &&
+      (tab === "dagboek" || tab === "inkomsten" || tab === "uitgaven" || tab === "followmoney"));
   const categorieOpties = form.type === "UITGAVE" ? UITGAVE_CATEGORIEEN : INKOMST_DIENSTEN;
   const nieuweInzendingen = inzendingen.filter((item) => item.status === "NIEUW").length;
 
@@ -1081,15 +1089,88 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
           </label>
           <label className="form-label fin-toolbar-search">
             Zoeken
-            <input type="search" className="form-input" placeholder="Klant, dossier, categorie..." value={zoekterm} onChange={(e) => setZoekterm(e.target.value)} />
+            <input
+              type="search"
+              className="form-input"
+              placeholder="Bijvoorbeeld: Medilab"
+              value={zoekterm}
+              onChange={(e) => setZoekterm(e.target.value)}
+              aria-label="Zoek in alle financiële gegevens"
+            />
           </label>
+          {zoekQuery && (
+            <button type="button" className="btn-secondary" onClick={() => setZoekterm("")}>
+              Wis zoekterm
+            </button>
+          )}
           <button type="button" className="btn-primary" onClick={openNieuwFormulier}>Nieuwe post</button>
         </header>
 
         {fout && <p className="muted page-error">{fout}</p>}
         {laden && <section className="card page-card"><p className="muted">Financiële gegevens laden...</p></section>}
 
-        {!laden && tab === "overzicht" && nieuweInzendingen > 0 && (
+        {!laden && zoekQuery && (
+          <div className="fin-panel-stack">
+            <section className="card page-card">
+              <div className="section-header">
+                <h2>Zoekresultaten voor “{zoekQuery}”</h2>
+                <p className="muted">
+                  {gezochtePosten.length} post{gezochtePosten.length === 1 ? "" : "en"}
+                  {" · "}
+                  {gezochteInzendingen.length} inzending{gezochteInzendingen.length === 1 ? "" : "en"}
+                  {" · alle periodes en valuta"}
+                </p>
+              </div>
+              {gezochtePosten.length === 0 && gezochteInzendingen.length === 0 ? (
+                <p className="muted">Niets gevonden. Probeer een andere naam of wis de zoekterm.</p>
+              ) : gezochtePosten.length > 0 ? (
+                <PostenTabel
+                  posten={gezochtePosten}
+                  opdrachtenById={opdrachtenById}
+                  onBewerk={startBewerk}
+                  onDelete={(id) => void handleDelete(id)}
+                  emptyText="Geen financiële posten gevonden."
+                />
+              ) : (
+                <p className="muted">Geen posten, wel inzendingen hieronder.</p>
+              )}
+            </section>
+            {klantSaldi.length > 0 && (
+              <KlantbetalingenPanel saldi={klantSaldi} />
+            )}
+            {dossierSaldi.length > 0 && (
+              <section className="card page-card">
+                <div className="section-header">
+                  <h2>Dossiersaldo’s</h2>
+                  <p className="muted">Openstaande en betaalde bedragen voor deze zoekterm.</p>
+                </div>
+                <SaldoTabel
+                  rows={dossierSaldi}
+                  emptyText="Geen dossiersaldo’s."
+                  labelHeader="Dossier"
+                  getKey={(row) => `${(row as DossierSaldo).opdrachtId}-${row.valuta}`}
+                  getLabel={(row) => {
+                    const dossier = row as DossierSaldo;
+                    return {
+                      title: dossier.klantNaam,
+                      subtitle: dossier.dossierLabel.replace(`${dossier.klantNaam} – `, "")
+                    };
+                  }}
+                />
+              </section>
+            )}
+            {gezochteInzendingen.length > 0 && (
+              <FinancieelInzendingenPanel
+                inzendingen={gezochteInzendingen}
+                onMarkeer={(id, status) => void markeerInzending(id, status)}
+                onNeemOver={neemOverInzending}
+                bezigId={inzendingBezigId}
+              />
+            )}
+          </div>
+        )}
+
+        {!laden && !zoekQuery && tab === "overzicht" && nieuweInzendingen > 0 && (
           <section className="card page-card fin-inzending-banner">
             <div>
               <h2>Nieuwe inzendingen van medewerkers</h2>
@@ -1102,7 +1183,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
             </button>
           </section>
         )}
-        {!laden && tab === "overzicht" && (
+        {!laden && !zoekQuery && tab === "overzicht" && (
           <OverzichtPanel
             kpis={kpis}
             gezondheid={gezondheid}
@@ -1114,7 +1195,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
             onOpenTab={(id) => setTab(id as FinancieelTabId)}
           />
         )}
-        {!laden && tab === "inzendingen" && (
+        {!laden && !zoekQuery && tab === "inzendingen" && (
           <FinancieelInzendingenPanel
             inzendingen={inzendingen}
             onMarkeer={(id, status) => void markeerInzending(id, status)}
@@ -1122,7 +1203,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
             bezigId={inzendingBezigId}
           />
         )}
-        {!laden && tab === "vandaag" && (
+        {!laden && !zoekQuery && tab === "vandaag" && (
           <VandaagPanel
             dag={dagVerslag}
             valuta={dashboardValuta}
@@ -1130,10 +1211,10 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
             onGeselecteerdeDag={setOverzichtDag}
           />
         )}
-        {!laden && tab === "followmoney" && (
+        {!laden && !zoekQuery && tab === "followmoney" && (
           <FollowTheMoneyPanel dag={followMoney} onDagWissel={setOverzichtDag} />
         )}
-        {!laden && tab === "dagboek" && (
+        {!laden && !zoekQuery && tab === "dagboek" && (
           <section className="card page-card">
             <div className="section-header section-header-row">
               <div><h2>Financieel dagboek</h2><p className="muted">{zichtbaar.length} post(en).</p></div>
@@ -1148,7 +1229,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
             <PostenTabel posten={zichtbaar} opdrachtenById={opdrachtenById} onBewerk={startBewerk} onDelete={(id) => void handleDelete(id)} emptyText="Geen financiële posten gevonden." />
           </section>
         )}
-        {!laden && tab === "inkomsten" && (
+        {!laden && !zoekQuery && tab === "inkomsten" && (
           <div className="fin-panel-stack">
             <InkomstenStats valuta={dashboardValuta} kpis={kpis} posten={periodePosten} />
             <section className="card page-card">
@@ -1157,15 +1238,15 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
             </section>
           </div>
         )}
-        {!laden && tab === "uitgaven" && (
+        {!laden && !zoekQuery && tab === "uitgaven" && (
           <section className="card page-card">
             <div className="section-header"><h2>Uitgaven</h2><p className="muted">Gebruik in het formulier type Uitgave.</p></div>
             <PostenTabel posten={uitgavenPosten} opdrachtenById={opdrachtenById} onBewerk={startBewerk} onDelete={(id) => void handleDelete(id)} emptyText="Geen uitgaven gevonden." />
           </section>
         )}
-        {!laden && tab === "openstaand" && <OpenstaandPanel rijen={openstaand} valuta={dashboardValuta} />}
-        {!laden && tab === "facturen" && <FacturenPanel facturen={facturen.filter((f) => f.valuta === dashboardValuta)} />}
-        {!laden && tab === "klantbetalingen" && (
+        {!laden && !zoekQuery && tab === "openstaand" && <OpenstaandPanel rijen={openstaand} valuta={dashboardValuta} />}
+        {!laden && !zoekQuery && tab === "facturen" && <FacturenPanel facturen={facturen.filter((f) => f.valuta === dashboardValuta)} />}
+        {!laden && !zoekQuery && tab === "klantbetalingen" && (
           <div className="fin-panel-stack">
             <KlantbetalingenPanel saldi={klantSaldi.filter((s) => s.valuta === dashboardValuta)} />
             <section className="card page-card">
@@ -1183,16 +1264,16 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
             </section>
           </div>
         )}
-        {!laden && tab === "kosten" && <KostenPanel items={kosten} valuta={dashboardValuta} />}
-        {!laden && tab === "winstverlies" && <WinstVerliesPanel wv={wv} />}
-        {!laden && tab === "cashflow" && <CashflowPanel cf={cashflow} tijdreeks={tijdreeks} />}
-        {!laden && tab === "analyses" && (
+        {!laden && !zoekQuery && tab === "kosten" && <KostenPanel items={kosten} valuta={dashboardValuta} />}
+        {!laden && !zoekQuery && tab === "winstverlies" && <WinstVerliesPanel wv={wv} />}
+        {!laden && !zoekQuery && tab === "cashflow" && <CashflowPanel cf={cashflow} tijdreeks={tijdreeks} />}
+        {!laden && !zoekQuery && tab === "analyses" && (
           <AnalysesPanel tijdreeks={tijdreeks} kosten={kosten} diensten={diensten} aging={aging} kalender={kalender} signaleringen={signaleringen} valuta={dashboardValuta} onDagKlik={(datum) => {
             setOverzichtDag(datum);
             setTab("followmoney");
           }} />
         )}
-        {!laden && tab === "rapportages" && (
+        {!laden && !zoekQuery && tab === "rapportages" && (
           <RapportagesPanel
             afsluitingen={afsluitingen}
             onDagAfsluiten={sluitDagAf}
@@ -1210,7 +1291,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
             disabled={laden || posten.length === 0}
           />
         )}
-        {!laden && tab === "instellingen" && (
+        {!laden && !zoekQuery && tab === "instellingen" && (
           <InstellingenPanel
             standaardValuta={dashboardValuta}
             geldBij={geldBijTotalen}

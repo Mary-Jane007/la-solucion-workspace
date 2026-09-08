@@ -2751,7 +2751,12 @@ textarea.form-input {
 }
 
 .fin-toolbar-search {
-  flex: 1 1 220px;
+  flex: 2 1 280px;
+  min-width: 220px;
+}
+
+.fin-toolbar-search .form-input {
+  min-width: 220px;
 }
 
 .fin-panel-stack {
