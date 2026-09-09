@@ -44,7 +44,12 @@ export default defineConfig({
       "/api": {
         target: "http://127.0.0.1:4000",
         changeOrigin: true,
-        timeout: 600000
+        timeout: 600000,
+        configure: (proxy) => {
+          proxy.on("proxyReq", (proxyReq) => {
+            proxyReq.removeHeader("accept-encoding");
+          });
+        }
       }
     }
   },

@@ -166,16 +166,25 @@ function triggerBrowserDownload(blob: Blob, bestandsnaam: string): void {
 
 /** Download een bestand via de beveiligde API (Authorization-header). */
 export async function downloadBestand(bestandId: string, bestandsnaam: string): Promise<void> {
-  const res = await apiFetch(`/api/bestanden/${bestandId}/download`);
+  const res = await apiFetch(`/api/bestanden/${encodeURIComponent(bestandId)}/download`);
   if (!res.ok) {
     const data = await readApiJson(res).catch(() => ({ error: "Download mislukt." }));
     throw new Error(String(data.error || "Download mislukt."));
   }
   const blob = await res.blob();
-  if (!blob.size) {
-    throw new Error("Download mislukt: het bestand is leeg.");
+  if (blob.size) {
+    triggerBrowserDownload(blob, bestandsnaam || "document");
+    return;
   }
-  triggerBrowserDownload(blob, bestandsnaam || "document");
+  const token = getToken();
+  if (!token) throw new Error("Download mislukt: het bestand is leeg.");
+  const a = document.createElement("a");
+  a.href = `/api/bestanden/${encodeURIComponent(bestandId)}/download?access_token=${encodeURIComponent(token)}`;
+  a.download = (bestandsnaam || "document").replace(/[\\/:*?"<>|]/g, "_").trim() || "document";
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 export type FinancieelType = "INKOMST" | "UITGAVE" | "KASGELD" | "OVERDRACHT";

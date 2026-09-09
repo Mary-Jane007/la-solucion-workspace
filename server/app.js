@@ -131,7 +131,11 @@ app.use(
     credentials: false
   })
 );
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" }
+  })
+);
 if (NODE_ENV === "production") {
   app.use(
     rateLimit({
@@ -169,9 +173,10 @@ if (process.env.VERCEL) {
   app.use(express.json({ limit: "50mb" }));
 }
 
+const legacyUploadDir = path.join(__dirname, "uploads");
 const uploadDir = process.env.VERCEL
   ? path.join(os.tmpdir(), "la-solucion-uploads")
-  : path.join(__dirname, "uploads");
+  : path.join(process.env.LOCALAPPDATA || os.homedir(), "la-solucion", "uploads");
 try {
   if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
@@ -698,11 +703,12 @@ async function purgeExpiredTrash() {
 
   const bestanden = await listBestandenForOpdrachtIds(ids);
   for (const bestand of bestanden) {
-    const filePath = path.join(uploadDir, bestand.opslagNaam);
-    try {
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    } catch (unlinkErr) {
-      console.warn("Kon verlopen prullenbak-bestand niet verwijderen:", filePath, unlinkErr);
+    for (const filePath of bestandSchijfPaden(bestand.opslagNaam)) {
+      try {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      } catch (unlinkErr) {
+        console.warn("Kon verlopen prullenbak-bestand niet verwijderen:", filePath, unlinkErr);
+      }
     }
   }
 
@@ -924,10 +930,27 @@ function sanitizeOrigineleNaam(naam) {
   return cleaned || null;
 }
 
-function bestandSchijfPad(opslagNaam) {
+function bestandSchijfPaden(opslagNaam) {
   const safe = path.basename(String(opslagNaam || ""));
-  if (!safe || safe === "." || safe === "..") return null;
-  return path.join(uploadDir, safe);
+  if (!safe || safe === "." || safe === "..") return [];
+  return [...new Set([uploadDir, legacyUploadDir])].map((dir) => path.join(dir, safe));
+}
+
+function bestandSchijfPad(opslagNaam) {
+  return bestandSchijfPaden(opslagNaam)[0] || null;
+}
+
+function leesBestandVanSchijf(opslagNaam) {
+  for (const filePath of bestandSchijfPaden(opslagNaam)) {
+    if (!fs.existsSync(filePath)) continue;
+    try {
+      const buffer = fs.readFileSync(filePath);
+      if (buffer.length) return { filePath, buffer };
+    } catch (err) {
+      console.warn("Kon bestand niet van schijf lezen:", filePath, err.message);
+    }
+  }
+  return null;
 }
 
 function contentDispositionAttachment(filename) {
@@ -946,6 +969,9 @@ function setBestandDownloadHeaders(res, bestand) {
 function naarBuffer(waarde) {
   if (!waarde) return null;
   if (Buffer.isBuffer(waarde)) return waarde.length ? waarde : null;
+  if (waarde instanceof Uint8Array) {
+    return waarde.length ? Buffer.from(waarde) : null;
+  }
   try {
     const buf = Buffer.from(waarde);
     return buf.length ? buf : null;
@@ -991,11 +1017,12 @@ app.delete("/api/bestanden/:id", authRequired, async (req, res) => {
     }
 
     await deleteBestandById(bestand.id);
-    const filePath = bestandSchijfPad(bestand.opslagNaam);
-    try {
-      if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    } catch (unlinkErr) {
-      console.warn("Kon bestand niet van schijf verwijderen:", filePath, unlinkErr);
+    for (const filePath of bestandSchijfPaden(bestand.opslagNaam)) {
+      try {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      } catch (unlinkErr) {
+        console.warn("Kon bestand niet van schijf verwijderen:", filePath, unlinkErr);
+      }
     }
     return res.json({ ok: true });
   } catch (err) {
@@ -1016,28 +1043,22 @@ app.get("/api/bestanden/:id/download", authRequired, async (req, res) => {
       return res.status(403).json({ error: "Geen toegang tot dit bestand." });
     }
 
-    const filePath = bestandSchijfPad(bestand.opslagNaam);
-    if (filePath && fs.existsSync(filePath)) {
-      try {
-        const vanSchijf = fs.readFileSync(filePath);
-        if (vanSchijf.length) {
-          void saveBestandInhoud(bestand.id, vanSchijf).catch((err) => {
-            console.warn("Kon bestandinhoud niet bijwerken:", err.message);
-          });
-          setBestandDownloadHeaders(res, bestand);
-          res.setHeader("Content-Length", vanSchijf.length);
-          return res.end(vanSchijf);
-        }
-      } catch (readErr) {
-        console.warn("Kon bestand niet van schijf lezen:", filePath, readErr.message);
-      }
+    const vanSchijf = leesBestandVanSchijf(bestand.opslagNaam);
+    if (vanSchijf) {
+      void saveBestandInhoud(bestand.id, vanSchijf.buffer).catch((err) => {
+        console.warn("Kon bestandinhoud niet bijwerken:", err.message);
+      });
+      setBestandDownloadHeaders(res, bestand);
+      res.setHeader("Content-Length", vanSchijf.buffer.length);
+      return res.end(vanSchijf.buffer);
     }
 
     const inhoud = naarBuffer(await getBestandInhoudById(bestand.id));
     if (inhoud) {
-      if (filePath) {
+      const cachePad = bestandSchijfPad(bestand.opslagNaam);
+      if (cachePad) {
         try {
-          fs.writeFileSync(filePath, inhoud);
+          fs.writeFileSync(cachePad, inhoud);
         } catch {
           /* cache is optioneel */
         }
