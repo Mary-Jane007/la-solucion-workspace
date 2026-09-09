@@ -47,8 +47,8 @@ export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
       setFout(null);
       markeerGeopend(id);
       await downloadBestand(id, naam);
-    } catch {
-      setFout("Download mislukt.");
+    } catch (err) {
+      setFout(err instanceof Error ? err.message : "Download mislukt.");
     }
   };
 

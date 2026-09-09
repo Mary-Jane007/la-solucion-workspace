@@ -536,9 +536,14 @@ export function OpdrachtDialoog({
                             className="link-btn file-download-btn"
                             onClick={async () => {
                               try {
+                                setFout(null);
                                 await downloadBestand(b.id, b.origineleNaam);
-                              } catch {
-                                setFout("Download mislukt. Controleer je rechten of probeer opnieuw.");
+                              } catch (err) {
+                                setFout(
+                                  err instanceof Error
+                                    ? err.message
+                                    : "Download mislukt. Controleer je rechten of probeer opnieuw."
+                                );
                               }
                             }}
                           >

@@ -9,6 +9,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
 const crypto = require("crypto");
 const multer = require("multer");
 const { v4: uuidv4 } = require("uuid");
@@ -54,6 +55,8 @@ const {
   listBestandenForOpdracht,
   listBestandenForOpdrachtIds,
   getBestandById,
+  getBestandInhoudById,
+  saveBestandInhoud,
   createBestand,
   updateBestandNaam,
   deleteBestandById,
@@ -166,9 +169,15 @@ if (process.env.VERCEL) {
   app.use(express.json({ limit: "50mb" }));
 }
 
-const uploadDir = path.join(__dirname, "uploads");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+const uploadDir = process.env.VERCEL
+  ? path.join(os.tmpdir(), "la-solucion-uploads")
+  : path.join(__dirname, "uploads");
+try {
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+} catch (err) {
+  console.warn("Kon uploadmap niet aanmaken:", err.message);
 }
 
 const uploadStorage = multer.diskStorage({
@@ -180,20 +189,40 @@ const uploadStorage = multer.diskStorage({
   }
 });
 
+const OPDRACHT_BESTAND_MIMES = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/msword",
+  "application/octet-stream"
+]);
+const OPDRACHT_BESTAND_EXTS = new Set([
+  ".pdf",
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".webp",
+  ".gif",
+  ".doc",
+  ".docx"
+]);
+
+function isToegestaanOpdrachtBestand(file) {
+  const mime = String(file.mimetype || "").toLowerCase();
+  const ext = path.extname(file.originalname || "").toLowerCase();
+  return OPDRACHT_BESTAND_MIMES.has(mime) || OPDRACHT_BESTAND_EXTS.has(ext);
+}
+
 const upload = multer({
-  storage: uploadStorage,
+  storage: multer.memoryStorage(),
   limits: {
     fileSize: 15 * 1024 * 1024 // 15MB
   },
   fileFilter: (_req, file, cb) => {
-    const allowed = [
-      "application/pdf",
-      "image/jpeg",
-      "image/png",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "application/msword"
-    ];
-    if (allowed.includes(file.mimetype)) return cb(null, true);
+    if (isToegestaanOpdrachtBestand(file)) return cb(null, true);
     return cb(new Error("Bestandstype niet toegestaan."));
   }
 });
@@ -830,7 +859,15 @@ app.post("/api/opdrachten/:id/herstel", authRequired, requireOwner, async (req, 
 app.post(
   "/api/opdrachten/:id/bestanden",
   authRequired,
-  upload.single("file"),
+  (req, res, next) => {
+    upload.single("file")(req, res, (err) => {
+      if (!err) return next();
+      if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+        return res.status(400).json({ error: "Bestand is te groot (max. 15 MB)." });
+      }
+      return res.status(400).json({ error: err.message || "Upload mislukt." });
+    });
+  },
   async (req, res) => {
     try {
       if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
@@ -842,15 +879,31 @@ app.post(
       }
       if (!req.file) return res.status(400).json({ error: "Geen bestand ontvangen." });
 
+      const buffer = naarBuffer(req.file.buffer);
+      if (!buffer) return res.status(400).json({ error: "Geen bestand ontvangen." });
+
+      const ext = path.extname(req.file.originalname || "").slice(0, 10);
+      const opslagNaam = `${uuidv4()}${ext}`;
+      const origineleNaam = sanitizeOrigineleNaam(req.file.originalname) || "document";
+      const filePath = bestandSchijfPad(opslagNaam);
+      if (filePath) {
+        try {
+          fs.writeFileSync(filePath, buffer);
+        } catch (writeErr) {
+          console.warn("Kon opdrachtbestand niet op schijf zetten:", writeErr.message);
+        }
+      }
+
       const bestandId = uuidv4();
       await createBestand({
         id: bestandId,
         opdrachtId,
-        origineleNaam: req.file.originalname,
-        opslagNaam: req.file.filename,
-        mimeType: req.file.mimetype,
-        grootte: req.file.size,
-        uploadedByUserId: req.user.id
+        origineleNaam,
+        opslagNaam,
+        mimeType: req.file.mimetype || "application/octet-stream",
+        grootte: buffer.length,
+        uploadedByUserId: req.user.id,
+        inhoud: buffer
       });
 
       return res.status(201).json({ ok: true, bestandId });
@@ -869,6 +922,36 @@ function sanitizeOrigineleNaam(naam) {
     .trim()
     .slice(0, 200);
   return cleaned || null;
+}
+
+function bestandSchijfPad(opslagNaam) {
+  const safe = path.basename(String(opslagNaam || ""));
+  if (!safe || safe === "." || safe === "..") return null;
+  return path.join(uploadDir, safe);
+}
+
+function contentDispositionAttachment(filename) {
+  const raw = sanitizeOrigineleNaam(filename) || "document";
+  const ascii = raw.replace(/[^\x20-\x7E]/g, "_") || "document";
+  const encoded = encodeURIComponent(raw).replace(/['()]/g, (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
+}
+
+function setBestandDownloadHeaders(res, bestand) {
+  res.setHeader("Content-Type", bestand.mimeType || "application/octet-stream");
+  res.setHeader("Content-Disposition", contentDispositionAttachment(bestand.origineleNaam));
+  res.setHeader("Cache-Control", "private, no-store");
+}
+
+function naarBuffer(waarde) {
+  if (!waarde) return null;
+  if (Buffer.isBuffer(waarde)) return waarde.length ? waarde : null;
+  try {
+    const buf = Buffer.from(waarde);
+    return buf.length ? buf : null;
+  } catch {
+    return null;
+  }
 }
 
 app.patch("/api/bestanden/:id", authRequired, async (req, res) => {
@@ -908,9 +991,9 @@ app.delete("/api/bestanden/:id", authRequired, async (req, res) => {
     }
 
     await deleteBestandById(bestand.id);
-    const filePath = path.join(uploadDir, bestand.opslagNaam);
+    const filePath = bestandSchijfPad(bestand.opslagNaam);
     try {
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
     } catch (unlinkErr) {
       console.warn("Kon bestand niet van schijf verwijderen:", filePath, unlinkErr);
     }
@@ -933,15 +1016,40 @@ app.get("/api/bestanden/:id/download", authRequired, async (req, res) => {
       return res.status(403).json({ error: "Geen toegang tot dit bestand." });
     }
 
-    const filePath = path.join(uploadDir, bestand.opslagNaam);
-    if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Bestand ontbreekt." });
+    const filePath = bestandSchijfPad(bestand.opslagNaam);
+    if (filePath && fs.existsSync(filePath)) {
+      try {
+        const vanSchijf = fs.readFileSync(filePath);
+        if (vanSchijf.length) {
+          void saveBestandInhoud(bestand.id, vanSchijf).catch((err) => {
+            console.warn("Kon bestandinhoud niet bijwerken:", err.message);
+          });
+          setBestandDownloadHeaders(res, bestand);
+          res.setHeader("Content-Length", vanSchijf.length);
+          return res.end(vanSchijf);
+        }
+      } catch (readErr) {
+        console.warn("Kon bestand niet van schijf lezen:", filePath, readErr.message);
+      }
+    }
 
-    res.setHeader("Content-Type", bestand.mimeType);
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="${encodeURIComponent(bestand.origineleNaam)}"`
-    );
-    return res.sendFile(filePath);
+    const inhoud = naarBuffer(await getBestandInhoudById(bestand.id));
+    if (inhoud) {
+      if (filePath) {
+        try {
+          fs.writeFileSync(filePath, inhoud);
+        } catch {
+          /* cache is optioneel */
+        }
+      }
+      setBestandDownloadHeaders(res, bestand);
+      res.setHeader("Content-Length", inhoud.length);
+      return res.end(inhoud);
+    }
+
+    return res.status(404).json({
+      error: "Dit bestand staat niet meer op de server. Upload het opnieuw bij de opdracht."
+    });
   } catch (err) {
     console.error("Fout bij download:", err);
     return res.status(500).json({ error: "Interne serverfout." });

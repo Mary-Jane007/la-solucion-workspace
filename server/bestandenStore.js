@@ -55,9 +55,9 @@ async function createBestand(bestand) {
   await query(
     `
     insert into bestanden
-      (id, opdracht_id, originele_naam, opslag_naam, mime_type, grootte, uploaded_by_user_id)
+      (id, opdracht_id, originele_naam, opslag_naam, mime_type, grootte, uploaded_by_user_id, inhoud)
     values
-      ($1,$2,$3,$4,$5,$6,$7)
+      ($1,$2,$3,$4,$5,$6,$7,$8)
     `,
     [
       bestand.id,
@@ -66,9 +66,23 @@ async function createBestand(bestand) {
       bestand.opslagNaam,
       bestand.mimeType,
       bestand.grootte,
-      bestand.uploadedByUserId || null
+      bestand.uploadedByUserId || null,
+      bestand.inhoud || null
     ]
   );
+}
+
+async function getBestandInhoudById(id) {
+  if (!hasDb()) return null;
+  const res = await query(`select inhoud from bestanden where id = $1 limit 1`, [id]);
+  const raw = res.rows[0]?.inhoud;
+  if (!raw) return null;
+  return Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
+}
+
+async function saveBestandInhoud(id, inhoud) {
+  if (!hasDb() || !inhoud) return;
+  await query(`update bestanden set inhoud = $2 where id = $1 and inhoud is null`, [id, inhoud]);
 }
 
 async function listBestandenForOpdrachtIds(opdrachtIds) {
@@ -125,6 +139,8 @@ module.exports = {
   listBestandenForOpdracht,
   listBestandenForOpdrachtIds,
   getBestandById,
+  getBestandInhoudById,
+  saveBestandInhoud,
   createBestand,
   updateBestandNaam,
   deleteBestandById,

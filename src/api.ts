@@ -149,23 +149,33 @@ export async function verwijderBestand(bestandId: string) {
   if (!res.ok) throw new Error((data as { error?: string }).error || "Verwijderen mislukt.");
 }
 
+function triggerBrowserDownload(blob: Blob, bestandsnaam: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = bestandsnaam.replace(/[\\/:*?"<>|]/g, "_").trim() || "document";
+  a.rel = "noopener";
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  window.setTimeout(() => {
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, 2000);
+}
+
 /** Download een bestand via de beveiligde API (Authorization-header). */
 export async function downloadBestand(bestandId: string, bestandsnaam: string): Promise<void> {
   const res = await apiFetch(`/api/bestanden/${bestandId}/download`);
   if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.error || "Download mislukt.");
+    const data = await readApiJson(res).catch(() => ({ error: "Download mislukt." }));
+    throw new Error(String(data.error || "Download mislukt."));
   }
   const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = bestandsnaam || "document";
-  a.style.display = "none";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  if (!blob.size) {
+    throw new Error("Download mislukt: het bestand is leeg.");
+  }
+  triggerBrowserDownload(blob, bestandsnaam || "document");
 }
 
 export type FinancieelType = "INKOMST" | "UITGAVE" | "KASGELD" | "OVERDRACHT";
@@ -333,15 +343,7 @@ export async function fetchFinancieelPostBijlageBlob(bijlageId: string): Promise
 
 export async function downloadFinancieelPostBijlage(bijlageId: string, bestandsnaam = "foto"): Promise<void> {
   const blob = await fetchFinancieelPostBijlageBlob(bijlageId);
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = bestandsnaam;
-  a.style.display = "none";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  triggerBrowserDownload(blob, bestandsnaam);
 }
 
 export async function deleteFinancieelPostBijlage(bijlageId: string): Promise<void> {
@@ -423,15 +425,7 @@ export async function createFinancieelInzending(
 
 export async function downloadInzendingBijlage(bijlageId: string, bestandsnaam = "foto"): Promise<void> {
   const blob = await fetchInzendingBijlageBlob(bijlageId);
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = bestandsnaam;
-  a.style.display = "none";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  triggerBrowserDownload(blob, bestandsnaam);
 }
 
 export async function fetchInzendingBijlageBlob(bijlageId: string): Promise<Blob> {

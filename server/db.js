@@ -325,6 +325,8 @@ async function migrate() {
     `,
     []
   );
+
+  await query(`alter table bestanden add column if not exists inhoud bytea;`, []);
 }
 
 module.exports = {
