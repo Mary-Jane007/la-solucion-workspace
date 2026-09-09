@@ -51,6 +51,7 @@ import {
   klantSaldoVoor,
   naarDateTimeLocal,
   normalizeValuta,
+  parseGeldInvoer,
   nieuweGebruikId,
   nuDateTimeLocal,
   opdrachtDossierLabel,
@@ -732,9 +733,9 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    const bedrag = Number(String(form.bedrag).replace(",", "."));
-    if (!Number.isFinite(bedrag) || bedrag < 0) {
-      setFout("Vul een geldig bedrag in.");
+    const bedrag = parseGeldInvoer(form.bedrag);
+    if (bedrag === null || bedrag < 0) {
+      setFout("Vul een geldig bedrag in. 0,- mag.");
       return;
     }
     if (!form.omschrijving.trim() && form.type !== "OVERDRACHT") {
@@ -743,8 +744,8 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
     }
     let wisselkoers: number | null = null;
     if (form.wisselkoers.trim()) {
-      wisselkoers = Number(String(form.wisselkoers).replace(",", "."));
-      if (!Number.isFinite(wisselkoers) || wisselkoers < 0) {
+      wisselkoers = parseGeldInvoer(form.wisselkoers);
+      if (wisselkoers === null || wisselkoers < 0) {
         setFout("Vul een geldige wisselkoers in (of laat leeg).");
         return;
       }
@@ -792,8 +793,8 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
         : isOpeningsKas(form)
           ? "Beginsaldo kas"
           : "");
-    if (!omschrijving || !Number.isFinite(bedrag) || bedrag < 0) {
-      setFout("Vul een omschrijving en een geldig bedrag in.");
+    if (!omschrijving || bedrag === null || bedrag < 0) {
+      setFout("Vul een omschrijving en een geldig bedrag in. 0,- mag.");
       return;
     }
     const gebruikingen: Array<{
@@ -822,8 +823,8 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
         rij.saldoBedrag.trim() ||
         rij.toelichting.trim();
       if (!heeftInhoud) continue;
-      const gebruikBedrag = Number(String(rij.bedrag).replace(",", "."));
-      if (!Number.isFinite(gebruikBedrag) || gebruikBedrag <= 0) {
+      const gebruikBedrag = parseGeldInvoer(rij.bedrag);
+      if (gebruikBedrag === null || gebruikBedrag <= 0) {
         setFout("Vul bij elke gebruiksregel een geldig bedrag in (of verwijder de lege regel).");
         return;
       }
@@ -852,8 +853,8 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
           setFout("Kies bij valuta omzetten een andere doelvaluta.");
           return;
         }
-        gebruikWisselkoers = Number(String(rij.wisselkoers).replace(",", "."));
-        if (!Number.isFinite(gebruikWisselkoers) || gebruikWisselkoers <= 0) {
+        gebruikWisselkoers = parseGeldInvoer(rij.wisselkoers);
+        if (gebruikWisselkoers === null || gebruikWisselkoers <= 0) {
           setFout("Vul bij valuta omzetten een geldige wisselkoers in.");
           return;
         }
@@ -881,8 +882,8 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
           setFout("Vul bij een openstaand saldo de klantnaam in.");
           return;
         }
-        saldoBedrag = Number(String(rij.saldoBedrag).replace(",", "."));
-        if (!Number.isFinite(saldoBedrag) || saldoBedrag <= 0) {
+        saldoBedrag = parseGeldInvoer(rij.saldoBedrag);
+        if (saldoBedrag === null || saldoBedrag <= 0) {
           setFout("Vul bij een openstaand saldo een geldig bedrag in.");
           return;
         }
@@ -1350,7 +1351,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                     <option value="OVERDRACHT">Overdracht (van A naar B)</option>
                   </select>
                 </label>
-                <label className="form-label">Bedrag<input className="form-input" inputMode="decimal" placeholder="0,00" value={form.bedrag} onChange={(e) => setForm({ ...form, bedrag: e.target.value })} required /></label>
+                <label className="form-label">Bedrag<input className="form-input" inputMode="decimal" placeholder="0,-" value={form.bedrag} onChange={(e) => setForm({ ...form, bedrag: e.target.value })} required /></label>
                 {isOpeningsKas(form) && (
                   <p className="muted financieel-span-2">
                     Vul hier het bedrag in dat vanochtend al in de kas lag. Dit is het beginsaldo van de dag in Follow the money, geen nieuwe inkomst.
@@ -1693,8 +1694,8 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                             />
                             <span className="help-text">
                               Resultaat: {(() => {
-                                const bron = Number(String(rij.bedrag).replace(",", "."));
-                                const koers = Number(String(rij.wisselkoers).replace(",", "."));
+                                const bron = parseGeldInvoer(rij.bedrag) ?? 0;
+                                const koers = parseGeldInvoer(rij.wisselkoers) ?? 0;
                                 const doel = bron > 0 && koers > 0 ? Math.round(bron * koers * 100) / 100 : 0;
                                 const code = rij.doelValuta || "—";
                                 return doel > 0 ? `${doel.toLocaleString("nl-NL")} ${code}` : "vul bedrag en koers in";
@@ -1985,23 +1986,23 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                       </button>
                     </div>
                     <p className="muted financieel-gebruik-restant">
-                      Origineel {formatGeld(Number(String(form.bedrag).replace(",", ".")) || 0, form.valuta)}
+                      Origineel {formatGeld(parseGeldInvoer(form.bedrag) ?? 0, form.valuta)}
                       {" · "}
                       restant{" "}
                       <strong>
                         {formatGeld(
                           restantBedrag({
-                            bedrag: Number(String(form.bedrag).replace(",", ".")) || 0,
+                            bedrag: parseGeldInvoer(form.bedrag) ?? 0,
                             gebruikingen: form.gebruikingen.map((rij) => ({
                               id: rij.id,
                               datum: rij.datum,
                               soort: rij.soort,
-                              bedrag: Number(String(rij.bedrag).replace(",", ".")) || 0,
+                              bedrag: parseGeldInvoer(rij.bedrag) ?? 0,
                               waaraan: rij.waaraan,
                               bank: rij.bank,
                               medewerker: rij.medewerker,
                               doelValuta: rij.doelValuta,
-                              wisselkoers: Number(String(rij.wisselkoers).replace(",", ".")) || null,
+                              wisselkoers: parseGeldInvoer(rij.wisselkoers),
                               doelBedrag: null,
                               klantNaam: rij.klantNaam
                             }))

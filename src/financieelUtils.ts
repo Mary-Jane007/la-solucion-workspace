@@ -190,6 +190,33 @@ function geldRondCents(bedrag: number): number {
   return Math.round((Number(bedrag) || 0) * 100) / 100;
 }
 
+/**
+ * Leest Nederlandse bedragen: 0,- , 0,00 , 12,50 , 1.234,56.
+ * Leeg of onleesbaar → null (0 zelf is geldig).
+ */
+export function parseGeldInvoer(waarde: string | number | null | undefined): number | null {
+  if (typeof waarde === "number") {
+    return Number.isFinite(waarde) ? geldRondCents(waarde) : null;
+  }
+  let s = String(waarde ?? "")
+    .trim()
+    .replace(/\u00a0/g, "")
+    .replace(/\s/g, "");
+  if (!s) return null;
+  s = s.replace(/^(€|\$|£|EUR|USD|SRD|XCG)/i, "");
+  if (/,-$/.test(s)) s = s.slice(0, -2);
+  const lastComma = s.lastIndexOf(",");
+  const lastDot = s.lastIndexOf(".");
+  if (lastComma >= 0 && lastDot >= 0) {
+    s = lastComma > lastDot ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, "");
+  } else if (lastComma >= 0) {
+    s = s.replace(",", ".");
+  }
+  const n = Number(s);
+  if (!Number.isFinite(n)) return null;
+  return geldRondCents(n);
+}
+
 export const GEBRUIK_BANKSTORTING = "Bankstorting";
 export const GEBRUIK_OVERDRACHT_MEDEWERKER = "Overdracht medewerker";
 export const GEBRUIK_INKOMST_KAS = "Inkomst kas";

@@ -21,6 +21,7 @@ import {
   isBankBetaling,
   isPinpasBetaling,
   nuDateTimeLocal,
+  parseGeldInvoer,
   SURINAAME_BANKEN,
   typeLabel,
   VALUTA_LABELS,
@@ -137,9 +138,9 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    const bedragNr = Number(String(bedrag).replace(",", "."));
-    if (!Number.isFinite(bedragNr) || bedragNr < 0) {
-      setFout("Vul een geldig bedrag in.");
+    const bedragNr = parseGeldInvoer(bedrag);
+    if (bedragNr === null || bedragNr < 0) {
+      setFout("Vul een geldig bedrag in. 0,- mag.");
       return;
     }
     if (!omschrijving.trim()) {
@@ -231,7 +232,7 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
               <input
                 className="form-input"
                 inputMode="decimal"
-                placeholder="0,00"
+                placeholder="0,-"
                 value={bedrag}
                 onChange={(e) => setBedrag(e.target.value)}
                 required
