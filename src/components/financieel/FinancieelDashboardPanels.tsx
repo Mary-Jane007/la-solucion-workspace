@@ -1120,7 +1120,9 @@ export function InstellingenPanel({
         <p className="muted">Inkomstdiensten: {INKOMST_DIENSTEN.join(", ")}.</p>
         <p className="muted">
           Betalingswijzen: Opgehaald (contant), Pinpas, Overgemaakt (bank), Gestort. Pinpas gaat niet
-          van het kasgeld bij een medewerker af. Banklijst is uitbreidbaar in het registratieformulier.
+          van het kasgeld bij een medewerker af. Muntenbak is beschikbaar contant dat niet in de kas van
+          een medewerker ligt; kies het als posttype of via “Van dit bedrag gebruikt”. Banklijst is
+          uitbreidbaar in het registratieformulier.
         </p>
       </section>
       <section className="card page-card">
@@ -1248,6 +1250,13 @@ export function FollowTheMoneyPanel({
             </span>
           </div>
           <div>
+            <span className="muted">Muntenbak</span>
+            <strong className="financieel-inkomst">{formatGeld(dag.totaalMuntenbak, dag.valuta)}</strong>
+            <span className="fin-kpi-hint muted">
+              Beschikbaar contant, niet bij een medewerker
+            </span>
+          </div>
+          <div>
             <span className="muted">Beginsaldo / Begon met</span>
             <strong>{formatGeld(dag.totaalBegin, dag.valuta)}</strong>
             <span className="fin-kpi-hint muted">start van deze dag</span>
@@ -1272,7 +1281,7 @@ export function FollowTheMoneyPanel({
         <div className="section-header">
           <h2>Bij wie ligt het geld?</h2>
           <p className="muted">
-            Beginsaldo is hetzelfde als “Begon met”. Wat je niet besteedt, blijft automatisch in Over en gaat door naar morgen.
+            Beginsaldo is hetzelfde als “Begon met”. Wat je niet besteedt, blijft automatisch in Over en gaat door naar morgen. Muntenbak is beschikbaar geld dat niet bij een medewerker ligt.
           </p>
         </div>
         {dag.personen.length === 0 ? (

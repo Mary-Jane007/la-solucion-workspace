@@ -221,7 +221,10 @@ export const GEBRUIK_BANKSTORTING = "Bankstorting";
 export const GEBRUIK_OVERDRACHT_MEDEWERKER = "Overdracht medewerker";
 export const GEBRUIK_INKOMST_KAS = "Inkomst kas";
 export const GEBRUIK_VALUTA_OMZETTING = "Valuta omzetten";
+export const GEBRUIK_MUNTENBAK = "Muntenbak";
 export const CATEGORIE_OPENINGSKAS = "Beginsaldo dag";
+export const CATEGORIE_MUNTENBAK = "Muntenbak";
+export const MUNTENBAK_NAAM = "Muntenbak";
 
 export function isBankstorting(waaraan?: string | null): boolean {
   return (waaraan || "").trim().toLowerCase().startsWith("bankstorting");
@@ -241,6 +244,22 @@ export function isValutaOmzetting(waaraan?: string | null): boolean {
 
 export function isOpeningsKas(p: { type?: string; categorie?: string | null }): boolean {
   return p.type === "KASGELD" && (p.categorie || "").trim().toLowerCase().startsWith("beginsaldo");
+}
+
+export function isMuntenbakGebruik(waaraan?: string | null): boolean {
+  return (waaraan || "").trim().toLowerCase().startsWith("muntenbak");
+}
+
+export function isMuntenbakPost(p: { type?: string; categorie?: string | null }): boolean {
+  return p.type === "KASGELD" && (p.categorie || "").trim().toLowerCase().startsWith("muntenbak");
+}
+
+export function isMuntenbakNaam(naam?: string | null): boolean {
+  return (naam || "").trim().toLowerCase() === "muntenbak";
+}
+
+export function isKlantBetalingGebruik(g: { soort?: string; waaraan?: string | null }): boolean {
+  return g.soort === "ERBIJ" && (isInkomstKas(g.waaraan) || isMuntenbakGebruik(g.waaraan));
 }
 
 export function totaalOpeningsKas(posten: FinancieelPost[]): number {
@@ -317,6 +336,8 @@ export function gebruikWaaraanTekst(g: {
   }
   if (isInkomstKas(waar) && klant) return `${GEBRUIK_INKOMST_KAS} · ${klant}`;
   if (isInkomstKas(waar)) return GEBRUIK_INKOMST_KAS;
+  if (isMuntenbakGebruik(waar) && klant) return `${GEBRUIK_MUNTENBAK} · ${klant}`;
+  if (isMuntenbakGebruik(waar)) return GEBRUIK_MUNTENBAK;
   return waar;
 }
 
@@ -356,7 +377,11 @@ export function normaliseerGebruikingen(waarde: unknown): FinancieelGebruik[] {
       datum: datum || new Date().toISOString(),
       soort,
       bedrag: geldRondCents(bedrag),
-      waaraan: isInkomstKas(waaraan) ? GEBRUIK_INKOMST_KAS : waaraan,
+      waaraan: isInkomstKas(waaraan)
+        ? GEBRUIK_INKOMST_KAS
+        : isMuntenbakGebruik(waaraan)
+          ? GEBRUIK_MUNTENBAK
+          : waaraan,
       bank: String(item.bank || "").trim() || bankUitWaaraan(waaraan),
       medewerker:
         String(item.medewerker || "").trim() || medewerkerUitWaaraan(waaraan),
@@ -406,11 +431,28 @@ export function totaalInkomstKas(p: { gebruikingen?: FinancieelGebruik[] }): num
   return geldRondCents(inkomstKasRegels(p).reduce((s, g) => s + g.bedrag, 0));
 }
 
+export function muntenbakRegels(p: { gebruikingen?: FinancieelGebruik[] }): FinancieelGebruik[] {
+  return normaliseerGebruikingen(p.gebruikingen).filter((g) => isMuntenbakGebruik(g.waaraan));
+}
+
+export function totaalMuntenbakErbij(p: { gebruikingen?: FinancieelGebruik[] }): number {
+  return geldRondCents(
+    normaliseerGebruikingen(p.gebruikingen)
+      .filter((g) => g.soort === "ERBIJ" && isMuntenbakGebruik(g.waaraan))
+      .reduce((s, g) => s + g.bedrag, 0)
+  );
+}
+
+export function totaalKlantBetalingViaRegels(p: { gebruikingen?: FinancieelGebruik[] }): number {
+  return geldRondCents(totaalInkomstKas(p) + totaalMuntenbakErbij(p));
+}
+
 export function isBesteedGebruik(g: { soort?: string; waaraan?: string }): boolean {
   if (g.soort !== "AF") return false;
   if (isOverdrachtMedewerker(g.waaraan)) return false;
   if (isBankstorting(g.waaraan)) return false;
   if (isValutaOmzetting(g.waaraan)) return false;
+  if (isMuntenbakGebruik(g.waaraan)) return false;
   return true;
 }
 
@@ -463,7 +505,7 @@ export function extraInkomstUitGebruikVoorValuta(
 ): number {
   const postValuta = normalizeValuta(p.valuta);
   const eigenValuta = postValuta === normalizeValuta(valuta);
-  const kas = eigenValuta ? totaalInkomstKas(p) : 0;
+  const kas = eigenValuta ? totaalKlantBetalingViaRegels(p) : 0;
   const omzetting = totaalOmzettingNaarValuta(p, normalizeValuta(valuta));
   if (!eigenValuta) return omzetting;
   if (!kas) return 0;
@@ -485,7 +527,16 @@ export function gebruikingenSamenvatting(p: { gebruikingen?: FinancieelGebruik[]
   return items
     .map((g) => {
       const waar = gebruikWaaraanTekst(g);
-      const richting = g.soort === "ERBIJ" ? (isInkomstKas(g.waaraan) ? "inkomst in kas" : "erbij") : "af";
+      const richting =
+        g.soort === "ERBIJ"
+          ? isInkomstKas(g.waaraan)
+            ? "inkomst in kas"
+            : isMuntenbakGebruik(g.waaraan)
+              ? "inkomst muntenbak"
+              : "erbij"
+          : isMuntenbakGebruik(g.waaraan)
+            ? "naar muntenbak"
+            : "af";
       const saldo =
         g.heeftSaldo === "JA"
           ? openstaandSaldoBedrag(g) > 0
@@ -579,6 +630,9 @@ export function typeLabel(type: FinancieelPost["type"] | string, post?: Pick<Fin
   if (type === "KASGELD" && post && isOpeningsKas({ type, categorie: post.categorie })) {
     return "Openingskas";
   }
+  if (type === "KASGELD" && post && isMuntenbakPost({ type, categorie: post.categorie })) {
+    return "Muntenbak";
+  }
   if (type === "INKOMST") return "Inkomst";
   if (type === "UITGAVE") return "Uitgave";
   if (type === "KASGELD") return "Kasgeld";
@@ -604,14 +658,14 @@ export function berekenTotalenPerValuta(posten: FinancieelPost[]): FinancieelTot
     const valuta = normalizeValuta(p.valuta);
     const t = map.get(valuta)!;
     const extra = extraInkomstUitGebruik(p);
-    const betaaldViaRegel = totaalInkomstKas(p);
+    const betaaldViaRegel = totaalKlantBetalingViaRegels(p);
     if (p.type === "INKOMST") {
       t.inkomsten += p.bedrag + extra;
       if (p.status === "OPEN") {
         t.teOntvangen += Math.max(0, p.bedrag - betaaldViaRegel);
       }
     } else if (p.type === "KASGELD") {
-      t.kasgeld += p.bedrag;
+      if (!isMuntenbakPost(p)) t.kasgeld += p.bedrag;
       t.inkomsten += extra;
     } else if (p.type === "UITGAVE") {
       t.uitgaven += p.bedrag;
@@ -729,24 +783,25 @@ export function berekenGeldBijTotalen(posten: FinancieelPost[]): GeldBijTotaal[]
 
   for (const p of posten) {
     if (!teltMeeInMedewerkerKas(p)) continue;
+    if (isMuntenbakPost(p)) continue;
     const valuta = normalizeValuta(p.valuta);
     const teltAlsKas = p.type === "KASGELD" || p.type === "OVERDRACHT" || p.status === "BETAALD";
+    const kasRestant = geldRondCents(restantBedrag(p) - totaalMuntenbakErbij(p));
     if (teltAlsKas) {
       if (p.type === "INKOMST") {
         const naar = geldNaarPersoon(p);
-        if (naar) bumpPersoon(map, naar, valuta, "inkomsten", restantBedrag(p));
+        if (naar) bumpPersoon(map, naar, valuta, "inkomsten", kasRestant);
       } else if (p.type === "KASGELD") {
         const naar = geldNaarPersoon(p);
-        if (naar) bumpPersoon(map, naar, valuta, "kasgeld", restantBedrag(p));
+        if (naar) bumpPersoon(map, naar, valuta, "kasgeld", kasRestant);
       } else if (p.type === "UITGAVE") {
         const van = geldVanPersoon(p);
-        if (van) bumpPersoon(map, van, valuta, "uitgaven", restantBedrag(p));
+        if (van) bumpPersoon(map, van, valuta, "uitgaven", kasRestant);
       } else if (p.type === "OVERDRACHT") {
         const van = geldVanPersoon(p);
         const naar = geldNaarPersoon(p);
-        const restant = restantBedrag(p);
-        if (van) bumpPersoon(map, van, valuta, "gegevenOverdracht", restant);
-        if (naar) bumpPersoon(map, naar, valuta, "ontvangenOverdracht", restant);
+        if (van) bumpPersoon(map, van, valuta, "gegevenOverdracht", kasRestant);
+        if (naar) bumpPersoon(map, naar, valuta, "ontvangenOverdracht", kasRestant);
       }
 
       // Overdracht naar medewerker vanuit gebruiksregels: kas blijft gelijk, geld verplaatst.
@@ -810,6 +865,24 @@ export function huidigKasSaldo(posten: FinancieelPost[], valuta: FinancieelValut
       .filter((r) => r.valuta === valuta)
       .reduce((s, r) => s + r.totaal, 0)
   );
+}
+
+/** Contant in de muntenbak: beschikbaar, maar niet bij een medewerker. */
+export function huidigMuntenbakSaldo(posten: FinancieelPost[], valuta: FinancieelValuta): number {
+  let n = 0;
+  for (const p of posten) {
+    if (!teltMeeInMedewerkerKas(p)) continue;
+    const postValuta = normalizeValuta(p.valuta);
+    if (isMuntenbakPost(p)) {
+      if (postValuta === valuta) n += restantBedrag(p);
+      continue;
+    }
+    if (postValuta !== valuta) continue;
+    for (const g of normaliseerGebruikingen(p.gebruikingen)) {
+      if (isMuntenbakGebruik(g.waaraan)) n += g.bedrag;
+    }
+  }
+  return geldRondCents(n);
 }
 
 export function financieelPostMatchtZoekterm(
@@ -886,7 +959,7 @@ export function berekenKlantSaldi(posten: FinancieelPost[]): KlantSaldo[] {
         }
         continue;
       }
-      if (g.soort !== "ERBIJ" || !isInkomstKas(g.waaraan)) continue;
+      if (g.soort !== "ERBIJ" || !isKlantBetalingGebruik(g)) continue;
       const klant = (g.klantNaam || "").trim();
       if (!klant) continue;
       const { key, bestaand } = bumpKlantSaldo(map, klant, valuta);
@@ -939,7 +1012,7 @@ export function berekenDossierSaldi(
         }
         continue;
       }
-      if (g.soort === "ERBIJ" && isInkomstKas(g.waaraan)) {
+      if (g.soort === "ERBIJ" && isKlantBetalingGebruik(g)) {
         const settle = Math.min(huidig.teOntvangen, g.bedrag);
         huidig.teOntvangen = geldRondCents(huidig.teOntvangen - settle);
         if (p.type === "INKOMST") huidig.ontvangen += settle;

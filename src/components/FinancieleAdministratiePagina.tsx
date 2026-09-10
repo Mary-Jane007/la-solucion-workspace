@@ -37,11 +37,15 @@ import {
   formatGeld,
   GEBRUIK_BANKSTORTING,
   GEBRUIK_INKOMST_KAS,
+  GEBRUIK_MUNTENBAK,
   GEBRUIK_OVERDRACHT_MEDEWERKER,
   GEBRUIK_VALUTA_OMZETTING,
   CATEGORIE_OPENINGSKAS,
+  CATEGORIE_MUNTENBAK,
   isBankstorting,
   isInkomstKas,
+  isMuntenbakGebruik,
+  isMuntenbakPost,
   isValutaOmzetting,
   isOpeningsKas,
   isOverdrachtMedewerker,
@@ -57,6 +61,7 @@ import {
   opdrachtDossierLabel,
   restantBedrag,
   totaalInkomstKas,
+  totaalMuntenbakErbij,
   extraUitgaveUitGebruik,
   echteMedewerkerUserId,
   voegVasteMedewerkersToe,
@@ -448,7 +453,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
   const inkomstenPosten = useMemo(
     () =>
       filterOpValuta(gezochtePosten, filterValuta).filter(
-        (p) => p.type === "INKOMST" || p.type === "KASGELD" || totaalInkomstKas(p) > 0
+        (p) => p.type === "INKOMST" || p.type === "KASGELD" || totaalInkomstKas(p) > 0 || totaalMuntenbakErbij(p) > 0
       ),
     [gezochtePosten, filterValuta]
   );
@@ -509,6 +514,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
         inkomsten: kpis.inkomsten,
         uitgaven: kpis.uitgaven,
         inKas: kpis.inKas,
+        muntenbak: kpis.muntenbak,
         netto: kpis.netto,
         ontvangen: kpis.ontvangen,
         teOntvangen: kpis.teOntvangen,
@@ -650,7 +656,9 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
             ? GEBRUIK_OVERDRACHT_MEDEWERKER
             : isInkomstKas(g.waaraan)
               ? GEBRUIK_INKOMST_KAS
-              : g.waaraan || "",
+              : isMuntenbakGebruik(g.waaraan)
+                ? GEBRUIK_MUNTENBAK
+                : g.waaraan || "",
         bank: g.bank || bankUitWaaraan(g.waaraan),
         medewerker: g.medewerker || medewerkerUitWaaraan(g.waaraan),
         doelValuta:
@@ -775,7 +783,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
     const geldVanNaam = pinpas
       ? ""
       : geldVanPersoonTeam?.name || form.geldVanNaam.trim();
-    const geldBijNaam = pinpas && form.type !== "OVERDRACHT"
+    const geldBijNaam = (pinpas && form.type !== "OVERDRACHT") || isMuntenbakPost(form)
       ? ""
       : geldBijPersoon?.name || form.geldBijNaam.trim();
     if (form.type === "OVERDRACHT" && (!geldVanNaam || !geldBijNaam)) {
@@ -792,7 +800,9 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
         ? `Overdracht ${geldVanNaam} → ${geldBijNaam}`
         : isOpeningsKas(form)
           ? "Beginsaldo kas"
-          : "");
+          : isMuntenbakPost(form)
+            ? "Muntenbak"
+            : "");
     if (!omschrijving || bedrag === null || bedrag < 0) {
       setFout("Vul een omschrijving en een geldig bedrag in. 0,- mag.");
       return;
@@ -861,11 +871,13 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
         doelBedrag = Math.round(gebruikBedrag * gebruikWisselkoers * 100) / 100;
       }
       const inkomstKas = rij.soort === "ERBIJ" && (isInkomstKas(rij.waaraan) || !rij.waaraan.trim());
-      if (inkomstKas && !rij.klantNaam.trim()) {
-        setFout("Vul bij een inkomst in kas de klantnaam in.");
+      const muntenbakGebruik = isMuntenbakGebruik(rij.waaraan);
+      const klantBetaling = inkomstKas || (rij.soort === "ERBIJ" && muntenbakGebruik);
+      if (klantBetaling && !rij.klantNaam.trim()) {
+        setFout(inkomstKas ? "Vul bij een inkomst in kas de klantnaam in." : "Vul bij een inkomst naar muntenbak de klantnaam in.");
         return;
       }
-      if (inkomstKas && rij.heeftSaldo !== "JA" && rij.heeftSaldo !== "NEE") {
+      if (klantBetaling && rij.heeftSaldo !== "JA" && rij.heeftSaldo !== "NEE") {
         setFout("Geef bij elke inkomst-regel aan of de klant openstaand saldo heeft.");
         return;
       }
@@ -874,7 +886,8 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
         rij.heeftSaldo === "JA" &&
         !isBankstorting(rij.waaraan) &&
         !isOverdrachtMedewerker(rij.waaraan) &&
-        !isValutaOmzetting(rij.waaraan);
+        !isValutaOmzetting(rij.waaraan) &&
+        !isMuntenbakGebruik(rij.waaraan);
       let saldoBedrag: number | null = null;
       if (besteedMetSaldo) {
         const klantVoorSaldo = rij.klantNaam.trim() || form.klantNaam.trim();
@@ -904,6 +917,8 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
           ? GEBRUIK_BANKSTORTING
           : isOverdrachtMedewerker(rij.waaraan)
             ? GEBRUIK_OVERDRACHT_MEDEWERKER
+            : muntenbakGebruik
+              ? GEBRUIK_MUNTENBAK
             : inkomstKas
               ? GEBRUIK_INKOMST_KAS
               : rij.waaraan.trim(),
@@ -928,7 +943,9 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       categorie:
         form.type === "KASGELD" && form.categorie.trim().toLowerCase().startsWith("beginsaldo")
           ? CATEGORIE_OPENINGSKAS
-          : form.categorie.trim(),
+          : isMuntenbakPost(form)
+            ? CATEGORIE_MUNTENBAK
+            : form.categorie.trim(),
       referentie: form.referentie.trim(),
       klantNaam: (gekozen?.klantNaam || form.klantNaam).trim(),
       opdrachtId: form.opdrachtId || null,
@@ -937,7 +954,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       afgehandeldDoorNaam: medewerkerNaam,
       betalingswijze: wijze,
       bank: toontBank ? form.bank.trim() : "",
-      geldBijUserId: pinpas && form.type !== "OVERDRACHT" ? null : echteMedewerkerUserId(form.geldBijUserId),
+      geldBijUserId: (pinpas && form.type !== "OVERDRACHT") || isMuntenbakPost(form) ? null : echteMedewerkerUserId(form.geldBijUserId),
       geldBijNaam,
       geldVanUserId: pinpas ? null : echteMedewerkerUserId(form.geldVanUserId),
       geldVanNaam,
@@ -1324,7 +1341,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                 <label className="form-label">Datum & tijd<input type="datetime-local" className="form-input" value={form.datum} onChange={(e) => setForm({ ...form, datum: e.target.value })} required /></label>
                 <label className="form-label">
                   Type
-                  <select className="form-input" value={isOpeningsKas(form) ? "OPENINGSKAS" : form.type} onChange={(e) => {
+                  <select className="form-input" value={isOpeningsKas(form) ? "OPENINGSKAS" : isMuntenbakPost(form) ? "MUNTENBAK" : form.type} onChange={(e) => {
                     const gekozen = e.target.value;
                     if (gekozen === "OPENINGSKAS") {
                       setForm({
@@ -1336,18 +1353,31 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                       });
                       return;
                     }
+                    if (gekozen === "MUNTENBAK") {
+                      setForm({
+                        ...form,
+                        type: "KASGELD",
+                        status: "BETAALD",
+                        categorie: CATEGORIE_MUNTENBAK,
+                        omschrijving: form.omschrijving.trim() || "Muntenbak",
+                        geldBijUserId: "",
+                        geldBijNaam: ""
+                      });
+                      return;
+                    }
                     const type = gekozen as FinancieelType;
                     setForm({
                       ...form,
                       type,
                       status: type === "KASGELD" || type === "OVERDRACHT" ? "BETAALD" : form.status,
-                      categorie: isOpeningsKas(form) ? "" : form.categorie
+                      categorie: isOpeningsKas(form) || isMuntenbakPost(form) ? "" : form.categorie
                     });
                   }}>
                     <option value="INKOMST">Inkomst</option>
                     <option value="UITGAVE">Uitgave</option>
                     <option value="OPENINGSKAS">Openingskas (beginsaldo van de dag)</option>
                     <option value="KASGELD">Kasgeld (al in kas)</option>
+                    <option value="MUNTENBAK">Muntenbak (beschikbaar, niet in kas)</option>
                     <option value="OVERDRACHT">Overdracht (van A naar B)</option>
                   </select>
                 </label>
@@ -1355,6 +1385,11 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                 {isOpeningsKas(form) && (
                   <p className="muted financieel-span-2">
                     Vul hier het bedrag in dat vanochtend al in de kas lag. Dit is het beginsaldo van de dag in Follow the money, geen nieuwe inkomst.
+                  </p>
+                )}
+                {isMuntenbakPost(form) && (
+                  <p className="muted financieel-span-2">
+                    Muntenbak is beschikbaar contant, maar ligt niet bij een medewerker. Het telt niet mee in de kas.
                   </p>
                 )}
                 <label className="form-label">
@@ -1367,7 +1402,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                 <label className="form-label">
                   Status
                   <select className="form-input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as FinancieelStatus })} disabled={form.type === "KASGELD" || form.type === "OVERDRACHT"}>
-                    {form.type === "KASGELD" ? <option value="BETAALD">In kas</option> : form.type === "OVERDRACHT" ? <option value="BETAALD">Overgedragen</option> : form.type === "INKOMST" ? <><option value="OPEN">Nog te betalen door klant</option><option value="BETAALD">Betaald door klant</option></> : <><option value="OPEN">Nog te betalen door ons</option><option value="BETAALD">Uitbetaald</option></>}
+                    {form.type === "KASGELD" ? <option value="BETAALD">{isMuntenbakPost(form) ? "In muntenbak" : "In kas"}</option> : form.type === "OVERDRACHT" ? <option value="BETAALD">Overgedragen</option> : form.type === "INKOMST" ? <><option value="OPEN">Nog te betalen door klant</option><option value="BETAALD">Betaald door klant</option></> : <><option value="OPEN">Nog te betalen door ons</option><option value="BETAALD">Uitbetaald</option></>}
                   </select>
                 </label>
                 <label className="form-label financieel-span-2">
@@ -1445,7 +1480,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                 </label>
                   </>
                 )}
-                {(form.type === "OVERDRACHT" || (form.type !== "UITGAVE" && !pinpas)) && (
+                {(form.type === "OVERDRACHT" || (form.type !== "UITGAVE" && !pinpas && !isMuntenbakPost(form))) && (
                   <>
                 <label className="form-label">
                   {form.type === "OVERDRACHT" ? "Bij wie is het geld nu?" : "Bij wie is het geld?"}
@@ -1486,10 +1521,10 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                   <datalist id="financieel-klanten">{klantOpties.map((naam) => <option key={naam} value={naam} />)}</datalist>
                   {form.klantNaam.trim() && <p className={`financieel-klant-saldo-hint${actueelKlantSaldo && (actueelKlantSaldo.teOntvangen > 0 || actueelKlantSaldo.teBetalen > 0) ? " heeft-saldo" : ""}`}>{klantSaldoSamenvatting(actueelKlantSaldo, form.valuta)}</p>}
                 </label>
-                <label className="form-label financieel-span-2">Omschrijving<input className="form-input" value={form.omschrijving} onChange={(e) => setForm({ ...form, omschrijving: e.target.value })} required={form.type !== "OVERDRACHT"} placeholder={form.type === "OVERDRACHT" ? "Optioneel — anders: Overdracht A → B" : isOpeningsKas(form) ? "Beginsaldo kas" : ""} /></label>
+                <label className="form-label financieel-span-2">Omschrijving<input className="form-input" value={form.omschrijving} onChange={(e) => setForm({ ...form, omschrijving: e.target.value })} required={form.type !== "OVERDRACHT"} placeholder={form.type === "OVERDRACHT" ? "Optioneel — anders: Overdracht A → B" : isOpeningsKas(form) ? "Beginsaldo kas" : isMuntenbakPost(form) ? "Muntenbak" : ""} /></label>
                 <label className="form-label">
                   Categorie
-                  <input className="form-input" list="financieel-categorieen" placeholder={form.type === "UITGAVE" ? "Kantoor, personeel..." : isOpeningsKas(form) ? "Beginsaldo dag" : "Visa, advies..."} value={form.categorie} onChange={(e) => setForm({ ...form, categorie: e.target.value })} disabled={isOpeningsKas(form)} />
+                  <input className="form-input" list="financieel-categorieen" placeholder={form.type === "UITGAVE" ? "Kantoor, personeel..." : isOpeningsKas(form) ? "Beginsaldo dag" : isMuntenbakPost(form) ? "Muntenbak" : "Visa, advies..."} value={form.categorie} onChange={(e) => setForm({ ...form, categorie: e.target.value })} disabled={isOpeningsKas(form) || isMuntenbakPost(form)} />
                   <datalist id="financieel-categorieen">{categorieOpties.map((categorie) => <option key={categorie} value={categorie} />)}</datalist>
                 </label>
                 <label className="form-label">Referentie<input className="form-input" placeholder="Factuurnummer" value={form.referentie} onChange={(e) => setForm({ ...form, referentie: e.target.value })} /></label>
@@ -1503,15 +1538,17 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                   {form.gebruikingen.map((rij, index) => {
                     const inkomstKas =
                       rij.soort === "ERBIJ" && (isInkomstKas(rij.waaraan) || !rij.waaraan.trim());
+                    const muntenbakGebruik = isMuntenbakGebruik(rij.waaraan);
                     const rijKlantSaldo = klantSaldoVoor(alleKlantSaldi, rij.klantNaam, form.valuta);
                     const toonZelfInvullen =
                       rij.soort === "ERBIJ"
-                        ? !inkomstKas && !!rij.waaraan.trim()
+                        ? !inkomstKas && !muntenbakGebruik && !!rij.waaraan.trim()
                         : !(
                             (UITGAVE_CATEGORIEEN as readonly string[]).includes(rij.waaraan) ||
                             isBankstorting(rij.waaraan) ||
                             isOverdrachtMedewerker(rij.waaraan) ||
                             isValutaOmzetting(rij.waaraan) ||
+                            isMuntenbakGebruik(rij.waaraan) ||
                             !rij.waaraan
                           );
                     return (
@@ -1565,6 +1602,8 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                             rij.soort === "ERBIJ"
                               ? inkomstKas
                                 ? GEBRUIK_INKOMST_KAS
+                                : muntenbakGebruik
+                                  ? GEBRUIK_MUNTENBAK
                                 : "__anders__"
                               : isBankstorting(rij.waaraan)
                                 ? GEBRUIK_BANKSTORTING
@@ -1572,6 +1611,8 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                                   ? GEBRUIK_OVERDRACHT_MEDEWERKER
                                 : isValutaOmzetting(rij.waaraan)
                                   ? GEBRUIK_VALUTA_OMZETTING
+                                : isMuntenbakGebruik(rij.waaraan)
+                                  ? GEBRUIK_MUNTENBAK
                                 : (UITGAVE_CATEGORIEEN as readonly string[]).includes(rij.waaraan)
                                   ? rij.waaraan
                                 : rij.waaraan
@@ -1589,6 +1630,16 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                                 bank: "",
                                 medewerker: "",
                                 klantNaam: rij.klantNaam || form.klantNaam
+                              };
+                            } else if (gekozen === GEBRUIK_MUNTENBAK) {
+                              gebruikingen[index] = {
+                                ...rij,
+                                waaraan: GEBRUIK_MUNTENBAK,
+                                bank: "",
+                                medewerker: "",
+                                klantNaam: rij.soort === "ERBIJ" ? rij.klantNaam || form.klantNaam : rij.klantNaam,
+                                heeftSaldo: rij.soort === "ERBIJ" ? rij.heeftSaldo : "",
+                                saldoBedrag: rij.soort === "ERBIJ" ? "" : rij.saldoBedrag
                               };
                             } else if (gekozen === GEBRUIK_BANKSTORTING) {
                               gebruikingen[index] = {
@@ -1641,11 +1692,13 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                           {rij.soort === "ERBIJ" ? (
                             <>
                               <option value={GEBRUIK_INKOMST_KAS}>Betaald door klant (erbij in kas en inkomsten)</option>
+                              <option value={GEBRUIK_MUNTENBAK}>Betaald door klant (naar muntenbak)</option>
                               <option value="__anders__">Anders (fooi, extra kas…)</option>
                             </>
                           ) : (
                             <>
                               <option value="">— Kies —</option>
+                              <option value={GEBRUIK_MUNTENBAK}>Naar muntenbak (beschikbaar, niet in kas)</option>
                               <option value={GEBRUIK_BANKSTORTING}>Bankstorting</option>
                               <option value={GEBRUIK_OVERDRACHT_MEDEWERKER}>Overdracht medewerker</option>
                               <option value={GEBRUIK_VALUTA_OMZETTING}>Valuta omzetten (bijv. USD → SRD)</option>
@@ -1728,7 +1781,8 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                       {rij.soort === "AF" &&
                         !isBankstorting(rij.waaraan) &&
                         !isOverdrachtMedewerker(rij.waaraan) &&
-                        !isValutaOmzetting(rij.waaraan) && (
+                        !isValutaOmzetting(rij.waaraan) &&
+                        !isMuntenbakGebruik(rij.waaraan) && (
                         <>
                           <label className="form-label">
                             Is er een saldo?
@@ -1837,6 +1891,16 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                       {rij.soort === "ERBIJ" && inkomstKas && (
                         <p className="muted financieel-span-2">
                           Dit bedrag gaat naar inkomsten en wordt opgeteld in de kas. Als deze klant saldo heeft, zie je dat hieronder.
+                        </p>
+                      )}
+                      {rij.soort === "ERBIJ" && muntenbakGebruik && (
+                        <p className="muted financieel-span-2">
+                          Dit bedrag gaat naar inkomsten en naar de muntenbak: beschikbaar, maar niet in de kas van een medewerker.
+                        </p>
+                      )}
+                      {rij.soort === "AF" && muntenbakGebruik && (
+                        <p className="muted financieel-span-2">
+                          Dit gaat uit de kas naar de muntenbak. Het is geen uitgave: het geld blijft beschikbaar.
                         </p>
                       )}
                       {isBankstorting(rij.waaraan) && (
@@ -1983,6 +2047,25 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                         }
                       >
                         Nieuwe inkomst / erbij
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={() =>
+                          setForm({
+                            ...form,
+                            gebruikingen: [
+                              ...form.gebruikingen,
+                              {
+                                ...legeGebruikRij("AF"),
+                                waaraan: GEBRUIK_MUNTENBAK,
+                                klantNaam: form.klantNaam
+                              }
+                            ]
+                          })
+                        }
+                      >
+                        Naar muntenbak
                       </button>
                     </div>
                     <p className="muted financieel-gebruik-restant">

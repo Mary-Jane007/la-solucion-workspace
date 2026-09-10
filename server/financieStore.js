@@ -49,7 +49,9 @@ function normalizeGebruikingen(waarde) {
       const waaraan = String(item.waaraan || "").trim();
       const genormaliseerdWaaraan = waaraan.toLowerCase().startsWith("inkomst kas")
         ? "Inkomst kas"
-        : waaraan;
+        : waaraan.toLowerCase().startsWith("muntenbak")
+          ? "Muntenbak"
+          : waaraan;
       return {
         id: String(item.id || uuidv4()),
         datum: datum || new Date().toISOString(),

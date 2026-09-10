@@ -14,6 +14,7 @@ import {
 } from "../financieelDashboardUtils";
 import {
   BETALINGSWIJZE_LABELS,
+  CATEGORIE_MUNTENBAK,
   dateTimeLocalNaarIso,
   FINANCIEEL_VALUTAS,
   formatDatumTijd,
@@ -47,9 +48,11 @@ const STATUS_LABEL: Record<FinancieelInzending["status"], string> = {
   VERWERKT: "Verwerkt in de administratie"
 };
 
+type FormType = FinancieelType | "MUNTENBAK";
+
 export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
   const [datum, setDatum] = useState(nuDateTimeLocal);
-  const [type, setType] = useState<FinancieelType>("KASGELD");
+  const [type, setType] = useState<FormType>("KASGELD");
   const [bedrag, setBedrag] = useState("");
   const [valuta, setValuta] = useState<FinancieelValuta>("EUR");
   const [omschrijving, setOmschrijving] = useState("");
@@ -72,6 +75,7 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
   const categorieOpties = type === "UITGAVE" ? UITGAVE_CATEGORIEEN : INKOMST_DIENSTEN;
   const toontBank = isBankBetaling(betalingswijze);
   const pinpas = isPinpasBetaling(betalingswijze);
+  const muntenbak = type === "MUNTENBAK";
 
   const laad = async () => {
     try {
@@ -143,7 +147,7 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
       setFout("Vul een geldig bedrag in. 0,- mag.");
       return;
     }
-    if (!omschrijving.trim()) {
+    if (!omschrijving.trim() && type !== "MUNTENBAK") {
       setFout("Vul een omschrijving in.");
       return;
     }
@@ -161,16 +165,16 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
       const created = await createFinancieelInzending(
         {
           datum: datumIso,
-          type,
-          omschrijving: omschrijving.trim(),
+          type: muntenbak ? "KASGELD" : type,
+          omschrijving: omschrijving.trim() || (muntenbak ? "Muntenbak" : ""),
           bedrag: bedragNr,
           valuta,
-          categorie: categorie.trim(),
+          categorie: muntenbak ? CATEGORIE_MUNTENBAK : categorie.trim(),
           referentie: referentie.trim(),
           klantNaam: klantNaam.trim(),
           betalingswijze: betalingswijze || null,
           bank: toontBank ? bank.trim() : "",
-          geldBijNaam: pinpas ? "" : geldBijNaam.trim() || gebruiker.naam,
+          geldBijNaam: pinpas || muntenbak ? "" : geldBijNaam.trim() || gebruiker.naam,
           geldVanNaam: pinpas ? "" : geldVanNaam.trim(),
           waaraan: waaraan.trim(),
           notities: notities.trim()
@@ -219,9 +223,20 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
               <select
                 className="form-input"
                 value={type}
-                onChange={(e) => setType(e.target.value as FinancieelType)}
+                onChange={(e) => {
+                  const gekozen = e.target.value as FormType;
+                  setType(gekozen);
+                  if (gekozen === "MUNTENBAK") {
+                    setCategorie(CATEGORIE_MUNTENBAK);
+                    setGeldBijNaam("");
+                    if (!omschrijving.trim()) setOmschrijving("Muntenbak");
+                  } else if (categorie === CATEGORIE_MUNTENBAK) {
+                    setCategorie("");
+                  }
+                }}
               >
                 <option value="KASGELD">Kasgeld (al in kas)</option>
+                <option value="MUNTENBAK">Muntenbak (beschikbaar, niet in kas)</option>
                 <option value="INKOMST">Inkomst</option>
                 <option value="UITGAVE">Uitgave</option>
                 <option value="OVERDRACHT">Overdracht naar medewerker</option>
@@ -258,8 +273,8 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
                 className="form-input"
                 value={omschrijving}
                 onChange={(e) => setOmschrijving(e.target.value)}
-                required
-                placeholder="Wat is er gebeurd met het geld?"
+                required={type !== "MUNTENBAK"}
+                placeholder={muntenbak ? "Muntenbak" : "Wat is er gebeurd met het geld?"}
               />
             </label>
             <label className="form-label">
@@ -269,7 +284,8 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
                 list="medewerker-fin-categorie"
                 value={categorie}
                 onChange={(e) => setCategorie(e.target.value)}
-                placeholder={type === "UITGAVE" ? "Taxi, kantoor..." : "Visa, advies..."}
+                placeholder={type === "UITGAVE" ? "Taxi, kantoor..." : muntenbak ? "Muntenbak" : "Visa, advies..."}
+                disabled={muntenbak}
               />
               <datalist id="medewerker-fin-categorie">
                 {categorieOpties.map((item) => (
@@ -333,7 +349,7 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
                 </select>
               </label>
             )}
-            {!pinpas && (
+            {!pinpas && !muntenbak && (
             <label className="form-label">
               Bij wie is het geld nu?
               <input
@@ -377,6 +393,7 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
                 placeholder="Bankstorting, overdracht, taxi..."
               />
               <datalist id="medewerker-fin-waaraan">
+                <option value="Muntenbak" />
                 <option value="Bankstorting" />
                 <option value="Overdracht medewerker" />
                 {UITGAVE_CATEGORIEEN.map((item) => (

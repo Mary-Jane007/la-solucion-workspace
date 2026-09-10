@@ -16,6 +16,7 @@ import {
   formatGeld,
   gebruikWaaraanTekst,
   isInkomstKas,
+  isMuntenbakGebruik,
   normaliseerGebruikingen,
   normalizeValuta,
   opdrachtDossierLabel,
@@ -37,7 +38,7 @@ export type FinancieelExportOpties = {
   /** KPI's van de geselecteerde periode — exact zoals op het scherm. */
   kpis?: Pick<
     DashboardKpis,
-    "inkomsten" | "uitgaven" | "inKas" | "netto" | "ontvangen" | "teOntvangen" | "openstaand"
+    "inkomsten" | "uitgaven" | "inKas" | "muntenbak" | "netto" | "ontvangen" | "teOntvangen" | "openstaand"
   >;
   /** Follow-the-money snapshot van de geselecteerde dag. */
   followTheMoney?: FollowMoneyDag;
@@ -48,7 +49,12 @@ function gebruikingenVanPost(p: FinancieelPost): FinancieelGebruik[] {
 }
 
 function gebruikSoortLabel(g: FinancieelGebruik): string {
-  if (g.soort === "ERBIJ") return isInkomstKas(g.waaraan) ? "Inkomst in kas" : "Erbij";
+  if (g.soort === "ERBIJ") {
+    if (isInkomstKas(g.waaraan)) return "Inkomst in kas";
+    if (isMuntenbakGebruik(g.waaraan)) return "Inkomst muntenbak";
+    return "Erbij";
+  }
+  if (isMuntenbakGebruik(g.waaraan)) return "Naar muntenbak";
   return "Af / besteed";
 }
 
@@ -160,7 +166,16 @@ function dagboekRij(p: FinancieelPost, opdrachtenById: Map<string, Opdracht>): s
   const gebruik = gebruikingenVanPost(p)
     .map((g) => {
       const waar = gebruikWaaraanTekst(g);
-      const richting = g.soort === "ERBIJ" ? (isInkomstKas(g.waaraan) ? "inkomst in kas" : "erbij") : "af";
+      const richting =
+        g.soort === "ERBIJ"
+          ? isInkomstKas(g.waaraan)
+            ? "inkomst in kas"
+            : isMuntenbakGebruik(g.waaraan)
+              ? "inkomst muntenbak"
+              : "erbij"
+          : isMuntenbakGebruik(g.waaraan)
+            ? "naar muntenbak"
+            : "af";
       return `${formatDatumTijd(g.datum)} · ${richting} ${geldTekst(g.bedrag, p.valuta)}${
         waar ? ` · ${waar}` : ""
       }${g.toelichting ? ` (${g.toelichting})` : ""}`;
@@ -268,6 +283,7 @@ function bouwRapportHtml(
       <tr><th>Inkomsten (periode)</th><td>${geldTekst(exportOpties.kpis.inkomsten, valuta)}</td></tr>
       <tr><th>Uitgaven (periode)</th><td>${geldTekst(exportOpties.kpis.uitgaven, valuta)}</td></tr>
       <tr><th>Momenteel in kas</th><td>${geldTekst(exportOpties.kpis.inKas, valuta)}</td></tr>
+      <tr><th>Muntenbak</th><td>${geldTekst(exportOpties.kpis.muntenbak, valuta)}</td></tr>
       <tr><th>Nettoresultaat (periode)</th><td>${geldTekst(exportOpties.kpis.netto, valuta)}</td></tr>
       <tr><th>Ontvangen</th><td>${geldTekst(exportOpties.kpis.ontvangen, valuta)}</td></tr>
       <tr><th>Nog te ontvangen</th><td>${geldTekst(exportOpties.kpis.teOntvangen, valuta)}</td></tr>
@@ -282,6 +298,7 @@ function bouwRapportHtml(
     <caption class="muted">Follow the money — einde van de geselecteerde dag</caption>
     <tbody>
       <tr><th>Totaal in kas (alle medewerkers)</th><td><strong>${geldTekst(follow.totaalInKas, follow.valuta)}</strong></td></tr>
+      <tr><th>Muntenbak</th><td>${geldTekst(follow.totaalMuntenbak, follow.valuta)}</td></tr>
       <tr><th>Beginsaldo / Begon met</th><td>${geldTekst(follow.totaalBegin, follow.valuta)}</td></tr>
       <tr><th>Deze dag erbij</th><td>${geldTekst(follow.totaalOntvangen, follow.valuta)}</td></tr>
       <tr><th>Deze dag eruit</th><td>${geldTekst(follow.totaalBesteed, follow.valuta)}</td></tr>
@@ -298,6 +315,7 @@ function bouwRapportHtml(
     geldTekst(t.uitgaven, t.valuta),
     geldTekst(t.ontvangen, t.valuta),
     geldTekst(t.momenteelInKas, t.valuta),
+    geldTekst(t.muntenbak, t.valuta),
     geldTekst(t.nettoResultaat, t.valuta),
     geldTekst(t.nogTeOntvangen, t.valuta),
     geldTekst(t.nogTeBetalen, t.valuta)
@@ -310,7 +328,8 @@ function bouwRapportHtml(
     geldTekst(t.ftmErbij, t.valuta),
     geldTekst(t.ftmEruit, t.valuta),
     geldTekst(t.ftmOverdracht, t.valuta),
-    geldTekst(t.ftmTotaalInKas, t.valuta)
+    geldTekst(t.ftmTotaalInKas, t.valuta),
+    geldTekst(t.ftmTotaalMuntenbak, t.valuta)
   ]);
 
   const gebruikRijen: string[][] = [];
@@ -392,6 +411,7 @@ function bouwRapportHtml(
             "Uitgaven",
             "Ontvangen",
             "Momenteel in kas",
+            "Muntenbak",
             "Nettoresultaat",
             "Nog te ontvangen",
             "Nog te betalen"
@@ -413,7 +433,8 @@ function bouwRapportHtml(
             "Deze dag erbij",
             "Deze dag eruit",
             "Overgedragen intern",
-            "Totaal in kas"
+            "Totaal in kas",
+            "Muntenbak"
           ],
           ftmRijen
         )
@@ -633,6 +654,7 @@ export function exportFinancieelExcel(
             ["Inkomsten (periode)", geldTekst(exportOpties.kpis.inkomsten, valuta)],
             ["Uitgaven (periode)", geldTekst(exportOpties.kpis.uitgaven, valuta)],
             ["Momenteel in kas", geldTekst(exportOpties.kpis.inKas, valuta)],
+            ["Muntenbak", geldTekst(exportOpties.kpis.muntenbak, valuta)],
             ["Nettoresultaat (periode)", geldTekst(exportOpties.kpis.netto, valuta)],
             ["Ontvangen", geldTekst(exportOpties.kpis.ontvangen, valuta)],
             ["Nog te ontvangen", geldTekst(exportOpties.kpis.teOntvangen, valuta)],
@@ -640,6 +662,7 @@ export function exportFinancieelExcel(
             ...(follow
               ? [
                   ["FTM — Totaal in kas", geldTekst(follow.totaalInKas, follow.valuta)],
+                  ["FTM — Muntenbak", geldTekst(follow.totaalMuntenbak, follow.valuta)],
                   ["FTM — Beginsaldo", geldTekst(follow.totaalBegin, follow.valuta)],
                   ["FTM — Deze dag erbij", geldTekst(follow.totaalOntvangen, follow.valuta)],
                   ["FTM — Deze dag eruit", geldTekst(follow.totaalBesteed, follow.valuta)],
@@ -658,6 +681,7 @@ export function exportFinancieelExcel(
       "Uitgaven",
       "Ontvangen",
       "Momenteel in kas",
+      "Muntenbak",
       "Nettoresultaat",
       "Nog te ontvangen",
       "Nog te betalen"
@@ -668,6 +692,7 @@ export function exportFinancieelExcel(
       geldTekst(t.uitgaven, t.valuta),
       geldTekst(t.ontvangen, t.valuta),
       geldTekst(t.momenteelInKas, t.valuta),
+      geldTekst(t.muntenbak, t.valuta),
       geldTekst(t.nettoResultaat, t.valuta),
       geldTekst(t.nogTeOntvangen, t.valuta),
       geldTekst(t.nogTeBetalen, t.valuta)
@@ -683,7 +708,8 @@ export function exportFinancieelExcel(
       "Deze dag erbij",
       "Deze dag eruit",
       "Overgedragen intern",
-      "Totaal in kas"
+      "Totaal in kas",
+      "Muntenbak"
     ],
     overzicht.map((t) => [
       VALUTA_LABELS[t.valuta],
@@ -692,7 +718,8 @@ export function exportFinancieelExcel(
       geldTekst(t.ftmErbij, t.valuta),
       geldTekst(t.ftmEruit, t.valuta),
       geldTekst(t.ftmOverdracht, t.valuta),
-      geldTekst(t.ftmTotaalInKas, t.valuta)
+      geldTekst(t.ftmTotaalInKas, t.valuta),
+      geldTekst(t.ftmTotaalMuntenbak, t.valuta)
     ])
   );
 

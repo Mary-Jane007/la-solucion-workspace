@@ -194,6 +194,11 @@ export function StatistiekenPagina({ werkruimte, onNavigeer }: Props) {
               tone="blauw"
             />
             <GeldKaart
+              label="Muntenbak"
+              waarde={formatGeld(financieel.kpis.muntenbak, valuta)}
+              tone="blauw"
+            />
+            <GeldKaart
               label="Nog te ontvangen"
               waarde={formatGeld(financieel.kpis.teOntvangen, valuta)}
               tone="oranje"
