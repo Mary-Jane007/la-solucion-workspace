@@ -468,6 +468,32 @@ export function helpVideoStreamUrl(): string {
   return `/api/help/video/stream?access_token=${encodeURIComponent(token)}`;
 }
 
+export function helpVideoDownloadUrl(): string {
+  const token = getToken();
+  if (!token) return "/api/help/video/download";
+  return `/api/help/video/download?access_token=${encodeURIComponent(token)}`;
+}
+
+export async function downloadHelpVideo(bestandsnaam: string): Promise<void> {
+  const res = await apiFetch("/api/help/video/download");
+  if (!res.ok) {
+    const data = await readApiJson(res).catch(() => ({ error: "Download mislukt." }));
+    throw new Error(String(data.error || "Download mislukt."));
+  }
+  const blob = await res.blob();
+  if (blob.size) {
+    triggerBrowserDownload(blob, bestandsnaam || "uitlegvideo.mp4");
+    return;
+  }
+  const a = document.createElement("a");
+  a.href = helpVideoDownloadUrl();
+  a.download = (bestandsnaam || "uitlegvideo.mp4").replace(/[\\/:*?"<>|]/g, "_").trim() || "uitlegvideo.mp4";
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 export async function fetchHelpVideo(): Promise<HelpVideoInfo | null> {
   const res = await apiFetch("/api/help/video");
   const data = await readApiJson(res);

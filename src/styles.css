@@ -2475,6 +2475,23 @@ textarea.form-input {
   font-size: 0.9rem;
 }
 
+.help-video-download {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin-top: 12px;
+}
+
+.help-video-download p {
+  margin: 0;
+  flex: 1 1 220px;
+}
+
+.help-video-download .btn-secondary {
+  text-decoration: none;
+}
+
 .help-video-actions {
   display: flex;
   flex-wrap: wrap;

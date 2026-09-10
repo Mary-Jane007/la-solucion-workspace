@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   deleteHelpVideo,
+  downloadHelpVideo,
   fetchHelpVideo,
   helpVideoStreamUrl,
   saveHelpVideoUrl,
@@ -10,7 +11,9 @@ import {
   HELP_VIDEO_ACCEPT,
   HELP_VIDEO_MAX_MB,
   HelpVideoInfo,
-  helpVideoEmbed
+  helpVideoBestandsnaam,
+  helpVideoEmbed,
+  helpVideoIsBestand
 } from "../helpConfig";
 
 type HelpStap = {
@@ -20,6 +23,15 @@ type HelpStap = {
 };
 
 const HELP_ONDERWERPEN: HelpStap[] = [
+  {
+    titel: "Uitlegvideo",
+    stappen: [
+      "Bovenaan Help staat de rondleidingvideo door de app.",
+      "Klik op afspelen om de video in de browser te bekijken.",
+      "Klik op Video downloaden om het bestand op je computer te zetten. Zo kun je de uitleg later offline terugkijken.",
+      "Staat er een YouTube- of Vimeo-link? Dan open je de video daar; die kun je niet als bestand vanuit Help downloaden."
+    ]
+  },
   {
     titel: "Inloggen",
     stappen: [
@@ -144,13 +156,15 @@ function HelpVideoBlok({
   gekozenBestand,
   laden,
   bezig,
+  downloadBezig,
   fout,
   succes,
   onInputChange,
   onBestandChange,
   onOpslaanLink,
   onUploadBestand,
-  onVerwijderen
+  onVerwijderen,
+  onDownload
 }: {
   isEigenaar: boolean;
   video: HelpVideoInfo | null;
@@ -158,6 +172,7 @@ function HelpVideoBlok({
   gekozenBestand: File | null;
   laden: boolean;
   bezig: boolean;
+  downloadBezig: boolean;
   fout: string | null;
   succes: string | null;
   onInputChange: (url: string) => void;
@@ -165,6 +180,7 @@ function HelpVideoBlok({
   onOpslaanLink: (e: FormEvent) => void;
   onUploadBestand: () => void;
   onVerwijderen: () => void;
+  onDownload: () => void;
 }) {
   const streamUrl = useMemo(() => helpVideoStreamUrl(), [video?.source]);
   const embed = helpVideoEmbed(video, streamUrl);
@@ -172,15 +188,20 @@ function HelpVideoBlok({
     { source: "link", playbackUrl: inputUrl.trim() },
     streamUrl
   );
-  const bestandTeGroot =
-    gekozenBestand && gekozenBestand.size > HELP_VIDEO_MAX_MB * 1024 * 1024;
+  const bestandTeGroot = Boolean(
+    gekozenBestand && gekozenBestand.size > HELP_VIDEO_MAX_MB * 1024 * 1024
+  );
+  const kanDownloaden = helpVideoIsBestand(video, embed);
+  const downloadNaam = helpVideoBestandsnaam(video);
+  const externeLink = video?.source === "link" ? video.playbackUrl : "";
 
   return (
     <section className="card page-card help-video-section">
       <div className="section-header">
         <h2>Video: rondleiding door de app</h2>
         <p className="muted">
-          Bekijk eerst deze uitlegvideo. Daarna vind je hieronder per onderwerp de stappen op een rij.
+          Bekijk de uitlegvideo hier, of download hem om later offline terug te kijken. Daarna
+          staan per onderwerp de stappen op een rij.
         </p>
       </div>
 
@@ -262,9 +283,9 @@ function HelpVideoBlok({
           {fout && <p className="login-hint login-error">{fout}</p>}
           {succes && <p className="login-hint login-success">{succes}</p>}
           <p className="muted help-video-beheer-hint">
-            Upload een bestand of plak een link. De video wordt opgeslagen in de database en blijft
-            beschikbaar na herstart of verhuizing van de server. Medewerkers zien alleen de afgespeelde
-            video.
+            Upload een bestand of plak een link. Een geüpload bestand wordt opgeslagen in de
+            database en blijft beschikbaar na herstart. Medewerkers kunnen de video afspelen en
+            downloaden.
           </p>
         </div>
       )}
@@ -272,24 +293,30 @@ function HelpVideoBlok({
       {laden ? (
         <p className="muted">Video laden...</p>
       ) : embed ? (
-        <div className="help-video-frame">
+        <>
           {video?.source === "file" && video.originalName && (
             <p className="muted help-video-bestandsnaam">{video.originalName}</p>
           )}
-          {embed.kind === "file" ? (
-            <video className="help-video-native" controls preload="metadata" src={embed.src}>
-              Je browser ondersteunt deze video niet.
-            </video>
-          ) : (
-            <iframe
-              className="help-video-embed"
-              src={embed.src}
-              title="App-uitlegvideo"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-            />
-          )}
-        </div>
+          <div className="help-video-frame">
+            {embed.kind === "file" ? (
+              <video className="help-video-native" controls preload="metadata" src={embed.src}>
+                Je browser ondersteunt deze video niet.{" "}
+                <a href={embed.src} download={downloadNaam}>
+                  Download de video
+                </a>
+                .
+              </video>
+            ) : (
+              <iframe
+                className="help-video-embed"
+                src={embed.src}
+                title="App-uitlegvideo"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+            )}
+          </div>
+        </>
       ) : (
         <div className="help-video-placeholder" aria-label="Geen uitlegvideo">
           <p>
@@ -298,8 +325,38 @@ function HelpVideoBlok({
           <p className="muted">
             {isEigenaar
               ? "Upload hierboven een videobestand of plak een link. Daarna verschijnt de speler op deze plek voor iedereen."
-              : "De eigenaar kan een uitlegvideo toevoegen. Zodra die is geplaatst, zie je hem hier."}
+              : "De eigenaar kan een uitlegvideo toevoegen. Zodra die is geplaatst, zie je hem hier en kun je hem downloaden."}
           </p>
+        </div>
+      )}
+      {embed && (
+        <div className="help-video-download">
+          {kanDownloaden ? (
+            <>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={bezig || laden || downloadBezig}
+                onClick={onDownload}
+              >
+                {downloadBezig ? "Downloaden..." : "Video downloaden"}
+              </button>
+              <p className="muted">
+                Sla <strong>{downloadNaam}</strong> op je computer op om de uitleg later offline te
+                bekijken.
+              </p>
+            </>
+          ) : externeLink ? (
+            <>
+              <a className="btn-secondary" href={externeLink} target="_blank" rel="noopener noreferrer">
+                Openen op {embed.kind === "vimeo" ? "Vimeo" : "YouTube"}
+              </a>
+              <p className="muted">
+                Deze video staat op een externe site. Downloaden als bestand kan alleen bij een
+                geüpload videobestand.
+              </p>
+            </>
+          ) : null}
         </div>
       )}
     </section>
@@ -312,6 +369,7 @@ export function HelpPagina({ isEigenaar }: { isEigenaar: boolean }) {
   const [gekozenBestand, setGekozenBestand] = useState<File | null>(null);
   const [laden, setLaden] = useState(true);
   const [bezig, setBezig] = useState(false);
+  const [downloadBezig, setDownloadBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
   const [succes, setSucces] = useState<string | null>(null);
 
@@ -364,11 +422,40 @@ export function HelpPagina({ isEigenaar }: { isEigenaar: boolean }) {
       setVideo(saved);
       setInputUrl("");
       setGekozenBestand(null);
-      setSucces("Videobestand opgeslagen. De video blijft bewaard en is direct af te spelen op Help.");
+      setSucces("Videobestand opgeslagen. De video blijft bewaard, is af te spelen en te downloaden op Help.");
     } catch (err) {
       setFout(err instanceof Error ? err.message : "Upload mislukt.");
     } finally {
       setBezig(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    setFout(null);
+    setSucces(null);
+    try {
+      setDownloadBezig(true);
+      if (video?.source === "file") {
+        await downloadHelpVideo(helpVideoBestandsnaam(video));
+        setSucces("Video gedownload.");
+        return;
+      }
+      const bron = video?.playbackUrl || helpVideoEmbed(video, helpVideoStreamUrl())?.src;
+      if (!bron) {
+        throw new Error("Geen videobestand beschikbaar om te downloaden.");
+      }
+      const a = document.createElement("a");
+      a.href = bron;
+      a.download = helpVideoBestandsnaam(video);
+      a.rel = "noopener";
+      a.target = "_blank";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (err) {
+      setFout(err instanceof Error ? err.message : "Download mislukt.");
+    } finally {
+      setDownloadBezig(false);
     }
   };
 
@@ -399,6 +486,7 @@ export function HelpPagina({ isEigenaar }: { isEigenaar: boolean }) {
         gekozenBestand={gekozenBestand}
         laden={laden}
         bezig={bezig}
+        downloadBezig={downloadBezig}
         fout={fout}
         succes={succes}
         onInputChange={setInputUrl}
@@ -406,6 +494,7 @@ export function HelpPagina({ isEigenaar }: { isEigenaar: boolean }) {
         onOpslaanLink={handleOpslaanLink}
         onUploadBestand={handleUploadBestand}
         onVerwijderen={handleVerwijderen}
+        onDownload={handleDownload}
       />
       {HELP_ONDERWERPEN.map((onderwerp) => (
         <HelpOnderwerp key={onderwerp.titel} {...onderwerp} />

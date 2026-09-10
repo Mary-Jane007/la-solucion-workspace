@@ -268,15 +268,36 @@ const uploadHelpVideo = multer({
   }
 });
 
-function streamHelpVideoResponse(req, res, { buffer, filePath, mimeType, originalName }) {
-  const safeName = String(originalName || "uitlegvideo").replace(/"/g, "");
+function streamHelpVideoResponse(req, res, { buffer, filePath, mimeType, originalName }, options = {}) {
+  const download = Boolean(options.download);
+  const safeName = String(originalName || "uitlegvideo.mp4").replace(/"/g, "") || "uitlegvideo.mp4";
   res.setHeader("Content-Type", mimeType || "video/mp4");
   res.setHeader("Cache-Control", "private, no-store");
-  res.setHeader("Accept-Ranges", "bytes");
-  if (safeName) {
-    res.setHeader("Content-Disposition", `inline; filename="${safeName}"`);
+  res.setHeader(
+    "Content-Disposition",
+    download ? contentDispositionAttachment(safeName) : `inline; filename="${safeName}"`
+  );
+  if (download) {
+    if (buffer) {
+      res.setHeader("Content-Length", buffer.length);
+      return res.end(buffer);
+    }
+    if (!filePath) {
+      res.status(404).json({ error: "Videobestand niet gevonden." });
+      return;
+    }
+    fs.stat(filePath, (err, stat) => {
+      if (err || !stat.isFile()) {
+        res.status(404).json({ error: "Videobestand niet gevonden." });
+        return;
+      }
+      res.setHeader("Content-Length", stat.size);
+      fs.createReadStream(filePath).pipe(res);
+    });
+    return;
   }
 
+  res.setHeader("Accept-Ranges", "bytes");
   const range = req.headers.range;
   if (buffer) {
     const size = buffer.length;
@@ -1463,6 +1484,21 @@ app.get("/api/help/video/stream", authRequired, async (req, res) => {
     console.error("Fout bij GET /api/help/video/stream:", err);
     if (!res.headersSent) {
       return res.status(500).json({ error: "Kon videobestand niet afspelen." });
+    }
+  }
+});
+
+app.get("/api/help/video/download", authRequired, async (req, res) => {
+  try {
+    const stream = await getHelpVideoForStream();
+    if (!stream) {
+      return res.status(404).json({ error: "Geen videobestand beschikbaar om te downloaden." });
+    }
+    streamHelpVideoResponse(req, res, stream, { download: true });
+  } catch (err) {
+    console.error("Fout bij GET /api/help/video/download:", err);
+    if (!res.headersSent) {
+      return res.status(500).json({ error: "Kon videobestand niet downloaden." });
     }
   }
 });

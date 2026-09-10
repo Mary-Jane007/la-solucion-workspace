@@ -66,3 +66,14 @@ export function helpVideoEmbed(
 
 export const HELP_VIDEO_ACCEPT = "video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov";
 export const HELP_VIDEO_MAX_MB = 100;
+
+export function helpVideoBestandsnaam(video: HelpVideoInfo | null): string {
+  const naam = (video?.originalName || "uitlegvideo").trim() || "uitlegvideo";
+  if (/\.(mp4|webm|mov|ogg|avi)$/i.test(naam)) return naam;
+  return `${naam}.mp4`;
+}
+
+export function helpVideoIsBestand(video: HelpVideoInfo | null, embed: HelpVideoEmbed | null): boolean {
+  if (video?.source === "file") return true;
+  return embed?.kind === "file";
+}
