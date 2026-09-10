@@ -7,6 +7,7 @@ const API_PORT = Number(process.env.PORT || 4000);
 const children = [];
 let shuttingDown = false;
 let serverRestartTimer = null;
+let frontendRestartTimer = null;
 
 function spawnProcess(name, command, args) {
   const child = spawn(command, args, {
@@ -33,10 +34,21 @@ function startBackend() {
   });
 }
 
+function startFrontend() {
+  if (shuttingDown) return;
+  const child = spawnProcess("frontend", "npx", ["vite"]);
+  child.on("exit", (code) => {
+    if (shuttingDown || code === 0) return;
+    console.log("[frontend] crashte — herstart over 2 seconden…");
+    frontendRestartTimer = setTimeout(startFrontend, 2000);
+  });
+}
+
 function shutdown(code = 0) {
   if (shuttingDown) return;
   shuttingDown = true;
   clearTimeout(serverRestartTimer);
+  clearTimeout(frontendRestartTimer);
   for (const child of children) {
     try {
       child.kill();
@@ -63,6 +75,5 @@ process.on("SIGTERM", () => shutdown(0));
   console.log("Stop alles met Ctrl+C.\n");
 
   startBackend();
-  const vite = spawnProcess("frontend", "npx", ["vite"]);
-  vite.on("exit", (code) => shutdown(code ?? 0));
+  startFrontend();
 })();

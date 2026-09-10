@@ -37,13 +37,29 @@ export async function login(email: string, password: string): Promise<{
   token: string;
   user: Gebruiker;
 }> {
-  const res = await apiFetch("/api/auth/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: email.trim(), password })
-  });
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), 20000);
+  let res: Response;
+  try {
+    res = await apiFetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email.trim(), password }),
+      signal: controller.signal
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("Inloggen duurde te lang. Controleer of de backend draait (npm run dev).");
+    }
+    throw new Error("De server is niet bereikbaar. Start alles met npm run dev en probeer het opnieuw.");
+  } finally {
+    window.clearTimeout(timer);
+  }
   const data = await readApiJson(res);
   if (!res.ok) throw new Error(String(data.error || "Inloggen mislukt."));
+  if (!data.token || !data.user || typeof data.user !== "object") {
+    throw new Error("Ongeldig antwoord van de server bij inloggen.");
+  }
   return data as { token: string; user: Gebruiker };
 }
 

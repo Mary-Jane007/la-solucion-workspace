@@ -290,11 +290,18 @@ function IngelogdeApp({
   );
 }
 
+function isSessieOngeldig(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /niet geautoriseerd|ongeldige of verlopen token|gebruiker niet gevonden/i.test(msg);
+}
+
 export function App() {
   const [ingelogdeGebruiker, setIngelogdeGebruiker] = useState<Gebruiker | null>(null);
   const [opdrachten, setOpdrachten] = useState<Opdracht[]>([]);
   const [laden, setLaden] = useState(true);
   const [fout, setFout] = useState<string | null>(null);
+  const [sessieFout, setSessieFout] = useState<string | null>(null);
+  const [sessiePoging, setSessiePoging] = useState(0);
   const [thema, setThema] = useState<Thema>(() => getOpgeslagenThema());
   const [prullenbakIds, setPrullenbakIds] = useState<string[]>([]);
 
@@ -306,6 +313,7 @@ export function App() {
     const token = getToken();
     if (!token) {
       setLaden(false);
+      setSessieFout(null);
       return;
     }
 
@@ -320,35 +328,56 @@ export function App() {
         )
       ]);
 
-    const init = async () => {
+    const laadOpdrachten = async (me: Gebruiker) => {
       try {
-        const me = await withTimeout(fetchMe(), "Sessie");
         const lijst = await withTimeout(fetchOpdrachten(), "Opdrachten");
         if (isCancelled) return;
-        setIngelogdeGebruiker(me);
         setOpdrachten(
           lijst.map((o) => ({
             ...o,
             bestanden: o.bestanden ?? []
           }))
         );
-        if (me.rol === Rol.Eigenaar) {
-          void fetchPrullenbak()
-            .then((prullenbak) => {
-              if (!isCancelled) setPrullenbakIds(prullenbak.map((o) => o.id));
-            })
-            .catch(() => {
-              // prullenbak is optioneel bij opstarten
-            });
-        }
       } catch {
-        clearToken();
         if (!isCancelled) {
-          setIngelogdeGebruiker(null);
-          setOpdrachten([]);
+          setFout("Ingelogd, maar opdrachten konden niet geladen worden.");
+        }
+      }
+      if (me.rol !== Rol.Eigenaar) return;
+      void fetchPrullenbak()
+        .then((prullenbak) => {
+          if (!isCancelled) setPrullenbakIds(prullenbak.map((o) => o.id));
+        })
+        .catch(() => {
+          // prullenbak is optioneel bij opstarten
+        });
+    };
+
+    const init = async () => {
+      setLaden(true);
+      setSessieFout(null);
+      try {
+        const me = await withTimeout(fetchMe(), "Sessie");
+        if (isCancelled) return;
+        setIngelogdeGebruiker(me);
+        await laadOpdrachten(me);
+      } catch (err) {
+        if (isSessieOngeldig(err)) {
+          clearToken();
+          if (!isCancelled) {
+            setIngelogdeGebruiker(null);
+            setOpdrachten([]);
+            setSessieFout(null);
+          }
+        } else if (!isCancelled) {
+          setSessieFout(
+            err instanceof Error
+              ? err.message
+              : "Kon de sessie niet herstellen. Controleer of de backend draait."
+          );
         }
       } finally {
-        setLaden(false);
+        if (!isCancelled) setLaden(false);
       }
     };
 
@@ -356,7 +385,7 @@ export function App() {
     return () => {
       isCancelled = true;
     };
-  }, []);
+  }, [sessiePoging]);
 
   const handleLogout = () => {
     clearToken();
@@ -377,6 +406,18 @@ export function App() {
           <div className="card">
             <h2>Even laden...</h2>
             <p className="muted">Bezig met sessie herstellen.</p>
+          </div>
+        ) : sessieFout && getToken() ? (
+          <div className="card">
+            <h2>Kan niet inloggen</h2>
+            <p className="muted page-error">{sessieFout}</p>
+            <p className="muted">
+              Je sessie is nog geldig, maar de server reageerde niet. Start de app met{" "}
+              <code>npm run dev</code> en probeer het opnieuw.
+            </p>
+            <button type="button" className="btn-primary" onClick={() => setSessiePoging((n) => n + 1)}>
+              Opnieuw proberen
+            </button>
           </div>
         ) : (
           <>
