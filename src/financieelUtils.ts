@@ -17,10 +17,10 @@ export const VALUTA_LABELS: Record<FinancieelValuta, string> = {
 };
 
 export const BETALINGSWIJZE_LABELS: Record<FinancieelBetalingswijze, string> = {
-  OPGEHAALD: "Opgehaald door medewerker",
-  PINPAS: "Pinpas",
-  OVERGEMAAKT: "Overgemaakt",
-  GESTORT: "Gestort op bank"
+  OPGEHAALD: "Opgehaald door medewerker (kas)",
+  PINPAS: "Pinpas (bank, niet in kas)",
+  OVERGEMAAKT: "Overmaking / deposit (bank, niet in kas)",
+  GESTORT: "Gestort op bank (niet in kas)"
 };
 
 export function isPinpasBetaling(wijze?: string | null): boolean {
@@ -32,14 +32,19 @@ export function isBankBetaling(wijze?: string | null): boolean {
   return v === "OVERGEMAAKT" || v === "GESTORT";
 }
 
+/** Pinpas, overmaking/deposit en storting: geld staat op de bank, niet in kas. */
+export function gaatViaBankrekening(wijze?: string | null): boolean {
+  return isPinpasBetaling(wijze) || isBankBetaling(wijze);
+}
+
 export function isContantBetaling(wijze?: string | null): boolean {
   const v = String(wijze || "").toUpperCase();
   return v === "" || v === "OPGEHAALD";
 }
 
-/** Pinpas gaat via de bankrekening, niet via kasgeld bij een medewerker. */
+/** Alleen contant (opgehaald) telt in de kas van een medewerker. */
 export function teltMeeInMedewerkerKas(p: { betalingswijze?: string | null }): boolean {
-  return !isPinpasBetaling(p.betalingswijze);
+  return !gaatViaBankrekening(p.betalingswijze);
 }
 
 /** Medewerkers die in financiële vulvelden altijd kiezenbaar zijn, ook zonder login-account. */
@@ -1072,7 +1077,7 @@ export function betalingsLabel(p: FinancieelPost): string {
   }
   const bank = (p.bank || "").trim();
   if (wijze === "OVERGEMAAKT") {
-    return bank ? `Overgemaakt · ${bank}` : BETALINGSWIJZE_LABELS.OVERGEMAAKT;
+    return bank ? `Overmaking / deposit · ${bank}` : BETALINGSWIJZE_LABELS.OVERGEMAAKT;
   }
   if (wijze === "PINPAS") return BETALINGSWIJZE_LABELS.PINPAS;
   return bank ? `Gestort · ${bank}` : BETALINGSWIJZE_LABELS.GESTORT;

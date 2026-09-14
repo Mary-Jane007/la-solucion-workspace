@@ -19,6 +19,7 @@ import {
   FINANCIEEL_VALUTAS,
   formatDatumTijd,
   formatGeld,
+  gaatViaBankrekening,
   isBankBetaling,
   isPinpasBetaling,
   nuDateTimeLocal,
@@ -75,6 +76,7 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
   const categorieOpties = type === "UITGAVE" ? UITGAVE_CATEGORIEEN : INKOMST_DIENSTEN;
   const toontBank = isBankBetaling(betalingswijze);
   const pinpas = isPinpasBetaling(betalingswijze);
+  const viaBankrekening = gaatViaBankrekening(betalingswijze);
   const muntenbak = type === "MUNTENBAK";
 
   const laad = async () => {
@@ -174,8 +176,8 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
           klantNaam: klantNaam.trim(),
           betalingswijze: betalingswijze || null,
           bank: toontBank ? bank.trim() : "",
-          geldBijNaam: pinpas || muntenbak ? "" : geldBijNaam.trim() || gebruiker.naam,
-          geldVanNaam: pinpas ? "" : geldVanNaam.trim(),
+          geldBijNaam: viaBankrekening || muntenbak ? "" : geldBijNaam.trim() || gebruiker.naam,
+          geldVanNaam: viaBankrekening ? "" : geldVanNaam.trim(),
           waaraan: waaraan.trim(),
           notities: notities.trim()
         },
@@ -319,7 +321,7 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
                   const wijze = e.target.value as "" | FinancieelBetalingswijze;
                   setBetalingswijze(wijze);
                   if (!isBankBetaling(wijze)) setBank("");
-                  if (isPinpasBetaling(wijze)) {
+                  if (gaatViaBankrekening(wijze)) {
                     setGeldBijNaam("");
                     setGeldVanNaam("");
                   }
@@ -333,7 +335,10 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
                 ))}
               </select>
               {pinpas && (
-                <span className="help-text">Pinpas gaat niet van het kasgeld bij een medewerker af.</span>
+                <span className="help-text">Pinpas gaat naar de bank, niet in kas bij een medewerker.</span>
+              )}
+              {toontBank && (
+                <span className="help-text">Overmaking of deposit staat op de bankrekening, niet in kas.</span>
               )}
             </label>
             {toontBank && (
@@ -349,7 +354,7 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
                 </select>
               </label>
             )}
-            {!pinpas && !muntenbak && (
+            {!viaBankrekening && !muntenbak && (
             <label className="form-label">
               Bij wie is het geld nu?
               <input
@@ -366,7 +371,7 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
               </datalist>
             </label>
             )}
-            {(type === "OVERDRACHT" || (type === "UITGAVE" && !pinpas)) && (
+            {(type === "OVERDRACHT" || (type === "UITGAVE" && !viaBankrekening)) && (
               <label className="form-label">
                 Van wie kwam het geld?
                 <input
