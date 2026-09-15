@@ -4,6 +4,7 @@ import {
   fetchFinancieelInzendingen,
   FinancieelBetalingswijze,
   FinancieelInzending,
+  FinancieelKasEffect,
   FinancieelType,
   FinancieelValuta
 } from "../api";
@@ -19,9 +20,10 @@ import {
   FINANCIEEL_VALUTAS,
   formatDatumTijd,
   formatGeld,
-  gaatViaBankrekening,
   isBankBetaling,
   isPinpasBetaling,
+  KAS_EFFECT_LABELS,
+  normalizeKasEffect,
   nuDateTimeLocal,
   parseGeldInvoer,
   SURINAAME_BANKEN,
@@ -61,6 +63,7 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
   const [klantNaam, setKlantNaam] = useState("");
   const [referentie, setReferentie] = useState("");
   const [betalingswijze, setBetalingswijze] = useState<"" | FinancieelBetalingswijze>("");
+  const [kasEffect, setKasEffect] = useState<"" | FinancieelKasEffect>("");
   const [bank, setBank] = useState("");
   const [geldBijNaam, setGeldBijNaam] = useState(gebruiker.naam);
   const [geldVanNaam, setGeldVanNaam] = useState("");
@@ -76,8 +79,14 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
   const categorieOpties = type === "UITGAVE" ? UITGAVE_CATEGORIEEN : INKOMST_DIENSTEN;
   const toontBank = isBankBetaling(betalingswijze);
   const pinpas = isPinpasBetaling(betalingswijze);
-  const viaBankrekening = gaatViaBankrekening(betalingswijze);
+  const kasRichting = toontBank ? normalizeKasEffect(kasEffect) || "NEE" : "";
   const muntenbak = type === "MUNTENBAK";
+  const toontKasErbij =
+    type === "OVERDRACHT" ||
+    (!muntenbak && !pinpas && (toontBank ? kasRichting === "ERBIJ" : true));
+  const toontKasAf =
+    type === "OVERDRACHT" ||
+    (!pinpas && (toontBank ? kasRichting === "AF" : type === "UITGAVE"));
 
   const laad = async () => {
     try {
@@ -106,6 +115,7 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
     setKlantNaam("");
     setReferentie("");
     setBetalingswijze("");
+    setKasEffect("");
     setBank("");
     setGeldBijNaam(gebruiker.naam);
     setGeldVanNaam("");
@@ -160,6 +170,16 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
       setFout("Vul een geldige datum en tijd in.");
       return;
     }
+    const bijNaam = toontKasErbij ? geldBijNaam.trim() || gebruiker.naam : "";
+    const vanNaam = toontKasAf ? geldVanNaam.trim() : "";
+    if (toontBank && kasRichting === "ERBIJ" && !bijNaam) {
+      setFout("Kies bij wie dit bedrag in kas erbij komt.");
+      return;
+    }
+    if (toontBank && kasRichting === "AF" && !vanNaam) {
+      setFout("Kies uit wiens kas dit bedrag af gaat.");
+      return;
+    }
     try {
       setBezig(true);
       setFout(null);
@@ -175,9 +195,10 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
           referentie: referentie.trim(),
           klantNaam: klantNaam.trim(),
           betalingswijze: betalingswijze || null,
+          kasEffect: toontBank ? kasRichting || "NEE" : null,
           bank: toontBank ? bank.trim() : "",
-          geldBijNaam: viaBankrekening || muntenbak ? "" : geldBijNaam.trim() || gebruiker.naam,
-          geldVanNaam: viaBankrekening ? "" : geldVanNaam.trim(),
+          geldBijNaam: bijNaam,
+          geldVanNaam: vanNaam,
           waaraan: waaraan.trim(),
           notities: notities.trim()
         },
@@ -319,9 +340,12 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
                 value={betalingswijze}
                 onChange={(e) => {
                   const wijze = e.target.value as "" | FinancieelBetalingswijze;
+                  const bankWijze = isBankBetaling(wijze);
+                  const pin = isPinpasBetaling(wijze);
                   setBetalingswijze(wijze);
-                  if (!isBankBetaling(wijze)) setBank("");
-                  if (gaatViaBankrekening(wijze)) {
+                  setKasEffect(bankWijze ? kasEffect || "NEE" : "");
+                  if (!bankWijze) setBank("");
+                  if (pin) {
                     setGeldBijNaam("");
                     setGeldVanNaam("");
                   }
@@ -337,9 +361,6 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
               {pinpas && (
                 <span className="help-text">Pinpas gaat naar de bank, niet in kas bij een medewerker.</span>
               )}
-              {toontBank && (
-                <span className="help-text">Overmaking of deposit staat op de bankrekening, niet in kas.</span>
-              )}
             </label>
             {toontBank && (
               <label className="form-label">
@@ -354,9 +375,34 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
                 </select>
               </label>
             )}
-            {!viaBankrekening && !muntenbak && (
+            {toontBank && (
+              <label className="form-label financieel-span-2">
+                Kas
+                <select
+                  className="form-input"
+                  value={kasRichting || "NEE"}
+                  onChange={(e) => {
+                    const effect = e.target.value as FinancieelKasEffect;
+                    setKasEffect(effect);
+                    if (effect !== "ERBIJ") setGeldBijNaam("");
+                    if (effect !== "AF") setGeldVanNaam("");
+                    if (effect === "ERBIJ") setGeldBijNaam((huidig) => huidig || gebruiker.naam);
+                  }}
+                >
+                  {(Object.keys(KAS_EFFECT_LABELS) as FinancieelKasEffect[]).map((effect) => (
+                    <option key={effect} value={effect}>
+                      {KAS_EFFECT_LABELS[effect]}
+                    </option>
+                  ))}
+                </select>
+                <span className="help-text">
+                  Kies zelf of dit bedrag van de kas af gaat, erbij komt, of op de bank blijft.
+                </span>
+              </label>
+            )}
+            {toontKasErbij && (
             <label className="form-label">
-              Bij wie is het geld nu?
+              {toontBank ? "Bij wie komt dit in kas?" : "Bij wie is het geld nu?"}
               <input
                 className="form-input"
                 list="medewerker-fin-bij-wie"
@@ -371,9 +417,9 @@ export function MedewerkerFinancieelPagina({ gebruiker }: Props) {
               </datalist>
             </label>
             )}
-            {(type === "OVERDRACHT" || (type === "UITGAVE" && !viaBankrekening)) && (
+            {toontKasAf && (
               <label className="form-label">
-                Van wie kwam het geld?
+                {toontBank ? "Uit wiens kas gaat dit af?" : "Van wie kwam het geld?"}
                 <input
                   className="form-input"
                   list="medewerker-fin-van-wie"

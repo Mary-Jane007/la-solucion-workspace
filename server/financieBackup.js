@@ -7,6 +7,7 @@ const {
   listFinancielePosten,
   normalizeValuta,
   normalizeBetalingswijze,
+  normalizeKasEffect,
   normalizeWisselkoers,
   normalizeGebruikingen
 } = require("./financieStore");
@@ -56,6 +57,7 @@ const postSchema = z.object({
   afgehandeldDoorUserId: z.string().optional().nullable(),
   afgehandeldDoorNaam: z.string().optional().nullable(),
   betalingswijze: z.enum(["OPGEHAALD", "PINPAS", "OVERGEMAAKT", "GESTORT"]).optional().nullable(),
+  kasEffect: z.enum(["NEE", "ERBIJ", "AF"]).optional().nullable(),
   bank: z.string().optional().nullable(),
   geldBijUserId: z.string().optional().nullable(),
   geldBijNaam: z.string().optional().nullable(),
@@ -84,6 +86,7 @@ const inzendingSchema = z.object({
   referentie: z.string().optional().nullable(),
   klantNaam: z.string().optional().nullable(),
   betalingswijze: z.enum(["OPGEHAALD", "PINPAS", "OVERGEMAAKT", "GESTORT"]).optional().nullable(),
+  kasEffect: z.enum(["NEE", "ERBIJ", "AF"]).optional().nullable(),
   bank: z.string().optional().nullable(),
   geldBijNaam: z.string().optional().nullable(),
   geldVanNaam: z.string().optional().nullable(),
@@ -323,11 +326,11 @@ async function insertPost(client, input) {
     `
     insert into financiele_posten
       (id, datum, type, omschrijving, bedrag, valuta, wisselkoers, categorie, referentie, klant_naam, opdracht_id,
-       afgehandeld_door_user_id, afgehandeld_door_naam, betalingswijze, bank,
+       afgehandeld_door_user_id, afgehandeld_door_naam, betalingswijze, kas_effect, bank,
        geld_bij_user_id, geld_bij_naam, geld_van_user_id, geld_van_naam, status, notities, gebruikingen,
        created_at, updated_at)
     values
-      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22::jsonb,$23,$24)
+      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23::jsonb,$24,$25)
     `,
     [
       id,
@@ -344,6 +347,7 @@ async function insertPost(client, input) {
       input.afgehandeldDoorUserId || null,
       input.afgehandeldDoorNaam || "",
       normalizeBetalingswijze(input.betalingswijze),
+      normalizeKasEffect(input.kasEffect),
       input.bank || "",
       input.geldBijUserId || null,
       input.geldBijNaam || "",
@@ -363,9 +367,9 @@ async function insertInzending(client, input) {
     `
     insert into financiele_inzendingen (
       id, created_at, van_user_id, van_naam, datum, type, omschrijving, bedrag, valuta, wisselkoers,
-      categorie, referentie, klant_naam, betalingswijze, bank, geld_bij_naam, geld_van_naam,
+      categorie, referentie, klant_naam, betalingswijze, kas_effect, bank, geld_bij_naam, geld_van_naam,
       waaraan, notities, status
-    ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+    ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
     `,
     [
       input.id,
@@ -382,6 +386,7 @@ async function insertInzending(client, input) {
       input.referentie || "",
       input.klantNaam || "",
       normalizeBetalingswijze(input.betalingswijze),
+      normalizeKasEffect(input.kasEffect),
       input.bank || "",
       input.geldBijNaam || "",
       input.geldVanNaam || "",

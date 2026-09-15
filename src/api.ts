@@ -207,6 +207,7 @@ export type FinancieelType = "INKOMST" | "UITGAVE" | "KASGELD" | "OVERDRACHT";
 export type FinancieelStatus = "OPEN" | "BETAALD";
 export type FinancieelValuta = "EUR" | "USD" | "SRD" | "XCG";
 export type FinancieelBetalingswijze = "OPGEHAALD" | "PINPAS" | "OVERGEMAAKT" | "GESTORT";
+export type FinancieelKasEffect = "NEE" | "ERBIJ" | "AF";
 export type FinancieelGebruikSoort = "AF" | "ERBIJ";
 
 export interface FinancieelGebruik {
@@ -254,6 +255,7 @@ export interface FinancieelPost {
   afgehandeldDoorUserId?: string | null;
   afgehandeldDoorNaam?: string;
   betalingswijze?: FinancieelBetalingswijze | null;
+  kasEffect?: FinancieelKasEffect | null;
   bank?: string;
   geldBijUserId?: string | null;
   geldBijNaam?: string;
@@ -396,6 +398,7 @@ export interface FinancieelInzending {
   referentie?: string;
   klantNaam?: string;
   betalingswijze?: FinancieelBetalingswijze | null;
+  kasEffect?: FinancieelKasEffect | null;
   bank?: string;
   geldBijNaam?: string;
   geldVanNaam?: string;
@@ -433,6 +436,7 @@ export async function createFinancieelInzending(
   if (inzending.referentie) form.append("referentie", inzending.referentie);
   if (inzending.klantNaam) form.append("klantNaam", inzending.klantNaam);
   if (inzending.betalingswijze) form.append("betalingswijze", inzending.betalingswijze);
+  if (inzending.kasEffect) form.append("kasEffect", inzending.kasEffect);
   if (inzending.bank) form.append("bank", inzending.bank);
   if (inzending.geldBijNaam) form.append("geldBijNaam", inzending.geldBijNaam);
   if (inzending.geldVanNaam) form.append("geldVanNaam", inzending.geldVanNaam);

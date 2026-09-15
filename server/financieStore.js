@@ -22,9 +22,14 @@ function normalizeWisselkoers(waarde) {
   return n;
 }
 
+function normalizeKasEffect(waarde) {
+  const v = String(waarde || "").toUpperCase();
+  return v === "NEE" || v === "ERBIJ" || v === "AF" ? v : null;
+}
+
 const POST_SELECT = `
       id, datum, type, omschrijving, bedrag, valuta, wisselkoers, categorie, referentie, klant_naam, opdracht_id,
-      afgehandeld_door_user_id, afgehandeld_door_naam, betalingswijze, bank,
+      afgehandeld_door_user_id, afgehandeld_door_naam, betalingswijze, kas_effect as "kasEffect", bank,
       geld_bij_user_id, geld_bij_naam, geld_van_user_id, geld_van_naam, status, notities, gebruikingen,
       created_at, updated_at
 `;
@@ -108,6 +113,7 @@ function rowToPost(row) {
     afgehandeldDoorUserId: row.afgehandeld_door_user_id || null,
     afgehandeldDoorNaam: row.afgehandeld_door_naam || "",
     betalingswijze: normalizeBetalingswijze(row.betalingswijze),
+    kasEffect: normalizeKasEffect(row.kasEffect ?? row.kas_effect),
     bank: row.bank || "",
     geldBijUserId: row.geld_bij_user_id || null,
     geldBijNaam: row.geld_bij_naam || "",
@@ -137,6 +143,7 @@ function postValues(id, input) {
     input.afgehandeldDoorUserId || null,
     input.afgehandeldDoorNaam || "",
     normalizeBetalingswijze(input.betalingswijze),
+    normalizeKasEffect(input.kasEffect),
     input.bank || "",
     input.geldBijUserId || null,
     input.geldBijNaam || "",
@@ -164,10 +171,10 @@ async function createFinancielePost(input) {
     `
     insert into financiele_posten
       (id, datum, type, omschrijving, bedrag, valuta, wisselkoers, categorie, referentie, klant_naam, opdracht_id,
-       afgehandeld_door_user_id, afgehandeld_door_naam, betalingswijze, bank,
+       afgehandeld_door_user_id, afgehandeld_door_naam, betalingswijze, kas_effect, bank,
        geld_bij_user_id, geld_bij_naam, geld_van_user_id, geld_van_naam, status, notities, gebruikingen)
     values
-      ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22::jsonb)
+      ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23::jsonb)
     returning ${POST_SELECT}
     `,
     postValues(id, input)
@@ -194,14 +201,15 @@ async function updateFinancielePost(id, input) {
       afgehandeld_door_user_id = $12,
       afgehandeld_door_naam = $13,
       betalingswijze = $14,
-      bank = $15,
-      geld_bij_user_id = $16,
-      geld_bij_naam = $17,
-      geld_van_user_id = $18,
-      geld_van_naam = $19,
-      status = $20,
-      notities = $21,
-      gebruikingen = $22::jsonb,
+      kas_effect = $15,
+      bank = $16,
+      geld_bij_user_id = $17,
+      geld_bij_naam = $18,
+      geld_van_user_id = $19,
+      geld_van_naam = $20,
+      status = $21,
+      notities = $22,
+      gebruikingen = $23::jsonb,
       updated_at = now()
     where id = $1
     returning ${POST_SELECT}
@@ -329,6 +337,7 @@ module.exports = {
   deleteFinancielePostBijlage,
   normalizeValuta,
   normalizeBetalingswijze,
+  normalizeKasEffect,
   normalizeWisselkoers,
   normalizeGebruikingen
 };

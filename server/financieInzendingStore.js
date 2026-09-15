@@ -15,6 +15,11 @@ function normalizeBetalingswijze(waarde) {
   return ["OPGEHAALD", "PINPAS", "OVERGEMAAKT", "GESTORT"].includes(v) ? v : null;
 }
 
+function normalizeKasEffect(waarde) {
+  const v = String(waarde || "").toUpperCase();
+  return v === "NEE" || v === "ERBIJ" || v === "AF" ? v : null;
+}
+
 function rowToInzending(row) {
   const datum =
     row.datum instanceof Date ? row.datum.toISOString() : row.datum ? String(row.datum) : null;
@@ -40,7 +45,8 @@ function rowToInzending(row) {
     categorie: row.categorie || "",
     referentie: row.referentie || "",
     klantNaam: row.klant_naam || "",
-    betalingswijze: row.betalingswijze || null,
+    betalingswijze: normalizeBetalingswijze(row.betalingswijze),
+    kasEffect: normalizeKasEffect(row.kas_effect),
     bank: row.bank || "",
     geldBijNaam: row.geld_bij_naam || "",
     geldVanNaam: row.geld_van_naam || "",
@@ -52,7 +58,7 @@ function rowToInzending(row) {
 
 const SELECT = `
   id, created_at, van_user_id, van_naam, datum, type, omschrijving, bedrag, valuta, wisselkoers,
-  categorie, referentie, klant_naam, betalingswijze, bank, geld_bij_naam, geld_van_naam, waaraan,
+  categorie, referentie, klant_naam, betalingswijze, kas_effect, bank, geld_bij_naam, geld_van_naam, waaraan,
   notities, status
 `;
 
@@ -76,9 +82,9 @@ async function createInzending(input, files = []) {
   await query(
     `insert into financiele_inzendingen (
       id, van_user_id, van_naam, datum, type, omschrijving, bedrag, valuta, wisselkoers,
-      categorie, referentie, klant_naam, betalingswijze, bank, geld_bij_naam, geld_van_naam,
+      categorie, referentie, klant_naam, betalingswijze, kas_effect, bank, geld_bij_naam, geld_van_naam,
       waaraan, notities, status
-    ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,'NIEUW')`,
+    ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,'NIEUW')`,
     [
       id,
       input.vanUserId,
@@ -93,6 +99,7 @@ async function createInzending(input, files = []) {
       input.referentie || "",
       input.klantNaam || "",
       normalizeBetalingswijze(input.betalingswijze),
+      normalizeKasEffect(input.kasEffect),
       input.bank || "",
       input.geldBijNaam || "",
       input.geldVanNaam || "",

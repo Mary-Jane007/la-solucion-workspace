@@ -1155,6 +1155,7 @@ const financieelSchema = z.object({
   afgehandeldDoorUserId: z.string().optional().nullable(),
   afgehandeldDoorNaam: z.string().optional().nullable(),
   betalingswijze: z.enum(["OPGEHAALD", "PINPAS", "OVERGEMAAKT", "GESTORT"]).optional().nullable(),
+  kasEffect: z.enum(["NEE", "ERBIJ", "AF"]).optional().nullable(),
   bank: z.string().optional().nullable(),
   geldBijUserId: z.string().optional().nullable(),
   geldBijNaam: z.string().optional().nullable(),
@@ -1201,6 +1202,7 @@ app.post("/api/admin/financieel", authRequired, requireOwner, async (req, res) =
     const body = { ...(req.body || {}) };
     if (!body.valuta) body.valuta = "EUR";
     if (body.wisselkoers === "" || body.wisselkoers === undefined) body.wisselkoers = null;
+    if (body.kasEffect === "") body.kasEffect = null;
     const parsed = financieelSchema.safeParse(body);
     if (!parsed.success) return res.status(400).json({ error: parseZodError(parsed.error) });
     const post = await createFinancielePost(parsed.data);
@@ -1275,6 +1277,7 @@ app.put("/api/admin/financieel/:id", authRequired, requireOwner, async (req, res
     const body = { ...(req.body || {}) };
     if (!body.valuta) body.valuta = "EUR";
     if (body.wisselkoers === "" || body.wisselkoers === undefined) body.wisselkoers = null;
+    if (body.kasEffect === "") body.kasEffect = null;
     const parsed = financieelSchema.safeParse(body);
     if (!parsed.success) return res.status(400).json({ error: parseZodError(parsed.error) });
     const post = await updateFinancielePost(req.params.id, parsed.data);
@@ -1309,6 +1312,7 @@ const inzendingSchema = z.object({
   referentie: z.string().optional().nullable(),
   klantNaam: z.string().optional().nullable(),
   betalingswijze: z.enum(["OPGEHAALD", "PINPAS", "OVERGEMAAKT", "GESTORT"]).optional().nullable(),
+  kasEffect: z.enum(["NEE", "ERBIJ", "AF"]).optional().nullable(),
   bank: z.string().optional().nullable(),
   geldBijNaam: z.string().optional().nullable(),
   geldVanNaam: z.string().optional().nullable(),
@@ -1346,6 +1350,7 @@ app.post("/api/financieel-inzendingen", authRequired, parseInzendingUpload, asyn
     if (!body.valuta) body.valuta = "EUR";
     if (body.wisselkoers === "" || body.wisselkoers === undefined) body.wisselkoers = null;
     if (body.betalingswijze === "") body.betalingswijze = null;
+    if (body.kasEffect === "") body.kasEffect = null;
     if (typeof body.bedrag === "string") {
       body.bedrag = Number(String(body.bedrag).replace(",", "."));
     }

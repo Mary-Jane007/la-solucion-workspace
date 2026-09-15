@@ -3,6 +3,8 @@ import {
   BETALINGSWIJZE_LABELS,
   formatDatumTijd,
   formatGeld,
+  isBankBetaling,
+  KAS_EFFECT_LABELS,
   typeLabel,
   VALUTA_LABELS
 } from "./financieelUtils";
@@ -24,6 +26,8 @@ export function inzendingMatchtZoekterm(item: FinancieelInzending, zoekterm: str
     item.referentie,
     item.notities,
     item.bank,
+    item.kasEffect,
+    item.kasEffect ? KAS_EFFECT_LABELS[item.kasEffect] : "",
     item.geldBijNaam,
     item.geldVanNaam,
     item.waaraan,
@@ -46,6 +50,9 @@ export function inzendingSamenvatting(item: FinancieelInzending): string {
     item.waaraan ? `Besteed: ${item.waaraan}` : "",
     item.geldBijNaam ? `Nu bij ${item.geldBijNaam}` : "",
     item.geldVanNaam ? `Van ${item.geldVanNaam}` : "",
+    item.kasEffect && isBankBetaling(item.betalingswijze)
+      ? KAS_EFFECT_LABELS[item.kasEffect]
+      : "",
     item.bijlagen?.length
       ? `${item.bijlagen.length} foto${item.bijlagen.length === 1 ? "" : "’s"}`
       : ""
@@ -75,6 +82,12 @@ export function inzendingVelden(item: FinancieelInzending): Array<{ veld: string
       waarde: item.betalingswijze ? BETALINGSWIJZE_LABELS[item.betalingswijze] : "—"
     },
     { veld: "Bank", waarde: item.bank || "—" },
+    {
+      veld: "Kas",
+      waarde: isBankBetaling(item.betalingswijze)
+        ? KAS_EFFECT_LABELS[item.kasEffect || "NEE"]
+        : "—"
+    },
     { veld: "Bij wie is het geld", waarde: item.geldBijNaam || "—" },
     { veld: "Geld van", waarde: item.geldVanNaam || "—" },
     { veld: "Waaraan besteed", waarde: item.waaraan || "—" },

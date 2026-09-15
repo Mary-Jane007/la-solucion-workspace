@@ -6,6 +6,7 @@ import {
   fetchFinancieel,
   FinancieelBetalingswijze,
   FinancieelGebruikSoort,
+  FinancieelKasEffect,
   FinancieelPost,
   FinancieelStatus,
   FinancieelType,
@@ -31,7 +32,6 @@ import {
   exportDossierSaldiCsv,
   exportFinancieelPostenCsv,
   exportKlantSaldiCsv,
-
   FINANCIEEL_VALUTAS,
   financieelPostMatchtZoekterm,
   formatGeld,
@@ -65,10 +65,11 @@ import {
   extraUitgaveUitGebruik,
   echteMedewerkerUserId,
   voegVasteMedewerkersToe,
-  gaatViaBankrekening,
   isBankBetaling,
   isContantBetaling,
   isPinpasBetaling,
+  KAS_EFFECT_LABELS,
+  normalizeKasEffect,
   SaldoCijfers,
   SURINAAME_BANKEN,
   VALUTA_LABELS
@@ -171,6 +172,7 @@ type FormState = {
   klantNaam: string;
   opdrachtId: string;
   betalingswijze: "" | FinancieelBetalingswijze;
+  kasEffect: "" | FinancieelKasEffect;
   bank: string;
   afgehandeldDoorUserId: string;
   afgehandeldDoorNaam: string;
@@ -228,6 +230,7 @@ function leegFormulier(valuta: FinancieelValuta = "EUR"): FormState {
     klantNaam: "",
     opdrachtId: "",
     betalingswijze: "",
+    kasEffect: "",
     bank: "",
     afgehandeldDoorUserId: "",
     afgehandeldDoorNaam: "",
@@ -574,7 +577,13 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
   const toontMedewerker = isContantBetaling(form.betalingswijze);
   const toontBank = isBankBetaling(form.betalingswijze);
   const pinpas = isPinpasBetaling(form.betalingswijze);
-  const viaBankrekening = gaatViaBankrekening(form.betalingswijze);
+  const kasEffect = toontBank ? normalizeKasEffect(form.kasEffect) || "NEE" : "";
+  const toontKasErbij =
+    form.type === "OVERDRACHT" ||
+    (!isMuntenbakPost(form) && !pinpas && (toontBank ? kasEffect === "ERBIJ" : form.type !== "UITGAVE"));
+  const toontKasAf =
+    form.type === "OVERDRACHT" ||
+    (!pinpas && (toontBank ? kasEffect === "AF" : form.type === "UITGAVE"));
   const resetForm = () => {
     setForm(leegFormulier(form.valuta));
     setBewerkId(null);
@@ -638,6 +647,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       klantNaam: post.klantNaam || "",
       opdrachtId: post.opdrachtId || "",
       betalingswijze: post.betalingswijze || "",
+      kasEffect: post.kasEffect || (isBankBetaling(post.betalingswijze) ? "NEE" : ""),
       bank: post.bank || "",
       afgehandeldDoorUserId: post.afgehandeldDoorUserId || "",
       afgehandeldDoorNaam: post.afgehandeldDoorNaam || "",
@@ -708,6 +718,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       referentie: item.referentie || "",
       klantNaam: item.klantNaam || "",
       betalingswijze: item.betalingswijze || "",
+      kasEffect: item.kasEffect || (isBankBetaling(item.betalingswijze) ? "NEE" : ""),
       bank: item.bank || "",
       afgehandeldDoorUserId: item.vanUserId,
       afgehandeldDoorNaam: item.vanNaam,
@@ -782,18 +793,26 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
     const geldVanPersoonTeam = form.geldVanUserId
       ? medewerkerOpties.find((u) => u.id === form.geldVanUserId)
       : undefined;
-    const geldVanNaam = viaBankrekening
-      ? ""
-      : geldVanPersoonTeam?.name || form.geldVanNaam.trim();
-    const geldBijNaam = (viaBankrekening && form.type !== "OVERDRACHT") || isMuntenbakPost(form)
-      ? ""
-      : geldBijPersoon?.name || form.geldBijNaam.trim();
+    const geldVanNaam = toontKasAf
+      ? geldVanPersoonTeam?.name || form.geldVanNaam.trim()
+      : "";
+    const geldBijNaam = toontKasErbij
+      ? geldBijPersoon?.name || form.geldBijNaam.trim()
+      : "";
     if (form.type === "OVERDRACHT" && (!geldVanNaam || !geldBijNaam)) {
       setFout("Bij een overdracht vul je in van wie het geld komt én bij wie het nu is.");
       return;
     }
     if (isOpeningsKas(form) && !geldBijNaam) {
       setFout("Bij openingskas vul je in bij wie het geld vanochtend lag.");
+      return;
+    }
+    if (toontBank && kasEffect === "ERBIJ" && !geldBijNaam) {
+      setFout("Kies bij wie dit bedrag in kas erbij komt.");
+      return;
+    }
+    if (toontBank && kasEffect === "AF" && !geldVanNaam) {
+      setFout("Kies uit wiens kas dit bedrag af gaat.");
       return;
     }
     const omschrijving =
@@ -955,10 +974,11 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
         isContantBetaling(wijze) ? echteMedewerkerUserId(form.afgehandeldDoorUserId) : null,
       afgehandeldDoorNaam: medewerkerNaam,
       betalingswijze: wijze,
+      kasEffect: toontBank ? kasEffect || "NEE" : null,
       bank: toontBank ? form.bank.trim() : "",
-      geldBijUserId: (viaBankrekening && form.type !== "OVERDRACHT") || isMuntenbakPost(form) ? null : echteMedewerkerUserId(form.geldBijUserId),
+      geldBijUserId: toontKasErbij ? echteMedewerkerUserId(form.geldBijUserId) : null,
       geldBijNaam,
-      geldVanUserId: viaBankrekening ? null : echteMedewerkerUserId(form.geldVanUserId),
+      geldVanUserId: toontKasAf ? echteMedewerkerUserId(form.geldVanUserId) : null,
       geldVanNaam,
       status: form.type === "OVERDRACHT" || form.type === "KASGELD" ? "BETAALD" : form.status,
       notities: form.notities.trim(),
@@ -1418,17 +1438,19 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                   Betalingswijze
                   <select className="form-input" value={form.betalingswijze} onChange={(e) => {
                     const betalingswijze = e.target.value as "" | FinancieelBetalingswijze;
-                    const viaBank = gaatViaBankrekening(betalingswijze);
+                    const bank = isBankBetaling(betalingswijze);
+                    const pin = isPinpasBetaling(betalingswijze);
                     setForm({
                       ...form,
                       betalingswijze,
-                      bank: isBankBetaling(betalingswijze) ? form.bank : "",
+                      kasEffect: bank ? form.kasEffect || "NEE" : "",
+                      bank: bank ? form.bank : "",
                       afgehandeldDoorUserId: isContantBetaling(betalingswijze) ? form.afgehandeldDoorUserId : "",
                       afgehandeldDoorNaam: isContantBetaling(betalingswijze) ? form.afgehandeldDoorNaam : "",
-                      geldVanUserId: viaBank ? "" : form.geldVanUserId,
-                      geldVanNaam: viaBank ? "" : form.geldVanNaam,
-                      geldBijUserId: viaBank && form.type !== "OVERDRACHT" ? "" : form.geldBijUserId,
-                      geldBijNaam: viaBank && form.type !== "OVERDRACHT" ? "" : form.geldBijNaam
+                      geldVanUserId: pin ? "" : form.geldVanUserId,
+                      geldVanNaam: pin ? "" : form.geldVanNaam,
+                      geldBijUserId: pin && form.type !== "OVERDRACHT" ? "" : form.geldBijUserId,
+                      geldBijNaam: pin && form.type !== "OVERDRACHT" ? "" : form.geldBijNaam
                     });
                   }}>
                     <option value="">— Niet gekozen —</option>
@@ -1436,9 +1458,6 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                   </select>
                   {pinpas && (
                     <span className="help-text">Pinpas gaat naar de bank, niet in kas bij een medewerker.</span>
-                  )}
-                  {toontBank && (
-                    <span className="help-text">Overmaking of deposit staat op de bankrekening, niet in kas.</span>
                   )}
                 </label>
                 {toontBank ? (
@@ -1450,6 +1469,31 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                     setForm({ ...form, afgehandeldDoorUserId: id, afgehandeldDoorNaam: medewerker?.name || "", betalingswijze: form.betalingswijze || "OPGEHAALD" });
                   }}><option value="">— Geen medewerker —</option>{medewerkerOpties.map((u) => <option key={u.id} value={u.id}>{u.name}{!u.active ? " (inactief)" : ""}{u.role === "EIGENAAR" ? " · eigenaar" : ""}</option>)}</select></label>
                 )}
+                {toontBank && (
+                  <label className="form-label financieel-span-2">
+                    Kas
+                    <select
+                      className="form-input"
+                      value={kasEffect || "NEE"}
+                      onChange={(e) => {
+                        const effect = e.target.value as FinancieelKasEffect;
+                        setForm({
+                          ...form,
+                          kasEffect: effect,
+                          geldBijUserId: effect === "ERBIJ" ? form.geldBijUserId : "",
+                          geldBijNaam: effect === "ERBIJ" ? form.geldBijNaam : "",
+                          geldVanUserId: effect === "AF" ? form.geldVanUserId : "",
+                          geldVanNaam: effect === "AF" ? form.geldVanNaam : ""
+                        });
+                      }}
+                    >
+                      {(Object.keys(KAS_EFFECT_LABELS) as FinancieelKasEffect[]).map((effect) => (
+                        <option key={effect} value={effect}>{KAS_EFFECT_LABELS[effect]}</option>
+                      ))}
+                    </select>
+                    <span className="help-text">Kies zelf of dit bedrag van de kas af gaat, erbij komt, of op de bank blijft.</span>
+                  </label>
+                )}
                 {toontMedewerker && (
                   <label className="form-label financieel-span-2">Of typ medewerkernaam<input className="form-input" list="financieel-afgehandeld-door" value={form.afgehandeldDoorNaam} onChange={(e) => {
                     const naam = e.target.value;
@@ -1457,12 +1501,14 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                     setForm({ ...form, afgehandeldDoorNaam: naam, afgehandeldDoorUserId: match?.id || "", betalingswijze: form.betalingswijze || (naam ? "OPGEHAALD" : "") });
                   }} /><datalist id="financieel-afgehandeld-door">{medewerkerOpties.map((u) => <option key={u.id} value={u.name} />)}</datalist></label>
                 )}
-                {(form.type === "OVERDRACHT" || (form.type === "UITGAVE" && !viaBankrekening)) && (
+                {toontKasAf && (
                   <>
                 <label className="form-label">
                   {form.type === "OVERDRACHT"
                     ? "Van wie kwam het geld?"
-                    : "Uit wiens kas is dit betaald?"}
+                    : toontBank
+                      ? "Uit wiens kas gaat dit af?"
+                      : "Uit wiens kas is dit betaald?"}
                   <select className="form-input" value={form.geldVanUserId} onChange={(e) => {
                     const id = e.target.value;
                     const medewerker = medewerkerOpties.find((m) => m.id === id);
@@ -1485,10 +1531,14 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                 </label>
                   </>
                 )}
-                {(form.type === "OVERDRACHT" || (form.type !== "UITGAVE" && !viaBankrekening && !isMuntenbakPost(form))) && (
+                {toontKasErbij && (
                   <>
                 <label className="form-label">
-                  {form.type === "OVERDRACHT" ? "Bij wie is het geld nu?" : "Bij wie is het geld?"}
+                  {form.type === "OVERDRACHT"
+                    ? "Bij wie is het geld nu?"
+                    : toontBank
+                      ? "Bij wie komt dit in kas?"
+                      : "Bij wie is het geld?"}
                   <select className="form-input" value={form.geldBijUserId} onChange={(e) => {
                     const id = e.target.value;
                     const medewerker = medewerkerOpties.find((m) => m.id === id);

@@ -11,6 +11,7 @@ import {
   formatGeld,
   geldNaarPersoon,
   geldVanPersoon,
+  bankKasRichting,
   gebruikingenSamenvatting,
   gebruikWaaraanTekst,
   inkomstKasRegels,
@@ -1669,6 +1670,17 @@ function applyFollowSaldo(saldi: Map<string, FollowSaldo>, p: FinancieelPost, be
   if (!teltMeeInMedewerkerKas(p)) return;
   const amount = geldRond(bedrag);
   if (amount === 0) return;
+  const bankRichting = bankKasRichting(p);
+  if (bankRichting === "ERBIJ") {
+    const naar = geldNaarPersoon(p) || geldVanPersoon(p);
+    if (naar) bumpFollowSaldo(saldi, naar, amount);
+    return;
+  }
+  if (bankRichting === "AF") {
+    const van = geldVanPersoon(p) || geldNaarPersoon(p);
+    if (van) bumpFollowSaldo(saldi, van, -amount);
+    return;
+  }
   if (p.type === "INKOMST" || p.type === "KASGELD") {
     const naar = geldNaarPersoon(p);
     if (naar) bumpFollowSaldo(saldi, naar, amount);
@@ -1688,6 +1700,17 @@ function followPersoonDeltas(p: FinancieelPost, bedrag: number): Array<{ key: st
   const amount = geldRond(bedrag);
   if (amount === 0) return [];
   const uit: Array<{ key: string; naam: string; delta: number }> = [];
+  const bankRichting = bankKasRichting(p);
+  if (bankRichting === "ERBIJ") {
+    const naar = geldNaarPersoon(p) || geldVanPersoon(p);
+    if (naar) uit.push({ key: followSleutel(naar.naam, naar.userId), naam: naar.naam, delta: amount });
+    return uit;
+  }
+  if (bankRichting === "AF") {
+    const van = geldVanPersoon(p) || geldNaarPersoon(p);
+    if (van) uit.push({ key: followSleutel(van.naam, van.userId), naam: van.naam, delta: -amount });
+    return uit;
+  }
   if (p.type === "INKOMST" || p.type === "KASGELD") {
     const naar = geldNaarPersoon(p);
     if (naar) uit.push({ key: followSleutel(naar.naam, naar.userId), naam: naar.naam, delta: amount });

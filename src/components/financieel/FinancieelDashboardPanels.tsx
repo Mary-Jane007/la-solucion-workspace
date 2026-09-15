@@ -1119,11 +1119,12 @@ export function InstellingenPanel({
         </p>
         <p className="muted">Inkomstdiensten: {INKOMST_DIENSTEN.join(", ")}.</p>
         <p className="muted">
-          Betalingswijzen: Opgehaald (contant in kas), Pinpas (bank), Overmaking / deposit
-          (bank), Gestort op bank. Pinpas, overmaking en storting komen niet in kas, maar staan op
-          de bankrekening. Muntenbak is beschikbaar contant dat niet in de kas van een medewerker
-          ligt; kies het als posttype of via “Van dit bedrag gebruikt”. Banklijst is uitbreidbaar in
-          het registratieformulier.
+          Betalingswijzen: Opgehaald (contant in kas), Pinpas (bank, nooit in kas), Overmaking /
+          deposit (bank), Gestort op bank. Bij overmaking of storting kies je zelf of het bedrag
+          niet in kas blijft, erbij in kas komt, of van kas af gaat. Pinpas blijft altijd buiten de
+          kas. Muntenbak is beschikbaar contant dat niet in de kas van een medewerker ligt; kies het
+          als posttype of via “Van dit bedrag gebruikt”. Banklijst is uitbreidbaar in het
+          registratieformulier.
         </p>
       </section>
       <section className="card page-card">

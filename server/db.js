@@ -186,6 +186,7 @@ async function migrate() {
     alter table financiele_posten add column if not exists afgehandeld_door_naam text;
     alter table financiele_posten add column if not exists valuta text;
     alter table financiele_posten add column if not exists betalingswijze text;
+    alter table financiele_posten add column if not exists kas_effect text;
     alter table financiele_posten add column if not exists bank text;
     alter table financiele_posten add column if not exists geld_bij_user_id text;
     alter table financiele_posten add column if not exists geld_bij_naam text;
@@ -217,6 +218,18 @@ async function migrate() {
         check (
           betalingswijze is null
           or betalingswijze in ('OPGEHAALD', 'OVERGEMAAKT', 'GESTORT', 'PINPAS')
+        );
+    exception
+      when duplicate_object then null;
+    end $$;
+    alter table financiele_posten drop constraint if exists financiele_posten_kas_effect_check;
+    do $$
+    begin
+      alter table financiele_posten
+        add constraint financiele_posten_kas_effect_check
+        check (
+          kas_effect is null
+          or kas_effect in ('NEE', 'ERBIJ', 'AF')
         );
     exception
       when duplicate_object then null;
@@ -258,6 +271,7 @@ async function migrate() {
       referentie text,
       klant_naam text,
       betalingswijze text,
+      kas_effect text,
       bank text,
       geld_bij_naam text,
       geld_van_naam text,
@@ -268,6 +282,7 @@ async function migrate() {
     create index if not exists idx_financiele_inzendingen_status on financiele_inzendingen(status);
     create index if not exists idx_financiele_inzendingen_van on financiele_inzendingen(van_user_id);
     create index if not exists idx_financiele_inzendingen_created on financiele_inzendingen(created_at desc);
+    alter table financiele_inzendingen add column if not exists kas_effect text;
     `,
     []
   );

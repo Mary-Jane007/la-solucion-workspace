@@ -19,8 +19,16 @@ export const VALUTA_LABELS: Record<FinancieelValuta, string> = {
 export const BETALINGSWIJZE_LABELS: Record<FinancieelBetalingswijze, string> = {
   OPGEHAALD: "Opgehaald door medewerker (kas)",
   PINPAS: "Pinpas (bank, niet in kas)",
-  OVERGEMAAKT: "Overmaking / deposit (bank, niet in kas)",
-  GESTORT: "Gestort op bank (niet in kas)"
+  OVERGEMAAKT: "Overmaking / deposit (bank)",
+  GESTORT: "Gestort op bank"
+};
+
+export type FinancieelKasEffect = "NEE" | "ERBIJ" | "AF";
+
+export const KAS_EFFECT_LABELS: Record<FinancieelKasEffect, string> = {
+  NEE: "Niet in kas (blijft op de bank)",
+  ERBIJ: "Erbij in kas",
+  AF: "Af van kas"
 };
 
 export function isPinpasBetaling(wijze?: string | null): boolean {
@@ -32,7 +40,7 @@ export function isBankBetaling(wijze?: string | null): boolean {
   return v === "OVERGEMAAKT" || v === "GESTORT";
 }
 
-/** Pinpas, overmaking/deposit en storting: geld staat op de bank, niet in kas. */
+/** Pinpas, overmaking/deposit en storting lopen via de bankrekening. */
 export function gaatViaBankrekening(wijze?: string | null): boolean {
   return isPinpasBetaling(wijze) || isBankBetaling(wijze);
 }
@@ -42,9 +50,30 @@ export function isContantBetaling(wijze?: string | null): boolean {
   return v === "" || v === "OPGEHAALD";
 }
 
-/** Alleen contant (opgehaald) telt in de kas van een medewerker. */
-export function teltMeeInMedewerkerKas(p: { betalingswijze?: string | null }): boolean {
-  return !gaatViaBankrekening(p.betalingswijze);
+export function normalizeKasEffect(waarde?: string | null): FinancieelKasEffect | "" {
+  const v = String(waarde || "").toUpperCase();
+  if (v === "NEE" || v === "ERBIJ" || v === "AF") return v;
+  return "";
+}
+
+/** Handmatige kas-richting bij overmaking/storting; anders null (dan geldt het posttype). */
+export function bankKasRichting(p: {
+  betalingswijze?: string | null;
+  kasEffect?: string | null;
+}): "ERBIJ" | "AF" | null {
+  if (!isBankBetaling(p.betalingswijze)) return null;
+  const effect = normalizeKasEffect(p.kasEffect);
+  return effect === "ERBIJ" || effect === "AF" ? effect : null;
+}
+
+/** Pinpas nooit in kas. Overmaking/storting alleen als je zelf Erbij of Af kiest. */
+export function teltMeeInMedewerkerKas(p: {
+  betalingswijze?: string | null;
+  kasEffect?: string | null;
+}): boolean {
+  if (isPinpasBetaling(p.betalingswijze)) return false;
+  if (isBankBetaling(p.betalingswijze)) return bankKasRichting(p) != null;
+  return true;
 }
 
 /** Medewerkers die in financiële vulvelden altijd kiezenbaar zijn, ook zonder login-account. */
@@ -792,8 +821,15 @@ export function berekenGeldBijTotalen(posten: FinancieelPost[]): GeldBijTotaal[]
     const valuta = normalizeValuta(p.valuta);
     const teltAlsKas = p.type === "KASGELD" || p.type === "OVERDRACHT" || p.status === "BETAALD";
     const kasRestant = geldRondCents(restantBedrag(p) - totaalMuntenbakErbij(p));
+    const bankRichting = bankKasRichting(p);
     if (teltAlsKas) {
-      if (p.type === "INKOMST") {
+      if (bankRichting === "ERBIJ") {
+        const naar = geldNaarPersoon(p);
+        if (naar) bumpPersoon(map, naar, valuta, p.type === "KASGELD" ? "kasgeld" : "inkomsten", kasRestant);
+      } else if (bankRichting === "AF") {
+        const van = geldVanPersoon(p) || geldNaarPersoon(p);
+        if (van) bumpPersoon(map, van, valuta, "uitgaven", kasRestant);
+      } else if (p.type === "INKOMST") {
         const naar = geldNaarPersoon(p);
         if (naar) bumpPersoon(map, naar, valuta, "inkomsten", kasRestant);
       } else if (p.type === "KASGELD") {
@@ -1076,11 +1112,13 @@ export function betalingsLabel(p: FinancieelPost): string {
       : BETALINGSWIJZE_LABELS.OPGEHAALD;
   }
   const bank = (p.bank || "").trim();
+  const kas = bankKasRichting(p);
+  const kasSuffix = kas === "ERBIJ" ? " · erbij in kas" : kas === "AF" ? " · af van kas" : "";
   if (wijze === "OVERGEMAAKT") {
-    return bank ? `Overmaking / deposit · ${bank}` : BETALINGSWIJZE_LABELS.OVERGEMAAKT;
+    return `${bank ? `Overmaking / deposit · ${bank}` : BETALINGSWIJZE_LABELS.OVERGEMAAKT}${kasSuffix}`;
   }
   if (wijze === "PINPAS") return BETALINGSWIJZE_LABELS.PINPAS;
-  return bank ? `Gestort · ${bank}` : BETALINGSWIJZE_LABELS.GESTORT;
+  return `${bank ? `Gestort · ${bank}` : BETALINGSWIJZE_LABELS.GESTORT}${kasSuffix}`;
 }
 
 export function klantSaldoVoor(
