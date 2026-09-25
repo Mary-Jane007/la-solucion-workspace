@@ -5,7 +5,7 @@ import { flattenDocumenten } from "../opdrachtenUtils";
 import { OpdrachtenWerkruimte } from "../hooks/useOpdrachtenWerkruimte";
 import { useLijstGezienStatus } from "../hooks/useLijstGezienStatus";
 import { documentenItemIds } from "../badgeItems";
-import { BestandViewer, BestandViewerItem } from "./BestandViewer";
+import { BestandMiniatuur, BestandViewer, BestandViewerItem } from "./BestandViewer";
 
 interface Props {
   werkruimte: OpdrachtenWerkruimte;
@@ -45,7 +45,7 @@ export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
           id: d.id,
           naam: d.origineleNaam,
           mimeType: d.mimeType,
-          fetchBlob: () => fetchBestandBlob(d.id)
+          fetchBlob: () => fetchBestandBlob(d.id, d.origineleNaam)
         })),
     [documenten]
   );
@@ -94,6 +94,7 @@ export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
           <table className="owner-table">
             <thead>
               <tr>
+                <th></th>
                 <th>Bestand</th>
                 <th>Klant</th>
                 <th>Grootte</th>
@@ -110,6 +111,14 @@ export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
                     className={ongelezen ? "prullenbak-rij-ongelezen" : undefined}
                     onClick={() => markeerGeopend(d.id)}
                   >
+                    <td>
+                      <BestandMiniatuur
+                        naam={d.origineleNaam}
+                        mimeType={d.mimeType}
+                        fetchBlob={() => fetchBestandBlob(d.id, d.origineleNaam)}
+                        onOpen={bekijkbaar ? () => openViewer(d.id) : undefined}
+                      />
+                    </td>
                     <td>{d.origineleNaam}</td>
                     <td>{d.klantNaam}</td>
                     <td>{formatGrootte(d.grootte)}</td>

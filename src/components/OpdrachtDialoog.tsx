@@ -4,7 +4,7 @@ import { downloadBestand, fetchBestandBlob, hernoemBestand, uploadBestand, verwi
 import { isAfbeeldingBestand, isBekijkbaarBestand } from "../bestandUtils";
 import { opdrachtVerwijderBevestiging } from "../opdrachtVerwijderen";
 import { statusLabel, vindOvereenkomstigeOpdrachten } from "../opdrachtenUtils";
-import { BestandViewer, BestandViewerItem } from "./BestandViewer";
+import { BestandMiniatuur, BestandViewer, BestandViewerItem } from "./BestandViewer";
 import { DocumentenToevoegen } from "./DocumentenToevoegen";
 
 type DialoogMode = "toevoegen" | "bewerken" | "bekijken";
@@ -115,7 +115,7 @@ export function OpdrachtDialoog({
         id: b.id,
         naam: b.origineleNaam,
         mimeType: b.mimeType,
-        fetchBlob: () => fetchBestandBlob(b.id)
+        fetchBlob: () => fetchBestandBlob(b.id, b.origineleNaam)
       }));
     return [...wachtend, ...gekoppeld];
   }, [wachtendeBestanden, bewerkt.bestanden]);
@@ -552,9 +552,16 @@ export function OpdrachtDialoog({
                   <ul className="files-edit-list">
                     {bewerkt.bestanden.map((b) => (
                       <li key={b.id} className="file-row file-row-edit">
-                        <span className="file-row-icon" aria-hidden>
-                          📄
-                        </span>
+                        <BestandMiniatuur
+                          naam={b.origineleNaam}
+                          mimeType={b.mimeType}
+                          fetchBlob={() => fetchBestandBlob(b.id, b.origineleNaam)}
+                          onOpen={
+                            isBekijkbaarBestand(b.origineleNaam, b.mimeType)
+                              ? () => setViewerId(b.id)
+                              : undefined
+                          }
+                        />
                         {kanDocumentenToevoegen ? (
                           <BestandNaamVeld
                             naam={b.origineleNaam}

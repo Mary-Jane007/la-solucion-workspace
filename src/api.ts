@@ -1,4 +1,5 @@
 import { BestandsKoppeling, Gebruiker, Opdracht } from "./types";
+import { normaliseerBestandBlob } from "./bestandUtils";
 import type { AfsluitingRapport } from "./financieelDashboardUtils";
 import type { FinancieelBackupBestand } from "./financieelBackup";
 
@@ -180,18 +181,18 @@ function triggerBrowserDownload(blob: Blob, bestandsnaam: string): void {
   }, 2000);
 }
 
-export async function fetchBestandBlob(bestandId: string): Promise<Blob> {
+export async function fetchBestandBlob(bestandId: string, bestandsnaam = ""): Promise<Blob> {
   const res = await apiFetch(`/api/bestanden/${encodeURIComponent(bestandId)}/download`);
   if (!res.ok) {
     const data = await readApiJson(res).catch(() => ({ error: "Kon bestand niet ophalen." }));
     throw new Error(String(data.error || "Kon bestand niet ophalen."));
   }
-  return res.blob();
+  return normaliseerBestandBlob(await res.blob(), bestandsnaam, res.headers.get("content-type"));
 }
 
 /** Download een bestand via de beveiligde API (Authorization-header). */
 export async function downloadBestand(bestandId: string, bestandsnaam: string): Promise<void> {
-  const blob = await fetchBestandBlob(bestandId);
+  const blob = await fetchBestandBlob(bestandId, bestandsnaam);
   if (blob.size) {
     triggerBrowserDownload(blob, bestandsnaam || "document");
     return;
@@ -363,17 +364,17 @@ export async function uploadFinancieelPostBestanden(
   return data.post as FinancieelPost;
 }
 
-export async function fetchFinancieelPostBijlageBlob(bijlageId: string): Promise<Blob> {
+export async function fetchFinancieelPostBijlageBlob(bijlageId: string, bestandsnaam = ""): Promise<Blob> {
   const res = await apiFetch(`/api/admin/financieel/bestanden/${bijlageId}/download`);
   if (!res.ok) {
     const data = await readApiJson(res).catch(() => ({ error: "Download mislukt." }));
     throw new Error(String(data.error || "Download mislukt."));
   }
-  return res.blob();
+  return normaliseerBestandBlob(await res.blob(), bestandsnaam, res.headers.get("content-type"));
 }
 
 export async function downloadFinancieelPostBijlage(bijlageId: string, bestandsnaam = "foto"): Promise<void> {
-  const blob = await fetchFinancieelPostBijlageBlob(bijlageId);
+  const blob = await fetchFinancieelPostBijlageBlob(bijlageId, bestandsnaam);
   triggerBrowserDownload(blob, bestandsnaam);
 }
 
@@ -457,17 +458,17 @@ export async function createFinancieelInzending(
 }
 
 export async function downloadInzendingBijlage(bijlageId: string, bestandsnaam = "foto"): Promise<void> {
-  const blob = await fetchInzendingBijlageBlob(bijlageId);
+  const blob = await fetchInzendingBijlageBlob(bijlageId, bestandsnaam);
   triggerBrowserDownload(blob, bestandsnaam);
 }
 
-export async function fetchInzendingBijlageBlob(bijlageId: string): Promise<Blob> {
+export async function fetchInzendingBijlageBlob(bijlageId: string, bestandsnaam = ""): Promise<Blob> {
   const res = await apiFetch(`/api/financieel-inzendingen/bestanden/${bijlageId}/download`);
   if (!res.ok) {
     const data = await readApiJson(res).catch(() => ({ error: "Download mislukt." }));
     throw new Error(String(data.error || "Download mislukt."));
   }
-  return res.blob();
+  return normaliseerBestandBlob(await res.blob(), bestandsnaam, res.headers.get("content-type"));
 }
 
 export async function updateFinancieelInzendingStatus(

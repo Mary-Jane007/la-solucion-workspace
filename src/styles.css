@@ -3922,14 +3922,15 @@ textarea.form-input {
   z-index: 80;
   background: rgba(2, 6, 23, 0.86);
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
   padding: 16px;
 }
 
 .bestand-viewer {
   width: min(1100px, 100%);
-  height: min(92vh, 100%);
+  height: 92dvh;
+  max-height: calc(100dvh - 32px);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -3968,19 +3969,24 @@ textarea.form-input {
 
 .bestand-viewer-stage {
   position: relative;
-  flex: 1;
-  min-height: 0;
+  flex: 1 1 auto;
+  min-height: 240px;
+  height: calc(92dvh - 76px);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .bestand-viewer-stage img {
-  max-width: 100%;
-  max-height: 100%;
+  display: block;
+  max-width: min(100%, calc(100vw - 96px));
+  max-height: calc(92dvh - 96px);
+  width: auto;
+  height: auto;
   object-fit: contain;
   border-radius: 10px;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35);
+  background: #0f172a;
 }
 
 .bestand-viewer-stage iframe {

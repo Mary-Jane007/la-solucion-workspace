@@ -13,7 +13,7 @@ export function FinancieelFotos({
   onVerwijder
 }: {
   bijlagen?: FinancieelInzendingBijlage[];
-  fetchBlob: (id: string) => Promise<Blob>;
+  fetchBlob: (id: string, naam?: string) => Promise<Blob>;
   onDownload: (id: string, naam: string) => void | Promise<void>;
   onVerwijder?: (id: string) => void;
 }) {
@@ -24,7 +24,7 @@ export function FinancieelFotos({
         id: bijlage.id,
         naam: bijlage.origineleNaam,
         mimeType: bijlage.mimeType,
-        fetchBlob: () => fetchBlob(bijlage.id)
+        fetchBlob: () => fetchBlob(bijlage.id, bijlage.origineleNaam)
       })),
     [bijlagen, fetchBlob]
   );
@@ -74,7 +74,7 @@ function FinancieelFoto({
   onVerwijder
 }: {
   bijlage: FinancieelInzendingBijlage;
-  fetchBlob: (id: string) => Promise<Blob>;
+  fetchBlob: (id: string, naam?: string) => Promise<Blob>;
   onOpen: () => void;
   onDownload: (id: string, naam: string) => void | Promise<void>;
   onVerwijder?: (id: string) => void;
@@ -85,7 +85,7 @@ function FinancieelFoto({
   useEffect(() => {
     let objectUrl: string | null = null;
     let stop = false;
-    void fetchBlob(bijlage.id)
+    void fetchBlob(bijlage.id, bijlage.origineleNaam)
       .then((blob) => {
         const next = URL.createObjectURL(blob);
         if (stop) {
