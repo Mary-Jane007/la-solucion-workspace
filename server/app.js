@@ -975,15 +975,26 @@ function leesBestandVanSchijf(opslagNaam) {
 }
 
 function contentDispositionAttachment(filename) {
+  return contentDispositionValue(filename, false);
+}
+
+function contentDispositionValue(filename, inline) {
   const raw = sanitizeOrigineleNaam(filename) || "document";
   const ascii = raw.replace(/[^\x20-\x7E]/g, "_") || "document";
   const encoded = encodeURIComponent(raw).replace(/['()]/g, (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`);
-  return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
+  return `${inline ? "inline" : "attachment"}; filename="${ascii}"; filename*=UTF-8''${encoded}`;
 }
 
-function setBestandDownloadHeaders(res, bestand) {
-  res.setHeader("Content-Type", bestand.mimeType || "application/octet-stream");
-  res.setHeader("Content-Disposition", contentDispositionAttachment(bestand.origineleNaam));
+function bestandContentType(bestand) {
+  const naam = String(bestand?.origineleNaam || "");
+  const mime = String(bestand?.mimeType || "").toLowerCase().split(";")[0].trim();
+  if (mime === "application/pdf" || /\.pdf$/i.test(naam)) return "application/pdf";
+  return bestand?.mimeType || "application/octet-stream";
+}
+
+function setBestandDownloadHeaders(res, bestand, inline = false) {
+  res.setHeader("Content-Type", bestandContentType(bestand));
+  res.setHeader("Content-Disposition", contentDispositionValue(bestand.origineleNaam, inline));
   res.setHeader("Cache-Control", "private, no-store");
 }
 
@@ -1064,12 +1075,13 @@ app.get("/api/bestanden/:id/download", authRequired, async (req, res) => {
       return res.status(403).json({ error: "Geen toegang tot dit bestand." });
     }
 
+    const inline = String(req.query.inline || "") === "1";
     const vanSchijf = leesBestandVanSchijf(bestand.opslagNaam);
     if (vanSchijf) {
       void saveBestandInhoud(bestand.id, vanSchijf.buffer).catch((err) => {
         console.warn("Kon bestandinhoud niet bijwerken:", err.message);
       });
-      setBestandDownloadHeaders(res, bestand);
+      setBestandDownloadHeaders(res, bestand, inline);
       res.setHeader("Content-Length", vanSchijf.buffer.length);
       return res.end(vanSchijf.buffer);
     }
@@ -1084,7 +1096,7 @@ app.get("/api/bestanden/:id/download", authRequired, async (req, res) => {
           /* cache is optioneel */
         }
       }
-      setBestandDownloadHeaders(res, bestand);
+      setBestandDownloadHeaders(res, bestand, inline);
       res.setHeader("Content-Length", inhoud.length);
       return res.end(inhoud);
     }
@@ -1241,11 +1253,8 @@ app.get("/api/admin/financieel/bestanden/:id/download", authRequired, requireOwn
     if (!bijlage) return res.status(404).json({ error: "Afbeelding niet gevonden." });
     const filePath = path.join(uploadDir, bijlage.opslagNaam);
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Bestand ontbreekt." });
-    res.setHeader("Content-Type", bijlage.mimeType || "application/octet-stream");
-    res.setHeader(
-      "Content-Disposition",
-      `inline; filename="${encodeURIComponent(bijlage.origineleNaam)}"`
-    );
+    res.setHeader("Content-Type", bestandContentType(bijlage));
+    res.setHeader("Content-Disposition", contentDispositionValue(bijlage.origineleNaam, true));
     return res.sendFile(filePath);
   } catch (err) {
     console.error("Fout bij download post-afbeelding:", err);
@@ -1391,11 +1400,8 @@ app.get("/api/financieel-inzendingen/bestanden/:id/download", authRequired, asyn
     }
     const filePath = path.join(uploadDir, bijlage.opslagNaam);
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Bestand ontbreekt." });
-    res.setHeader("Content-Type", bijlage.mimeType || "application/octet-stream");
-    res.setHeader(
-      "Content-Disposition",
-      `inline; filename="${encodeURIComponent(bijlage.origineleNaam)}"`
-    );
+    res.setHeader("Content-Type", bestandContentType(bijlage));
+    res.setHeader("Content-Disposition", contentDispositionValue(bijlage.origineleNaam, true));
     return res.sendFile(filePath);
   } catch (err) {
     console.error("Fout bij download inzending-afbeelding:", err);

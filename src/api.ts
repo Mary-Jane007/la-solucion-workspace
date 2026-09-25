@@ -181,6 +181,28 @@ function triggerBrowserDownload(blob: Blob, bestandsnaam: string): void {
   }, 2000);
 }
 
+export type BestandBron = "opdracht" | "financieel-post" | "financieel-inzending";
+
+export function bestandBekijkUrl(
+  bestandId: string,
+  bron: BestandBron = "opdracht"
+): string | null {
+  const token = getToken();
+  if (!token) return null;
+  const pad =
+    bron === "financieel-post"
+      ? `/api/admin/financieel/bestanden/${encodeURIComponent(bestandId)}/download`
+      : bron === "financieel-inzending"
+        ? `/api/financieel-inzendingen/bestanden/${encodeURIComponent(bestandId)}/download`
+        : `/api/bestanden/${encodeURIComponent(bestandId)}/download`;
+  return `${pad}?access_token=${encodeURIComponent(token)}&inline=1`;
+}
+
+export function openBestandInNieuwTab(url: string): boolean {
+  const win = window.open(url, "_blank");
+  return Boolean(win);
+}
+
 export async function fetchBestandBlob(bestandId: string, bestandsnaam = ""): Promise<Blob> {
   const res = await apiFetch(`/api/bestanden/${encodeURIComponent(bestandId)}/download`);
   if (!res.ok) {

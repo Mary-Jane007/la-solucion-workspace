@@ -7,6 +7,7 @@ export interface BestandViewerItem {
   naam: string;
   mimeType?: string | null;
   url?: string;
+  bekijkUrl?: string | null;
   fetchBlob?: () => Promise<Blob>;
 }
 
@@ -44,6 +45,13 @@ export function BestandViewer({ items, startId, onClose, onDownload }: Props) {
 
   useEffect(() => {
     if (!item) return;
+    if (isPdfBestand(item.naam, item.mimeType) && item.bekijkUrl) {
+      setSoort("pdf");
+      setGeladenUrl(item.bekijkUrl);
+      setLaden(false);
+      setFout(null);
+      return;
+    }
     if (item.url) {
       setGeladenUrl(item.url);
       setSoort(isPdfBestand(item.naam, item.mimeType) ? "pdf" : "foto");
@@ -85,7 +93,7 @@ export function BestandViewer({ items, startId, onClose, onDownload }: Props) {
       stop = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [item?.id, item?.url, item?.naam, item?.mimeType]);
+  }, [item?.id, item?.url, item?.bekijkUrl, item?.naam, item?.mimeType]);
 
   useEffect(() => {
     const vorigeOverflow = document.body.style.overflow;
@@ -130,6 +138,15 @@ export function BestandViewer({ items, startId, onClose, onDownload }: Props) {
             )}
           </div>
           <div className="bestand-viewer-acties">
+            {soort === "pdf" && geladenUrl && (
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => window.open(geladenUrl, "_blank")}
+              >
+                Open in nieuw tabblad
+              </button>
+            )}
             {onDownload && item.fetchBlob && (
               <button type="button" className="btn-secondary" onClick={() => void onDownload(item)}>
                 Download
@@ -140,8 +157,8 @@ export function BestandViewer({ items, startId, onClose, onDownload }: Props) {
             </button>
           </div>
         </header>
-        <div className="bestand-viewer-stage">
-          {heeftVorige && (
+        <div className={`bestand-viewer-stage${soort === "pdf" ? " bestand-viewer-stage-pdf" : ""}`}>
+          {heeftVorige && soort !== "pdf" && (
             <button
               type="button"
               className="bestand-viewer-nav bestand-viewer-nav-prev"
@@ -154,7 +171,7 @@ export function BestandViewer({ items, startId, onClose, onDownload }: Props) {
           {laden && <p className="bestand-viewer-status">Laden…</p>}
           {fout && <p className="bestand-viewer-status">{fout}</p>}
           {!laden && !fout && geladenUrl && soort === "pdf" && (
-            <iframe src={geladenUrl} title={item.naam} />
+            <embed src={geladenUrl} type="application/pdf" title={item.naam} className="bestand-viewer-pdf" />
           )}
           {!laden && !fout && geladenUrl && soort !== "pdf" && (
             <img
@@ -163,7 +180,7 @@ export function BestandViewer({ items, startId, onClose, onDownload }: Props) {
               onError={() => setFout("Deze foto kan in de browser niet worden getoond.")}
             />
           )}
-          {heeftVorige && (
+          {heeftVorige && soort !== "pdf" && (
             <button
               type="button"
               className="bestand-viewer-nav bestand-viewer-nav-next"

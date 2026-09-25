@@ -2173,6 +2173,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                       fetchBlob={fetchFinancieelPostBijlageBlob}
                       onDownload={downloadFinancieelPostBijlage}
                       onVerwijder={(id) => void verwijderBestaandeFoto(id)}
+                      bron="financieel-post"
                     />
                   )}
                   {fotoPreviews.length > 0 && (

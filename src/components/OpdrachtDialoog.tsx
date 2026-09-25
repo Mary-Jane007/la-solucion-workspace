@@ -1,7 +1,15 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Opdracht, OpdrachtStatus, Prioriteit } from "../types";
-import { downloadBestand, fetchBestandBlob, hernoemBestand, uploadBestand, verwijderBestand } from "../api";
-import { isAfbeeldingBestand, isBekijkbaarBestand } from "../bestandUtils";
+import {
+  bestandBekijkUrl,
+  downloadBestand,
+  fetchBestandBlob,
+  hernoemBestand,
+  openBestandInNieuwTab,
+  uploadBestand,
+  verwijderBestand
+} from "../api";
+import { isAfbeeldingBestand, isBekijkbaarBestand, isPdfBestand } from "../bestandUtils";
 import { opdrachtVerwijderBevestiging } from "../opdrachtVerwijderen";
 import { statusLabel, vindOvereenkomstigeOpdrachten } from "../opdrachtenUtils";
 import { BestandMiniatuur, BestandViewer, BestandViewerItem } from "./BestandViewer";
@@ -115,10 +123,24 @@ export function OpdrachtDialoog({
         id: b.id,
         naam: b.origineleNaam,
         mimeType: b.mimeType,
-        fetchBlob: () => fetchBestandBlob(b.id, b.origineleNaam)
+        fetchBlob: () => fetchBestandBlob(b.id, b.origineleNaam),
+        bekijkUrl: bestandBekijkUrl(b.id)
       }));
     return [...wachtend, ...gekoppeld];
   }, [wachtendeBestanden, bewerkt.bestanden]);
+
+  const openBestand = (id: string) => {
+    const wachtend = wachtendeBestanden.find((item) => item.id === id);
+    if (wachtend && isPdfBestand(wachtend.file.name, wachtend.file.type)) {
+      if (openBestandInNieuwTab(wachtend.url)) return;
+    }
+    const gekoppeld = (bewerkt.bestanden || []).find((item) => item.id === id);
+    if (gekoppeld && isPdfBestand(gekoppeld.origineleNaam, gekoppeld.mimeType)) {
+      const url = bestandBekijkUrl(id);
+      if (url && openBestandInNieuwTab(url)) return;
+    }
+    setViewerId(id);
+  };
 
   useEffect(() => {
     return () => {
@@ -507,7 +529,7 @@ export function OpdrachtDialoog({
                             <button
                               type="button"
                               className="file-row-thumb-btn"
-                              onClick={() => setViewerId(item.id)}
+                              onClick={() => openBestand(item.id)}
                               title="Foto bekijken"
                             >
                               <img
@@ -530,7 +552,7 @@ export function OpdrachtDialoog({
                             <button
                               type="button"
                               className="link-btn file-download-btn"
-                              onClick={() => setViewerId(item.id)}
+                              onClick={() => openBestand(item.id)}
                             >
                               Bekijken
                             </button>
@@ -558,7 +580,7 @@ export function OpdrachtDialoog({
                           fetchBlob={() => fetchBestandBlob(b.id, b.origineleNaam)}
                           onOpen={
                             isBekijkbaarBestand(b.origineleNaam, b.mimeType)
-                              ? () => setViewerId(b.id)
+                              ? () => openBestand(b.id)
                               : undefined
                           }
                         />
@@ -577,7 +599,7 @@ export function OpdrachtDialoog({
                             <button
                               type="button"
                               className="link-btn file-download-btn"
-                              onClick={() => setViewerId(b.id)}
+                              onClick={() => openBestand(b.id)}
                             >
                               Bekijken
                             </button>

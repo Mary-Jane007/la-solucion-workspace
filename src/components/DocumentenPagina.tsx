@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { downloadBestand, fetchBestandBlob } from "../api";
-import { isBekijkbaarBestand } from "../bestandUtils";
+import { bestandBekijkUrl, downloadBestand, fetchBestandBlob, openBestandInNieuwTab } from "../api";
+import { isBekijkbaarBestand, isPdfBestand } from "../bestandUtils";
 import { flattenDocumenten } from "../opdrachtenUtils";
 import { OpdrachtenWerkruimte } from "../hooks/useOpdrachtenWerkruimte";
 import { useLijstGezienStatus } from "../hooks/useLijstGezienStatus";
@@ -45,7 +45,8 @@ export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
           id: d.id,
           naam: d.origineleNaam,
           mimeType: d.mimeType,
-          fetchBlob: () => fetchBestandBlob(d.id, d.origineleNaam)
+          fetchBlob: () => fetchBestandBlob(d.id, d.origineleNaam),
+          bekijkUrl: bestandBekijkUrl(d.id)
         })),
     [documenten]
   );
@@ -70,6 +71,11 @@ export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
 
   const openViewer = (id: string) => {
     markeerGeopend(id);
+    const doc = documenten.find((item) => item.id === id);
+    if (doc && isPdfBestand(doc.origineleNaam, doc.mimeType)) {
+      const url = bestandBekijkUrl(id);
+      if (url && openBestandInNieuwTab(url)) return;
+    }
     setViewerId(id);
   };
 

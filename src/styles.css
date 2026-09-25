@@ -3989,12 +3989,18 @@ textarea.form-input {
   background: #0f172a;
 }
 
-.bestand-viewer-stage iframe {
+.bestand-viewer-stage iframe,
+.bestand-viewer-pdf {
   width: 100%;
   height: 100%;
+  min-height: calc(92dvh - 96px);
   border: 0;
   border-radius: 10px;
   background: #fff;
+}
+
+.bestand-viewer-stage-pdf {
+  align-items: stretch;
 }
 
 .bestand-viewer-status {

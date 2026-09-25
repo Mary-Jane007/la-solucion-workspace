@@ -1,21 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  BestandBron,
+  bestandBekijkUrl,
   downloadInzendingBijlage,
   fetchInzendingBijlageBlob,
-  FinancieelInzendingBijlage
+  FinancieelInzendingBijlage,
+  openBestandInNieuwTab
 } from "../../api";
+import { isPdfBestand } from "../../bestandUtils";
 import { BestandViewer, BestandViewerItem } from "../BestandViewer";
 
 export function FinancieelFotos({
   bijlagen,
   fetchBlob,
   onDownload,
-  onVerwijder
+  onVerwijder,
+  bron = "financieel-inzending"
 }: {
   bijlagen?: FinancieelInzendingBijlage[];
   fetchBlob: (id: string, naam?: string) => Promise<Blob>;
   onDownload: (id: string, naam: string) => void | Promise<void>;
   onVerwijder?: (id: string) => void;
+  bron?: BestandBron;
 }) {
   const [viewerId, setViewerId] = useState<string | null>(null);
   const viewerItems = useMemo<BestandViewerItem[]>(
@@ -24,10 +30,18 @@ export function FinancieelFotos({
         id: bijlage.id,
         naam: bijlage.origineleNaam,
         mimeType: bijlage.mimeType,
-        fetchBlob: () => fetchBlob(bijlage.id, bijlage.origineleNaam)
+        fetchBlob: () => fetchBlob(bijlage.id, bijlage.origineleNaam),
+        bekijkUrl: bestandBekijkUrl(bijlage.id, bron)
       })),
-    [bijlagen, fetchBlob]
+    [bijlagen, fetchBlob, bron]
   );
+  const openBijlage = (bijlage: FinancieelInzendingBijlage) => {
+    if (isPdfBestand(bijlage.origineleNaam, bijlage.mimeType)) {
+      const url = bestandBekijkUrl(bijlage.id, bron);
+      if (url && openBestandInNieuwTab(url)) return;
+    }
+    setViewerId(bijlage.id);
+  };
 
   if (!bijlagen?.length) return null;
   return (
@@ -38,7 +52,7 @@ export function FinancieelFotos({
             key={bijlage.id}
             bijlage={bijlage}
             fetchBlob={fetchBlob}
-            onOpen={() => setViewerId(bijlage.id)}
+            onOpen={() => openBijlage(bijlage)}
             onDownload={onDownload}
             onVerwijder={onVerwijder}
           />
