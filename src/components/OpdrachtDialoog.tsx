@@ -1,8 +1,10 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Opdracht, OpdrachtStatus, Prioriteit } from "../types";
-import { downloadBestand, hernoemBestand, uploadBestand, verwijderBestand } from "../api";
+import { downloadBestand, fetchBestandBlob, hernoemBestand, uploadBestand, verwijderBestand } from "../api";
+import { isAfbeeldingBestand, isBekijkbaarBestand } from "../bestandUtils";
 import { opdrachtVerwijderBevestiging } from "../opdrachtVerwijderen";
 import { statusLabel, vindOvereenkomstigeOpdrachten } from "../opdrachtenUtils";
+import { BestandViewer, BestandViewerItem } from "./BestandViewer";
 import { DocumentenToevoegen } from "./DocumentenToevoegen";
 
 type DialoogMode = "toevoegen" | "bewerken" | "bekijken";
@@ -32,11 +34,6 @@ function hernoemFile(file: File, nieuweNaam: string): File {
   const naam = normaliseerBestandsnaam(file.name, nieuweNaam);
   if (naam === file.name) return file;
   return new File([file], naam, { type: file.type, lastModified: file.lastModified });
-}
-
-function isAfbeeldingBestand(naam: string, mime?: string): boolean {
-  if (mime?.startsWith("image/")) return true;
-  return /\.(jpe?g|png|webp|gif|heic|heif)$/i.test(naam);
 }
 
 function BestandNaamVeld({
@@ -99,8 +96,29 @@ export function OpdrachtDialoog({
   const [isBezig, setIsBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
   const [wachtendeBestanden, setWachtendeBestanden] = useState<WachtendBestand[]>([]);
+  const [viewerId, setViewerId] = useState<string | null>(null);
   const wachtendeBestandenRef = useRef<WachtendBestand[]>([]);
   wachtendeBestandenRef.current = wachtendeBestanden;
+
+  const viewerItems = useMemo<BestandViewerItem[]>(() => {
+    const wachtend = wachtendeBestanden
+      .filter((item) => isBekijkbaarBestand(item.file.name, item.file.type))
+      .map((item) => ({
+        id: item.id,
+        naam: item.file.name,
+        mimeType: item.file.type,
+        url: item.url
+      }));
+    const gekoppeld = (bewerkt.bestanden || [])
+      .filter((b) => isBekijkbaarBestand(b.origineleNaam, b.mimeType))
+      .map((b) => ({
+        id: b.id,
+        naam: b.origineleNaam,
+        mimeType: b.mimeType,
+        fetchBlob: () => fetchBestandBlob(b.id)
+      }));
+    return [...wachtend, ...gekoppeld];
+  }, [wachtendeBestanden, bewerkt.bestanden]);
 
   useEffect(() => {
     return () => {
@@ -298,6 +316,7 @@ export function OpdrachtDialoog({
         : "Opdracht bekijken";
 
   return (
+    <>
     <div className="modal-backdrop" onClick={onSluit}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <header className="modal-header">
@@ -485,11 +504,18 @@ export function OpdrachtDialoog({
                       {wachtendeBestanden.map((item) => (
                         <li key={item.id} className="file-row file-row-edit">
                           {isAfbeeldingBestand(item.file.name, item.file.type) ? (
-                            <img
-                              className="file-row-thumb"
-                              src={item.url}
-                              alt=""
-                            />
+                            <button
+                              type="button"
+                              className="file-row-thumb-btn"
+                              onClick={() => setViewerId(item.id)}
+                              title="Foto bekijken"
+                            >
+                              <img
+                                className="file-row-thumb"
+                                src={item.url}
+                                alt={item.file.name}
+                              />
+                            </button>
                           ) : (
                             <span className="file-row-icon" aria-hidden>
                               📄
@@ -500,6 +526,15 @@ export function OpdrachtDialoog({
                             disabled={isBezig}
                             onOpslaan={(naam) => hernoemWachtendBestand(item.id, naam)}
                           />
+                          {isBekijkbaarBestand(item.file.name, item.file.type) && (
+                            <button
+                              type="button"
+                              className="link-btn file-download-btn"
+                              onClick={() => setViewerId(item.id)}
+                            >
+                              Bekijken
+                            </button>
+                          )}
                           <button
                             type="button"
                             className="link-btn file-row-verwijder"
@@ -531,6 +566,15 @@ export function OpdrachtDialoog({
                         )}
                         <span className="file-meta">
                           {(b.grootte / 1024).toFixed(1)} kB
+                          {isBekijkbaarBestand(b.origineleNaam, b.mimeType) && (
+                            <button
+                              type="button"
+                              className="link-btn file-download-btn"
+                              onClick={() => setViewerId(b.id)}
+                            >
+                              Bekijken
+                            </button>
+                          )}
                           <button
                             type="button"
                             className="link-btn file-download-btn"
@@ -623,5 +667,27 @@ export function OpdrachtDialoog({
         </form>
       </div>
     </div>
+    {viewerId && viewerItems.length > 0 && (
+      <BestandViewer
+        items={viewerItems}
+        startId={viewerId}
+        onClose={() => setViewerId(null)}
+        onDownload={async (item) => {
+          if (item.fetchBlob) {
+            try {
+              setFout(null);
+              await downloadBestand(item.id, item.naam);
+            } catch (err) {
+              setFout(
+                err instanceof Error
+                  ? err.message
+                  : "Download mislukt. Controleer je rechten of probeer opnieuw."
+              );
+            }
+          }
+        }}
+      />
+    )}
+    </>
   );
 }

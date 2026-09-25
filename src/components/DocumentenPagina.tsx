@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
-import { downloadBestand } from "../api";
+import { downloadBestand, fetchBestandBlob } from "../api";
+import { isBekijkbaarBestand } from "../bestandUtils";
 import { flattenDocumenten } from "../opdrachtenUtils";
 import { OpdrachtenWerkruimte } from "../hooks/useOpdrachtenWerkruimte";
 import { useLijstGezienStatus } from "../hooks/useLijstGezienStatus";
 import { documentenItemIds } from "../badgeItems";
+import { BestandViewer, BestandViewerItem } from "./BestandViewer";
 
 interface Props {
   werkruimte: OpdrachtenWerkruimte;
@@ -20,6 +22,7 @@ function formatGrootte(bytes: number): string {
 export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
   const [zoekterm, setZoekterm] = useState("");
   const [fout, setFout] = useState<string | null>(null);
+  const [viewerId, setViewerId] = useState<string | null>(null);
   const { alleOpdrachten } = werkruimte;
 
   const documenten = useMemo(() => {
@@ -33,6 +36,19 @@ export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
         d.omschrijving.toLowerCase().includes(q)
     );
   }, [alleOpdrachten, zoekterm]);
+
+  const viewerItems = useMemo<BestandViewerItem[]>(
+    () =>
+      documenten
+        .filter((d) => isBekijkbaarBestand(d.origineleNaam, d.mimeType))
+        .map((d) => ({
+          id: d.id,
+          naam: d.origineleNaam,
+          mimeType: d.mimeType,
+          fetchBlob: () => fetchBestandBlob(d.id)
+        })),
+    [documenten]
+  );
 
   const itemIds = useMemo(() => documentenItemIds(alleOpdrachten), [alleOpdrachten]);
   const { isOngelezen, markeerGeopend } = useLijstGezienStatus(
@@ -50,6 +66,11 @@ export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
     } catch (err) {
       setFout(err instanceof Error ? err.message : "Download mislukt.");
     }
+  };
+
+  const openViewer = (id: string) => {
+    markeerGeopend(id);
+    setViewerId(id);
   };
 
   return (
@@ -82,6 +103,7 @@ export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
             <tbody>
               {documenten.map((d) => {
                 const ongelezen = isOngelezen(d.id);
+                const bekijkbaar = isBekijkbaarBestand(d.origineleNaam, d.mimeType);
                 return (
                   <tr
                     key={d.id}
@@ -92,6 +114,18 @@ export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
                     <td>{d.klantNaam}</td>
                     <td>{formatGrootte(d.grootte)}</td>
                     <td>
+                      {bekijkbaar && (
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openViewer(d.id);
+                          }}
+                        >
+                          Bekijken
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="btn-secondary"
@@ -109,6 +143,14 @@ export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
             </tbody>
           </table>
         </div>
+      )}
+      {viewerId && viewerItems.length > 0 && (
+        <BestandViewer
+          items={viewerItems}
+          startId={viewerId}
+          onClose={() => setViewerId(null)}
+          onDownload={(item) => void handleDownload(item.id, item.naam)}
+        />
       )}
     </section>
   );

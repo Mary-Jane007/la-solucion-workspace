@@ -180,14 +180,18 @@ function triggerBrowserDownload(blob: Blob, bestandsnaam: string): void {
   }, 2000);
 }
 
-/** Download een bestand via de beveiligde API (Authorization-header). */
-export async function downloadBestand(bestandId: string, bestandsnaam: string): Promise<void> {
+export async function fetchBestandBlob(bestandId: string): Promise<Blob> {
   const res = await apiFetch(`/api/bestanden/${encodeURIComponent(bestandId)}/download`);
   if (!res.ok) {
-    const data = await readApiJson(res).catch(() => ({ error: "Download mislukt." }));
-    throw new Error(String(data.error || "Download mislukt."));
+    const data = await readApiJson(res).catch(() => ({ error: "Kon bestand niet ophalen." }));
+    throw new Error(String(data.error || "Kon bestand niet ophalen."));
   }
-  const blob = await res.blob();
+  return res.blob();
+}
+
+/** Download een bestand via de beveiligde API (Authorization-header). */
+export async function downloadBestand(bestandId: string, bestandsnaam: string): Promise<void> {
+  const blob = await fetchBestandBlob(bestandId);
   if (blob.size) {
     triggerBrowserDownload(blob, bestandsnaam || "document");
     return;

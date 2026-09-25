@@ -81,6 +81,7 @@ const HELP_ONDERWERPEN: HelpStap[] = [
       "Scroll in het detailvenster naar het uploadveld voor documenten.",
       "Kies een of meerdere bestanden (PDF, foto, Word, enz.).",
       "Wacht tot de upload klaar is; de bestandsnaam verschijnt in de lijst.",
+      "Klik op Bekijken om een foto of PDF in de viewer te openen, zonder te downloaden.",
       "Alle bijlagen van opdrachten vind je ook terug onder Documenten in het menu."
     ],
     tip: "Gebruik duidelijke bestandsnamen (bijv. paspoort-klantnaam.pdf) zodat je later sneller vindt wat je zoekt."

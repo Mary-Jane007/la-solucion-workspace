@@ -231,6 +231,7 @@ export function groepeerPerKlant(opdrachten: Opdracht[]): KlantGroep[] {
 export interface DocumentItem {
   id: string;
   origineleNaam: string;
+  mimeType?: string;
   grootte: number;
   klantNaam: string;
   opdrachtId: string;
@@ -244,6 +245,7 @@ export function flattenDocumenten(opdrachten: Opdracht[]): DocumentItem[] {
       items.push({
         id: b.id,
         origineleNaam: b.origineleNaam,
+        mimeType: b.mimeType,
         grootte: b.grootte,
         klantNaam: o.klantNaam,
         opdrachtId: o.id,

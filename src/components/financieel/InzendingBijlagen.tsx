@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   downloadInzendingBijlage,
   fetchInzendingBijlageBlob,
   FinancieelInzendingBijlage
 } from "../../api";
+import { BestandViewer, BestandViewerItem } from "../BestandViewer";
 
 export function FinancieelFotos({
   bijlagen,
@@ -16,19 +17,42 @@ export function FinancieelFotos({
   onDownload: (id: string, naam: string) => void | Promise<void>;
   onVerwijder?: (id: string) => void;
 }) {
+  const [viewerId, setViewerId] = useState<string | null>(null);
+  const viewerItems = useMemo<BestandViewerItem[]>(
+    () =>
+      (bijlagen || []).map((bijlage) => ({
+        id: bijlage.id,
+        naam: bijlage.origineleNaam,
+        mimeType: bijlage.mimeType,
+        fetchBlob: () => fetchBlob(bijlage.id)
+      })),
+    [bijlagen, fetchBlob]
+  );
+
   if (!bijlagen?.length) return null;
   return (
-    <div className="inzending-fotos">
-      {bijlagen.map((bijlage) => (
-        <FinancieelFoto
-          key={bijlage.id}
-          bijlage={bijlage}
-          fetchBlob={fetchBlob}
-          onDownload={onDownload}
-          onVerwijder={onVerwijder}
+    <>
+      <div className="inzending-fotos">
+        {bijlagen.map((bijlage) => (
+          <FinancieelFoto
+            key={bijlage.id}
+            bijlage={bijlage}
+            fetchBlob={fetchBlob}
+            onOpen={() => setViewerId(bijlage.id)}
+            onDownload={onDownload}
+            onVerwijder={onVerwijder}
+          />
+        ))}
+      </div>
+      {viewerId && (
+        <BestandViewer
+          items={viewerItems}
+          startId={viewerId}
+          onClose={() => setViewerId(null)}
+          onDownload={(item) => onDownload(item.id, item.naam)}
         />
-      ))}
-    </div>
+      )}
+    </>
   );
 }
 
@@ -45,11 +69,13 @@ export function InzendingBijlagen({ bijlagen }: { bijlagen?: FinancieelInzending
 function FinancieelFoto({
   bijlage,
   fetchBlob,
+  onOpen,
   onDownload,
   onVerwijder
 }: {
   bijlage: FinancieelInzendingBijlage;
   fetchBlob: (id: string) => Promise<Blob>;
+  onOpen: () => void;
   onDownload: (id: string, naam: string) => void | Promise<void>;
   onVerwijder?: (id: string) => void;
 }) {
@@ -84,8 +110,8 @@ function FinancieelFoto({
         <button
           type="button"
           className="inzending-foto-btn"
-          onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
-          title={bijlage.origineleNaam}
+          onClick={onOpen}
+          title={`Bekijk ${bijlage.origineleNaam}`}
         >
           <img src={url} alt={bijlage.origineleNaam} />
         </button>
@@ -96,6 +122,9 @@ function FinancieelFoto({
       )}
       <figcaption>
         <span>{bijlage.origineleNaam}</span>
+        <button type="button" className="link-btn" onClick={onOpen}>
+          Bekijken
+        </button>
         <button
           type="button"
           className="link-btn"
