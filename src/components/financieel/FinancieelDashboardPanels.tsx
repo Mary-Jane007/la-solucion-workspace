@@ -1283,7 +1283,7 @@ export function FollowTheMoneyPanel({
         <div className="section-header">
           <h2>Bij wie ligt het geld?</h2>
           <p className="muted">
-            Beginsaldo is hetzelfde als “Begon met”. Wat je niet besteedt, blijft automatisch in Over en gaat door naar morgen. Muntenbak is beschikbaar geld dat niet bij een medewerker ligt.
+            Beginsaldo is hetzelfde als “Begon met”. Wat je niet besteedt, blijft automatisch in Over en gaat door naar morgen. Vul je openingskas in, dan is dat de telling van vanochtend en vervangt het het restant van gisteren. Muntenbak is beschikbaar geld dat niet bij een medewerker ligt.
           </p>
         </div>
         {dag.personen.length === 0 ? (

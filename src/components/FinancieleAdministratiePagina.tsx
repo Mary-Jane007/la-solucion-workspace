@@ -1406,7 +1406,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                 <label className="form-label">Bedrag<input className="form-input" inputMode="decimal" placeholder="0,-" value={form.bedrag} onChange={(e) => setForm({ ...form, bedrag: e.target.value })} required /></label>
                 {isOpeningsKas(form) && (
                   <p className="muted financieel-span-2">
-                    Vul hier het bedrag in dat vanochtend al in de kas lag. Dit is het beginsaldo van de dag in Follow the money, geen nieuwe inkomst.
+                    Vul hier het getelde bedrag van vanochtend in. Dat is het beginsaldo van de dag: het vervangt het restant van gisteren, het komt er niet bovenop.
                   </p>
                 )}
                 {isMuntenbakPost(form) && (

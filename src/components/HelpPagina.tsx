@@ -125,7 +125,7 @@ const HELP_ONDERWERPEN: HelpStap[] = [
       "Ga naar Financiën in het menu (alleen zichtbaar voor de eigenaar).",
       "Kies bovenaan Periode en Valuta (SRD, USD, EUR, …).",
       "Overzicht: dagcijfers en KPI’s. Follow the money: kas per dag, per medewerker, totaal in kas.",
-      "Nieuwe post: registreer inkomst, uitgave, kasgeld, overdracht of openingskas.",
+      "Nieuwe post: registreer inkomst, uitgave, kasgeld, overdracht of openingskas. Openingskas is de telling van vanochtend en vervangt het restant van gisteren.",
       "Bij Inzendingen: open meldingen van medewerkers en neem ze over in het dagboek."
     ],
     tip: "Totaal in kas (alle medewerkers) staat in Follow the money — dat is het contante totaal einde van de gekozen dag."

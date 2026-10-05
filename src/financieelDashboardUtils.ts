@@ -589,13 +589,14 @@ export function berekenDagVerslag(
   for (const p of sorted) {
     const d = postDatum(p);
     const tijd = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    const openingskas = isOpeningsKas(p);
     const positief = p.type !== "UITGAVE";
-    const teken = positief ? "+" : "−";
+    const teken = openingskas ? "" : positief ? "+" : "−";
     tijdlijn.push({
       id: p.id,
       tijd,
       tekst: `${typeLabel(p.type, p)} · ${
-        isOpeningsKas(p) ? "beginsaldo van de dag" : isMuntenbakPost(p) ? "muntenbak" : p.omschrijving
+        openingskas ? "beginsaldo van de dag" : isMuntenbakPost(p) ? "muntenbak" : p.omschrijving
       }${p.klantNaam ? ` · ${p.klantNaam}` : ""}`,
       bedragLabel: `${teken}${formatGeld(p.bedrag, p.valuta)}`,
       positief,
@@ -2155,7 +2156,6 @@ function berekenFollowTheMoneyDag(
   openingCarry: Map<string, FollowSaldo>
 ): FollowMoneyDag {
   const dag = parseLokaleDatum(dagIso);
-  const heeftCarry = openingCarry.size > 0;
   const opening = new Map<string, FollowSaldo>();
   for (const [key, saldo] of openingCarry) {
     opening.set(key, { naam: saldo.naam, saldo: followKasSaldo(saldo.saldo) });
@@ -2163,18 +2163,18 @@ function berekenFollowTheMoneyDag(
 
   const dagOps = ops.filter((op) => isZelfdeLokaleDag(op.at, dag));
 
-  // Eerste dag zonder carry: openingskas-registratie zet het beginsaldo.
-  if (!heeftCarry) {
-    for (const op of dagOps) {
-      if (op.soort !== "begin") continue;
-      if (op.handmatigeDeltas) {
-        for (const delta of op.handmatigeDeltas) {
-          zetFollowSaldo(opening, { naam: delta.naam, userId: delta.userId }, delta.delta);
-        }
-      } else {
-        const wie = geldNaarPersoon(op.post);
-        if (wie) zetFollowSaldo(opening, wie, op.bedrag);
+  // Openingskas is de telling van vanochtend: die vervangt het restant van gisteren
+  // voor die persoon, in plaats van er bovenop te tellen. Personen zonder openingskas
+  // houden gewoon hun carry.
+  for (const op of dagOps) {
+    if (op.soort !== "begin") continue;
+    if (op.handmatigeDeltas) {
+      for (const delta of op.handmatigeDeltas) {
+        zetFollowSaldo(opening, { naam: delta.naam, userId: delta.userId }, delta.delta);
       }
+    } else {
+      const wie = geldNaarPersoon(op.post);
+      if (wie) zetFollowSaldo(opening, wie, op.bedrag);
     }
   }
 
@@ -2212,13 +2212,16 @@ function berekenFollowTheMoneyDag(
         bedragLabel: formatGeld(beginsaldoWeergave, valuta),
         soort: op.soort
       };
+      const vervangtRestant = Boolean(key && openingCarry.has(key));
       gebeurtenissen.push({
         id: op.id,
         tijd,
         soort: op.soort,
         titel: op.titel,
-        uitleg: heeftCarry
-          ? [`Over van vorige dag · automatisch doorgezet`, wie ? `bij ${wie.naam}` : null].filter(Boolean).join(" · ")
+        uitleg: vervangtRestant
+          ? [`Openingskas van vanochtend · vervangt restant van gisteren`, wie ? `bij ${wie.naam}` : null]
+              .filter(Boolean)
+              .join(" · ")
           : op.uitleg,
         bedragLabel: formatGeld(beginsaldoWeergave, valuta),
         post: op.post

@@ -818,6 +818,8 @@ export function berekenGeldBijTotalen(posten: FinancieelPost[]): GeldBijTotaal[]
   for (const p of posten) {
     if (!teltMeeInMedewerkerKas(p)) continue;
     if (isMuntenbakPost(p)) continue;
+    // Openingskas is een telling, geen extra geld bovenop restanten van eerdere posten.
+    if (isOpeningsKas(p)) continue;
     const valuta = normalizeValuta(p.valuta);
     const teltAlsKas = p.type === "KASGELD" || p.type === "OVERDRACHT" || p.status === "BETAALD";
     const kasRestant = geldRondCents(restantBedrag(p) - totaalMuntenbakErbij(p));
@@ -878,6 +880,26 @@ export function berekenGeldBijTotalen(posten: FinancieelPost[]): GeldBijTotaal[]
         if (naar) bumpPersoon(map, naar, doelValuta as FinancieelValuta, "kasgeld", doelBedrag);
       }
     }
+  }
+
+  // Alleen als zaad: laatste openingskas telt mee als die persoon verder geen kasrestant heeft.
+  const zaad = new Map<string, { wie: GeldPersoon; valuta: FinancieelValuta; bedrag: number; at: number }>();
+  for (const p of posten) {
+    if (!teltMeeInMedewerkerKas(p) || !isOpeningsKas(p)) continue;
+    const naar = geldNaarPersoon(p);
+    if (!naar) continue;
+    const valuta = normalizeValuta(p.valuta);
+    const key = persoonSleutel(naar, valuta);
+    const at = new Date(p.datum).getTime();
+    const stamp = Number.isFinite(at) ? at : 0;
+    const prev = zaad.get(key);
+    if (!prev || stamp >= prev.at) {
+      zaad.set(key, { wie: naar, valuta, bedrag: geldRondCents(restantBedrag(p)), at: stamp });
+    }
+  }
+  for (const [key, z] of zaad) {
+    if (map.has(key)) continue;
+    bumpPersoon(map, z.wie, z.valuta, "kasgeld", z.bedrag);
   }
 
   return [...map.values()]
