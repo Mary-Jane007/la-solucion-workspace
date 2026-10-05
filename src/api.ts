@@ -183,9 +183,15 @@ function triggerBrowserDownload(blob: Blob, bestandsnaam: string): void {
 
 export type BestandBron = "opdracht" | "financieel-post" | "financieel-inzending";
 
+function bekijkNaamInUrl(bestandsnaam?: string): string {
+  const raw = String(bestandsnaam || "document").replace(/[\\/]/g, "_").trim() || "document";
+  return encodeURIComponent(raw);
+}
+
 export function bestandBekijkUrl(
   bestandId: string,
-  bron: BestandBron = "opdracht"
+  bron: BestandBron = "opdracht",
+  bestandsnaam?: string
 ): string | null {
   const token = getToken();
   if (!token) return null;
@@ -195,12 +201,25 @@ export function bestandBekijkUrl(
       : bron === "financieel-inzending"
         ? `/api/financieel-inzendingen/bestanden/${encodeURIComponent(bestandId)}/download`
         : `/api/bestanden/${encodeURIComponent(bestandId)}/download`;
-  return `${pad}?access_token=${encodeURIComponent(token)}&inline=1`;
+  return `${pad}/${bekijkNaamInUrl(bestandsnaam)}?access_token=${encodeURIComponent(token)}&inline=1`;
 }
 
 export function openBestandInNieuwTab(url: string): boolean {
-  const win = window.open(url, "_blank");
-  return Boolean(win);
+  if (!url) return false;
+  try {
+    const a = document.createElement("a");
+    a.href = url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    return true;
+  } catch {
+    const win = window.open(url, "_blank", "noopener,noreferrer");
+    return Boolean(win);
+  }
 }
 
 export async function fetchBestandBlob(bestandId: string, bestandsnaam = ""): Promise<Blob> {

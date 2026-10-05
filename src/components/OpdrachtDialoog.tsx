@@ -12,7 +12,7 @@ import {
 import { isAfbeeldingBestand, isBekijkbaarBestand, isPdfBestand } from "../bestandUtils";
 import { opdrachtVerwijderBevestiging } from "../opdrachtVerwijderen";
 import { statusLabel, vindOvereenkomstigeOpdrachten } from "../opdrachtenUtils";
-import { BestandMiniatuur, BestandViewer, BestandViewerItem } from "./BestandViewer";
+import { BestandBekijkLink, BestandMiniatuur, BestandViewer, BestandViewerItem } from "./BestandViewer";
 import { DocumentenToevoegen } from "./DocumentenToevoegen";
 
 type DialoogMode = "toevoegen" | "bewerken" | "bekijken";
@@ -124,7 +124,7 @@ export function OpdrachtDialoog({
         naam: b.origineleNaam,
         mimeType: b.mimeType,
         fetchBlob: () => fetchBestandBlob(b.id, b.origineleNaam),
-        bekijkUrl: bestandBekijkUrl(b.id)
+        bekijkUrl: bestandBekijkUrl(b.id, "opdracht", b.origineleNaam)
       }));
     return [...wachtend, ...gekoppeld];
   }, [wachtendeBestanden, bewerkt.bestanden]);
@@ -136,7 +136,7 @@ export function OpdrachtDialoog({
     }
     const gekoppeld = (bewerkt.bestanden || []).find((item) => item.id === id);
     if (gekoppeld && isPdfBestand(gekoppeld.origineleNaam, gekoppeld.mimeType)) {
-      const url = bestandBekijkUrl(id);
+      const url = bestandBekijkUrl(id, "opdracht", gekoppeld.origineleNaam);
       if (url && openBestandInNieuwTab(url)) return;
     }
     setViewerId(id);
@@ -548,7 +548,9 @@ export function OpdrachtDialoog({
                             disabled={isBezig}
                             onOpslaan={(naam) => hernoemWachtendBestand(item.id, naam)}
                           />
-                          {isBekijkbaarBestand(item.file.name, item.file.type) && (
+                          {isPdfBestand(item.file.name, item.file.type) ? (
+                            <BestandBekijkLink href={item.url} />
+                          ) : isBekijkbaarBestand(item.file.name, item.file.type) ? (
                             <button
                               type="button"
                               className="link-btn file-download-btn"
@@ -556,7 +558,7 @@ export function OpdrachtDialoog({
                             >
                               Bekijken
                             </button>
-                          )}
+                          ) : null}
                           <button
                             type="button"
                             className="link-btn file-row-verwijder"
@@ -595,7 +597,9 @@ export function OpdrachtDialoog({
                         )}
                         <span className="file-meta">
                           {(b.grootte / 1024).toFixed(1)} kB
-                          {isBekijkbaarBestand(b.origineleNaam, b.mimeType) && (
+                          {isPdfBestand(b.origineleNaam, b.mimeType) ? (
+                            <BestandBekijkLink href={bestandBekijkUrl(b.id, "opdracht", b.origineleNaam)} />
+                          ) : isBekijkbaarBestand(b.origineleNaam, b.mimeType) ? (
                             <button
                               type="button"
                               className="link-btn file-download-btn"
@@ -603,7 +607,7 @@ export function OpdrachtDialoog({
                             >
                               Bekijken
                             </button>
-                          )}
+                          ) : null}
                           <button
                             type="button"
                             className="link-btn file-download-btn"

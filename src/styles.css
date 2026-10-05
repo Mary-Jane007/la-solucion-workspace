@@ -1256,6 +1256,19 @@ textarea.form-input {
   text-decoration: underline;
 }
 
+a.file-download-btn,
+a.link-btn,
+a.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+a.link-btn,
+a.btn-secondary {
+  text-decoration: none;
+}
+
 .file-download-btn:hover {
   color: var(--color-accent-hover);
 }
@@ -2239,6 +2252,25 @@ textarea.form-input {
   border: 0;
   background: none;
   cursor: pointer;
+}
+
+.inzending-foto-pdf {
+  width: 132px;
+  height: 132px;
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  border-radius: 10px;
+  text-decoration: none;
+  color: var(--color-text);
+  background: color-mix(in srgb, currentColor 6%, transparent);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.inzending-foto-pdf span:first-child {
+  font-size: 28px;
+  line-height: 1;
 }
 
 .inzending-foto-placeholder {

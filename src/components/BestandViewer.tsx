@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { MouseEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { isAfbeeldingBestand, isPdfBestand, normaliseerBestandBlob } from "../bestandUtils";
 
@@ -16,6 +16,42 @@ interface Props {
   startId: string;
   onClose: () => void;
   onDownload?: (item: BestandViewerItem) => void | Promise<void>;
+}
+
+export function BestandBekijkLink({
+  href,
+  className = "link-btn file-download-btn",
+  children = "Bekijken",
+  onClick,
+  onFallback
+}: {
+  href?: string | null;
+  className?: string;
+  children?: ReactNode;
+  onClick?: (event: MouseEvent<HTMLAnchorElement>) => void;
+  onFallback?: () => void;
+}) {
+  if (href) {
+    return (
+      <a
+        className={className}
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={onClick}
+      >
+        {children}
+      </a>
+    );
+  }
+  if (onFallback) {
+    return (
+      <button type="button" className={className} onClick={onFallback}>
+        {children}
+      </button>
+    );
+  }
+  return null;
 }
 
 export function BestandViewer({ items, startId, onClose, onDownload }: Props) {
@@ -139,13 +175,14 @@ export function BestandViewer({ items, startId, onClose, onDownload }: Props) {
           </div>
           <div className="bestand-viewer-acties">
             {soort === "pdf" && geladenUrl && (
-              <button
-                type="button"
+              <a
                 className="btn-secondary"
-                onClick={() => window.open(geladenUrl, "_blank")}
+                href={geladenUrl}
+                target="_blank"
+                rel="noopener noreferrer"
               >
-                Open in nieuw tabblad
-              </button>
+                Openen in Chrome
+              </a>
             )}
             {onDownload && item.fetchBlob && (
               <button type="button" className="btn-secondary" onClick={() => void onDownload(item)}>
@@ -171,7 +208,12 @@ export function BestandViewer({ items, startId, onClose, onDownload }: Props) {
           {laden && <p className="bestand-viewer-status">Laden…</p>}
           {fout && <p className="bestand-viewer-status">{fout}</p>}
           {!laden && !fout && geladenUrl && soort === "pdf" && (
-            <embed src={geladenUrl} type="application/pdf" title={item.naam} className="bestand-viewer-pdf" />
+            <div className="bestand-viewer-status">
+              <p>Deze PDF opent in Chrome.</p>
+              <a className="btn-secondary" href={geladenUrl} target="_blank" rel="noopener noreferrer">
+                Openen in Chrome
+              </a>
+            </div>
           )}
           {!laden && !fout && geladenUrl && soort !== "pdf" && (
             <img

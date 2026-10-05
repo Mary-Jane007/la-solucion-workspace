@@ -5,7 +5,7 @@ import { flattenDocumenten } from "../opdrachtenUtils";
 import { OpdrachtenWerkruimte } from "../hooks/useOpdrachtenWerkruimte";
 import { useLijstGezienStatus } from "../hooks/useLijstGezienStatus";
 import { documentenItemIds } from "../badgeItems";
-import { BestandMiniatuur, BestandViewer, BestandViewerItem } from "./BestandViewer";
+import { BestandBekijkLink, BestandMiniatuur, BestandViewer, BestandViewerItem } from "./BestandViewer";
 
 interface Props {
   werkruimte: OpdrachtenWerkruimte;
@@ -46,7 +46,7 @@ export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
           naam: d.origineleNaam,
           mimeType: d.mimeType,
           fetchBlob: () => fetchBestandBlob(d.id, d.origineleNaam),
-          bekijkUrl: bestandBekijkUrl(d.id)
+          bekijkUrl: bestandBekijkUrl(d.id, "opdracht", d.origineleNaam)
         })),
     [documenten]
   );
@@ -73,7 +73,7 @@ export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
     markeerGeopend(id);
     const doc = documenten.find((item) => item.id === id);
     if (doc && isPdfBestand(doc.origineleNaam, doc.mimeType)) {
-      const url = bestandBekijkUrl(id);
+      const url = bestandBekijkUrl(id, "opdracht", doc.origineleNaam);
       if (url && openBestandInNieuwTab(url)) return;
     }
     setViewerId(id);
@@ -129,7 +129,16 @@ export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
                     <td>{d.klantNaam}</td>
                     <td>{formatGrootte(d.grootte)}</td>
                     <td>
-                      {bekijkbaar && (
+                      {isPdfBestand(d.origineleNaam, d.mimeType) ? (
+                        <BestandBekijkLink
+                          className="btn-secondary"
+                          href={bestandBekijkUrl(d.id, "opdracht", d.origineleNaam)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            markeerGeopend(d.id);
+                          }}
+                        />
+                      ) : bekijkbaar ? (
                         <button
                           type="button"
                           className="btn-secondary"
@@ -140,7 +149,7 @@ export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
                         >
                           Bekijken
                         </button>
-                      )}
+                      ) : null}
                       <button
                         type="button"
                         className="btn-secondary"

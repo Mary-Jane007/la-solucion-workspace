@@ -985,15 +985,56 @@ function contentDispositionValue(filename, inline) {
   return `${inline ? "inline" : "attachment"}; filename="${ascii}"; filename*=UTF-8''${encoded}`;
 }
 
-function bestandContentType(bestand) {
-  const naam = String(bestand?.origineleNaam || "");
-  const mime = String(bestand?.mimeType || "").toLowerCase().split(";")[0].trim();
-  if (mime === "application/pdf" || /\.pdf$/i.test(naam)) return "application/pdf";
-  return bestand?.mimeType || "application/octet-stream";
+const BESTAND_MIME_PER_EXT = {
+  pdf: "application/pdf",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  gif: "image/gif",
+  bmp: "image/bmp",
+  heic: "image/heic",
+  heif: "image/heif"
+};
+
+function mimeUitMagic(buffer) {
+  if (!buffer || buffer.length < 4) return "";
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return "image/jpeg";
+  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) return "image/png";
+  if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46) return "image/gif";
+  if (
+    buffer.length >= 12 &&
+    buffer[0] === 0x52 &&
+    buffer[1] === 0x49 &&
+    buffer[2] === 0x46 &&
+    buffer[3] === 0x46 &&
+    buffer[8] === 0x57 &&
+    buffer[9] === 0x45 &&
+    buffer[10] === 0x42 &&
+    buffer[11] === 0x50
+  ) {
+    return "image/webp";
+  }
+  if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) {
+    return "application/pdf";
+  }
+  return "";
 }
 
-function setBestandDownloadHeaders(res, bestand, inline = false) {
-  res.setHeader("Content-Type", bestandContentType(bestand));
+function bestandContentType(bestand, buffer) {
+  const magic = mimeUitMagic(buffer);
+  if (magic) return magic;
+  const naam = String(bestand?.origineleNaam || "");
+  const mime = String(bestand?.mimeType || "").toLowerCase().split(";")[0].trim();
+  if (mime === "image/jpg") return "image/jpeg";
+  if (mime === "application/pdf" || mime.startsWith("image/")) return mime;
+  const ext = (naam.match(/\.([a-z0-9]{1,8})$/i) || [])[1];
+  if (ext && BESTAND_MIME_PER_EXT[ext.toLowerCase()]) return BESTAND_MIME_PER_EXT[ext.toLowerCase()];
+  return mime || "application/octet-stream";
+}
+
+function setBestandDownloadHeaders(res, bestand, inline = false, buffer) {
+  res.setHeader("Content-Type", bestandContentType(bestand, buffer));
   res.setHeader("Content-Disposition", contentDispositionValue(bestand.origineleNaam, inline));
   res.setHeader("Cache-Control", "private, no-store");
 }
@@ -1063,7 +1104,7 @@ app.delete("/api/bestanden/:id", authRequired, async (req, res) => {
   }
 });
 
-app.get("/api/bestanden/:id/download", authRequired, async (req, res) => {
+app.get(["/api/bestanden/:id/download", "/api/bestanden/:id/download/:naam"], authRequired, async (req, res) => {
   try {
     if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
     const bestand = await getBestandById(req.params.id);
@@ -1081,7 +1122,7 @@ app.get("/api/bestanden/:id/download", authRequired, async (req, res) => {
       void saveBestandInhoud(bestand.id, vanSchijf.buffer).catch((err) => {
         console.warn("Kon bestandinhoud niet bijwerken:", err.message);
       });
-      setBestandDownloadHeaders(res, bestand, inline);
+      setBestandDownloadHeaders(res, bestand, inline, vanSchijf.buffer);
       res.setHeader("Content-Length", vanSchijf.buffer.length);
       return res.end(vanSchijf.buffer);
     }
@@ -1096,7 +1137,7 @@ app.get("/api/bestanden/:id/download", authRequired, async (req, res) => {
           /* cache is optioneel */
         }
       }
-      setBestandDownloadHeaders(res, bestand, inline);
+      setBestandDownloadHeaders(res, bestand, inline, inhoud);
       res.setHeader("Content-Length", inhoud.length);
       return res.end(inhoud);
     }
@@ -1246,7 +1287,11 @@ app.post(
   }
 );
 
-app.get("/api/admin/financieel/bestanden/:id/download", authRequired, requireOwner, async (req, res) => {
+app.get(
+  ["/api/admin/financieel/bestanden/:id/download", "/api/admin/financieel/bestanden/:id/download/:naam"],
+  authRequired,
+  requireOwner,
+  async (req, res) => {
   try {
     if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
     const bijlage = await getFinancielePostBijlageById(req.params.id);
@@ -1386,7 +1431,10 @@ app.post("/api/financieel-inzendingen", authRequired, parseInzendingUpload, asyn
   }
 });
 
-app.get("/api/financieel-inzendingen/bestanden/:id/download", authRequired, async (req, res) => {
+app.get(
+  ["/api/financieel-inzendingen/bestanden/:id/download", "/api/financieel-inzendingen/bestanden/:id/download/:naam"],
+  authRequired,
+  async (req, res) => {
   try {
     if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
     const bijlage = await getInzendingBijlageById(req.params.id);
