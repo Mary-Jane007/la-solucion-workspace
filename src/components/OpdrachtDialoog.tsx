@@ -148,10 +148,17 @@ export function OpdrachtDialoog({
     };
   }, []);
 
-  const actieveMedewerkers = useMemo(
-    () => teamGebruikers.filter((u) => u.active && u.role !== "EIGENAAR"),
-    [teamGebruikers]
-  );
+  const toewijsbareGebruikers = useMemo(() => {
+    const actief = teamGebruikers.filter((u) => u.active);
+    const gekozen = teamGebruikers.find((u) => u.id === bewerkt.behandelaarUserId);
+    const lijst =
+      gekozen && !actief.some((u) => u.id === gekozen.id) ? [...actief, gekozen] : actief;
+    return [...lijst].sort((a, b) => {
+      if (a.role === "EIGENAAR" && b.role !== "EIGENAAR") return -1;
+      if (a.role !== "EIGENAAR" && b.role === "EIGENAAR") return 1;
+      return a.name.localeCompare(b.name, "nl");
+    });
+  }, [teamGebruikers, bewerkt.behandelaarUserId]);
 
   const isToevoegen = mode === "toevoegen";
   const isBekijken = mode === "bekijken";
@@ -473,7 +480,7 @@ export function OpdrachtDialoog({
                   onChange={(e) => {
                     const nextId = e.target.value || null;
                     const nextNaam =
-                      actieveMedewerkers.find((u) => u.id === nextId)?.name || null;
+                      toewijsbareGebruikers.find((u) => u.id === nextId)?.name || null;
                     setBewerkt({
                       ...bewerkt,
                       behandelaarUserId: nextId,
@@ -482,9 +489,9 @@ export function OpdrachtDialoog({
                   }}
                 >
                   <option value="">Niet toegewezen</option>
-                  {actieveMedewerkers.map((u) => (
+                  {toewijsbareGebruikers.map((u) => (
                     <option key={u.id} value={u.id}>
-                      {u.name}
+                      {u.role === "EIGENAAR" ? `${u.name} · eigenaar` : u.name}
                     </option>
                   ))}
                 </select>

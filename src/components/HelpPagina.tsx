@@ -69,7 +69,7 @@ const HELP_ONDERWERPEN: HelpStap[] = [
     titel: "Opdracht bewerken & status",
     stappen: [
       "Klik op een kaart op het opdrachtenbord om het detailvenster te openen.",
-      "Pas klant, omschrijving, notities, behandelaar of deadline aan.",
+      "Pas klant, omschrijving, notities, behandelaar of deadline aan. Bij Taak toegewezen aan kies je iedereen met een login, inclusief de eigenaar.",
       "Wijzig status: Nieuw → In behandeling → Afgerond (sleep kaarten of kies status in het venster).",
       "Sla wijzigingen op met Opslaan of Sluiten (wijzigingen worden bewaard)."
     ]
