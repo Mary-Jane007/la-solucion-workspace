@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { DocumentScanner } from "../documentScanner/DocumentScanner";
+import { useRef } from "react";
 
 interface Props {
   disabled?: boolean;
@@ -8,26 +7,6 @@ interface Props {
 
 export function DocumentenToevoegen({ disabled, onBestanden }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [scannerOpen, setScannerOpen] = useState(false);
-  const [cameraSupported, setCameraSupported] = useState(false);
-
-  useEffect(() => {
-    setCameraSupported(
-      Boolean(
-        typeof navigator !== "undefined" &&
-          navigator.mediaDevices &&
-          typeof navigator.mediaDevices.getUserMedia === "function"
-      )
-    );
-  }, []);
-
-  const hint = useMemo(
-    () =>
-      cameraSupported
-        ? "PDF, JPG, PNG of DOC — of scan een document met de camera. Daarna kun je de naam aanpassen of een bestand verwijderen."
-        : "PDF, JPG, PNG of DOC. Daarna kun je de naam aanpassen of een bestand verwijderen.",
-    [cameraSupported]
-  );
 
   return (
     <div className="documenten-toevoegen">
@@ -53,24 +32,10 @@ export function DocumentenToevoegen({ disabled, onBestanden }: Props) {
         >
           Bestand kiezen
         </button>
-        <button
-          type="button"
-          className="btn-primary documenten-scan-btn"
-          disabled={disabled}
-          onClick={() => setScannerOpen(true)}
-        >
-          📷 Scan document
-        </button>
       </div>
-      <span className="help-text">{hint}</span>
-      <DocumentScanner
-        open={scannerOpen}
-        onSluit={() => setScannerOpen(false)}
-        onPdfKlaar={(file) => {
-          onBestanden([file]);
-          setScannerOpen(false);
-        }}
-      />
+      <span className="help-text">
+        PDF, JPG, PNG of DOC. Daarna kun je de naam aanpassen of een bestand verwijderen.
+      </span>
     </div>
   );
 }

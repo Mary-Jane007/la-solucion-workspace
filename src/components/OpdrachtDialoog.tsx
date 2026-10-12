@@ -353,7 +353,7 @@ export function OpdrachtDialoog({
             <h2>{titel}</h2>
             <p className="muted">
               {isToevoegen &&
-                "Vul alle gegevens in. Je kunt direct documenten uploaden of een foto maken."}
+                "Vul alle gegevens in. Je kunt direct documenten uploaden."}
               {mode === "bewerken" && "Pas gegevens, toegewezen medewerker en documenten aan."}
               {isBekijken &&
                 "Je kunt alleen aangeven of je deze opdracht hebt uitgevoerd (status op Afgerond zetten)."}
