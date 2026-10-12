@@ -242,41 +242,8 @@ export function OpdrachtDialoog({
     setWachtendeBestanden([]);
   };
 
-  const handleMarkeerUitgevoerd = async () => {
-    try {
-      setFout(null);
-      setIsBezig(true);
-      await onBewaar({ ...bewerkt, status: OpdrachtStatus.Afgerond });
-      onSluit();
-    } catch {
-      setFout("Status bijwerken mislukt. Probeer opnieuw.");
-    } finally {
-      setIsBezig(false);
-    }
-  };
-
-  const uploadDirectNaarOpdracht = async (files: File[]) => {
-    if (!bewerkt.id || !files.length) return;
-    try {
-      setFout(null);
-      setIsBezig(true);
-      for (const file of files) {
-        await uploadBestand(bewerkt.id, file);
-      }
-      setBewerkt(await onBewaar(bewerkt));
-    } catch {
-      setFout("Upload mislukt. Controleer je verbinding en probeer opnieuw.");
-    } finally {
-      setIsBezig(false);
-    }
-  };
-
   const uploadBestanden = (files: File[]) => {
     if (!files.length) return;
-    if (isBekijken && bewerkt.id) {
-      void uploadDirectNaarOpdracht(files);
-      return;
-    }
     setWachtendeBestanden((huidig) => [
       ...huidig,
       ...files.map((file) => ({
@@ -376,7 +343,7 @@ export function OpdrachtDialoog({
                 "Vul alle gegevens in. Je kunt direct documenten uploaden."}
               {mode === "bewerken" && "Pas gegevens, toegewezen medewerker en documenten aan."}
               {isBekijken &&
-                "Je kunt documenten uploaden en aangeven of je deze opdracht hebt uitgevoerd."}
+                "Je kunt documenten toevoegen. Klik op Opslaan om ze te koppelen."}
             </p>
           </div>
           <button type="button" className="btn-ghost" onClick={onSluit}>
@@ -683,7 +650,7 @@ export function OpdrachtDialoog({
               </span>
             )}
             <button type="button" className="btn-ghost" onClick={onSluit}>
-              {isBekijken ? "Sluiten" : "Annuleren"}
+              Annuleren
             </button>
             {kanVerwijderen && (
               <button
@@ -709,20 +676,9 @@ export function OpdrachtDialoog({
                 Opdracht verwijderen
               </button>
             )}
-            {isBekijken ? (
-              <button
-                type="button"
-                className="btn-primary"
-                disabled={isBezig || bewerkt.status === OpdrachtStatus.Afgerond}
-                onClick={handleMarkeerUitgevoerd}
-              >
-                {isBezig ? "Bezig..." : "Markeer als uitgevoerd"}
-              </button>
-            ) : (
-              <button type="submit" className="btn-primary" disabled={isBezig}>
-                {isBezig ? "Bezig..." : isToevoegen ? "Opdracht opslaan" : "Opslaan"}
-              </button>
-            )}
+            <button type="submit" className="btn-primary" disabled={isBezig}>
+              {isBezig ? "Bezig..." : isToevoegen ? "Opdracht opslaan" : "Opslaan"}
+            </button>
           </footer>
         </form>
       </div>

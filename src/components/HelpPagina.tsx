@@ -80,7 +80,7 @@ const HELP_ONDERWERPEN: HelpStap[] = [
       "Open een toegewezen opdracht (eigenaar: elke opdracht).",
       "Scroll in het detailvenster naar Documenten toevoegen.",
       "Kies een of meerdere bestanden (PDF, foto, Word, enz.).",
-      "Als medewerker wordt het bestand meteen opgeslagen. Als eigenaar koppel je het bij Opslaan.",
+      "Klik op Opslaan om de bestanden te koppelen.",
       "Klik op Bekijken: foto’s blijven in de viewer. PDF’s openen in Chrome.",
       "Alle bijlagen van opdrachten vind je ook terug onder Documenten in het menu (eigenaar)."
     ],
