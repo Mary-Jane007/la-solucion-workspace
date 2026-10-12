@@ -163,7 +163,7 @@ export function OpdrachtDialoog({
   const isToevoegen = mode === "toevoegen";
   const isBekijken = mode === "bekijken";
   const alleenLezen = isBekijken;
-  const kanDocumentenToevoegen = !alleenLezen;
+  const kanDocumentenToevoegen = true;
   const kanVerwijderen = isEigenaar && Boolean(bewerkt.id) && !isToevoegen && Boolean(onDelete);
 
   const overeenkomstigeOpdrachten = useMemo(() => {
@@ -255,8 +255,28 @@ export function OpdrachtDialoog({
     }
   };
 
+  const uploadDirectNaarOpdracht = async (files: File[]) => {
+    if (!bewerkt.id || !files.length) return;
+    try {
+      setFout(null);
+      setIsBezig(true);
+      for (const file of files) {
+        await uploadBestand(bewerkt.id, file);
+      }
+      setBewerkt(await onBewaar(bewerkt));
+    } catch {
+      setFout("Upload mislukt. Controleer je verbinding en probeer opnieuw.");
+    } finally {
+      setIsBezig(false);
+    }
+  };
+
   const uploadBestanden = (files: File[]) => {
     if (!files.length) return;
+    if (isBekijken && bewerkt.id) {
+      void uploadDirectNaarOpdracht(files);
+      return;
+    }
     setWachtendeBestanden((huidig) => [
       ...huidig,
       ...files.map((file) => ({
@@ -356,7 +376,7 @@ export function OpdrachtDialoog({
                 "Vul alle gegevens in. Je kunt direct documenten uploaden."}
               {mode === "bewerken" && "Pas gegevens, toegewezen medewerker en documenten aan."}
               {isBekijken &&
-                "Je kunt alleen aangeven of je deze opdracht hebt uitgevoerd (status op Afgerond zetten)."}
+                "Je kunt documenten uploaden en aangeven of je deze opdracht hebt uitgevoerd."}
             </p>
           </div>
           <button type="button" className="btn-ghost" onClick={onSluit}>

@@ -6,11 +6,7 @@ export function filterZichtbareOpdrachten(
   isEigenaar: boolean
 ): Opdracht[] {
   if (isEigenaar) return opdrachten;
-  return opdrachten.filter(
-    (o) =>
-      o.behandelaarNaam &&
-      o.behandelaarNaam.toLocaleLowerCase() === gebruiker.naam.toLocaleLowerCase()
-  );
+  return filterMijnOpdrachten(opdrachten, gebruiker);
 }
 
 export function filterMijnOpdrachten(opdrachten: Opdracht[], gebruiker: Gebruiker): Opdracht[] {

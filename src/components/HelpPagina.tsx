@@ -77,14 +77,14 @@ const HELP_ONDERWERPEN: HelpStap[] = [
   {
     titel: "Documenten uploaden",
     stappen: [
-      "Open de opdracht via het opdrachtenbord.",
-      "Scroll in het detailvenster naar het uploadveld voor documenten.",
+      "Open een toegewezen opdracht (eigenaar: elke opdracht).",
+      "Scroll in het detailvenster naar Documenten toevoegen.",
       "Kies een of meerdere bestanden (PDF, foto, Word, enz.).",
-      "Wacht tot de upload klaar is; de bestandsnaam verschijnt in de lijst.",
+      "Als medewerker wordt het bestand meteen opgeslagen. Als eigenaar koppel je het bij Opslaan.",
       "Klik op Bekijken: foto’s blijven in de viewer. PDF’s openen in Chrome.",
-      "Alle bijlagen van opdrachten vind je ook terug onder Documenten in het menu."
+      "Alle bijlagen van opdrachten vind je ook terug onder Documenten in het menu (eigenaar)."
     ],
-    tip: "Gebruik duidelijke bestandsnamen (bijv. paspoort-klantnaam.pdf) zodat je later sneller vindt wat je zoekt."
+    tip: "Iedereen met een login kan bestanden toevoegen aan opdrachten die aan hen zijn toegewezen. De eigenaar kan dat bij alle opdrachten."
   },
   {
     titel: "Verwijderen & prullenbak",
