@@ -430,7 +430,7 @@ export function berekenDashboardKpis(
       id: "in-kas",
       label: "Momenteel in kas",
       waarde: formatGeld(inKas, valuta),
-      hint: "Contant nu bij medewerkers, na bestedingen en overdrachten",
+      hint: "Contant nu bij medewerkers, zonder muntenbak",
       tone: inKas >= 0 ? "blauw" : "rood",
       deltaPct: null,
       deltaLabel: null
@@ -555,6 +555,7 @@ export type DagVerslag = {
   openstaand: number;
   netto: number;
   eindbalans: number;
+  muntenbak: number;
   transacties: number;
   grootsteInkomst: FinancieelPost | null;
   grootsteUitgave: FinancieelPost | null;
@@ -575,11 +576,12 @@ export function berekenDagVerslag(
   const follow = berekenFollowTheMoney(allePosten, lokaleDatumIso(dag), valuta);
   h.inkomsten = follow.totaalOntvangen;
   h.uitgaven = follow.totaalBesteed;
-  h.kasgeld = follow.totaalOver;
+  h.kasgeld = follow.totaalInKas;
   h.ontvangen = follow.totaalOntvangen;
-  h.netto = geldRond(follow.totaalOver - follow.totaalBegin);
+  h.netto = geldRond(follow.totaalInKas - follow.totaalBegin);
   const beginsaldo = follow.totaalBegin;
-  const eindbalans = follow.totaalOver;
+  const eindbalans = follow.totaalInKas;
+  const muntenbak = follow.totaalMuntenbak;
 
   const sorted = [...(inValuta.length ? inValuta : dagPosten)].sort(
     (a, b) => postDatum(a).getTime() - postDatum(b).getTime()
@@ -651,11 +653,13 @@ export function berekenDagVerslag(
     }
   }
 
-  const geldBij = berekenGeldBijTotalen(inValuta.length ? inValuta : dagPosten).map((g) => ({
-    naam: g.naam,
-    totaal: g.totaal,
-    valuta: g.valuta
-  }));
+  const geldBij = berekenGeldBijTotalen(inValuta.length ? inValuta : dagPosten)
+    .filter((g) => !isMuntenbakNaam(g.naam))
+    .map((g) => ({
+      naam: g.naam,
+      totaal: g.totaal,
+      valuta: g.valuta
+    }));
 
   return {
     datumLabel: dag.toLocaleDateString("nl-NL", {
@@ -672,6 +676,7 @@ export function berekenDagVerslag(
     openstaand: h.teOntvangen,
     netto: h.netto,
     eindbalans,
+    muntenbak,
     transacties: h.transacties,
     grootsteInkomst:
       sorted.filter((p) => (p.type === "INKOMST" || p.type === "KASGELD") && !isOpeningsKas(p) && !isMuntenbakPost(p)).sort((a, b) => b.bedrag - a.bedrag)[0] ||
@@ -1597,7 +1602,7 @@ export type FollowMoneyDag = {
   totaalOntvangen: number;
   totaalBesteed: number;
   totaalOverdracht: number;
-  /** Som van Over per medewerker — totaal contant einde geselecteerde dag. */
+  /** Som van Over per medewerker, zonder muntenbak. */
   totaalOver: number;
   totaalInKas: number;
   totaalMuntenbak: number;
@@ -1947,8 +1952,8 @@ function followOpsVanPost(p: FinancieelPost, valuta: FinancieelValuta): FollowOp
         soort: "overdracht",
         titel: "Naar muntenbak",
         uitleg: [
-          bron ? `Van ${bron.naam}` : null,
-          "beschikbaar, niet bij een medewerker",
+          bron ? `Afgetrokken van kas van ${bron.naam}` : null,
+          "nu alleen in muntenbak (niet in totaal in kas)",
           `van post “${p.omschrijving}”`,
           g.toelichting || null
         ]
@@ -2259,7 +2264,10 @@ function berekenFollowTheMoneyDag(
     }
 
     if (op.soort === "overdracht") {
-      totaalOverdracht = geldRond(totaalOverdracht + Math.abs(op.bedrag));
+      const raaktMuntenbak = Boolean(op.handmatigeDeltas?.some((d) => isMuntenbakNaam(d.naam)));
+      if (!raaktMuntenbak) {
+        totaalOverdracht = geldRond(totaalOverdracht + Math.abs(op.bedrag));
+      }
     } else if (op.soort === "binnen") {
       totaalOntvangen = geldRond(totaalOntvangen + Math.abs(op.bedrag));
     } else if (op.soort === "uit") {
@@ -2323,11 +2331,11 @@ function berekenFollowTheMoneyDag(
       .map(([categorie, bedrag]) => ({ categorie, bedrag }))
       .filter((b) => b.bedrag > 0)
       .sort((a, b) => b.bedrag - a.bedrag),
-    totaalBegin: geldRond(personen.reduce((s, p) => s + p.beginsaldo, 0)),
+    totaalBegin: geldRond(personen.filter((p) => !isMuntenbakNaam(p.naam)).reduce((s, p) => s + p.beginsaldo, 0)),
     totaalOntvangen,
     totaalBesteed: Math.max(0, totaalBesteed),
     totaalOverdracht,
-    totaalOver: geldRond(personen.reduce((s, p) => s + p.over, 0)),
+    totaalOver: geldRond(personen.filter((p) => !isMuntenbakNaam(p.naam)).reduce((s, p) => s + p.over, 0)),
     totaalInKas: geldRond(personen.filter((p) => !isMuntenbakNaam(p.naam)).reduce((s, p) => s + p.over, 0)),
     totaalMuntenbak: geldRond(personen.filter((p) => isMuntenbakNaam(p.naam)).reduce((s, p) => s + p.over, 0))
   };

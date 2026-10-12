@@ -1955,7 +1955,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                       )}
                       {rij.soort === "AF" && muntenbakGebruik && (
                         <p className="muted financieel-span-2">
-                          Dit gaat uit de kas naar de muntenbak. Het is geen uitgave: het geld blijft beschikbaar.
+                          Dit gaat uit de kas van de medewerker naar de muntenbak. Het is geen uitgave: het geld blijft beschikbaar, maar telt niet meer mee in totaal in kas.
                         </p>
                       )}
                       {isBankstorting(rij.waaraan) && (

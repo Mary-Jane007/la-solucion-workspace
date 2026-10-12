@@ -822,6 +822,7 @@ export function berekenGeldBijTotalen(posten: FinancieelPost[]): GeldBijTotaal[]
     if (isOpeningsKas(p)) continue;
     const valuta = normalizeValuta(p.valuta);
     const teltAlsKas = p.type === "KASGELD" || p.type === "OVERDRACHT" || p.status === "BETAALD";
+    // AF naar muntenbak zit al in restant (af van de medewerker). ERBIJ muntenbak is nooit kas.
     const kasRestant = geldRondCents(restantBedrag(p) - totaalMuntenbakErbij(p));
     const bankRichting = bankKasRichting(p);
     if (teltAlsKas) {
@@ -903,6 +904,7 @@ export function berekenGeldBijTotalen(posten: FinancieelPost[]): GeldBijTotaal[]
   }
 
   return [...map.values()]
+    .filter((s) => !isMuntenbakNaam(s.naam))
     .map((s) => ({
       naam: s.naam,
       userId: s.userId,

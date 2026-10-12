@@ -128,7 +128,7 @@ const HELP_ONDERWERPEN: HelpStap[] = [
       "Nieuwe post: registreer inkomst, uitgave, kasgeld, overdracht of openingskas. Openingskas is de telling van vanochtend en vervangt het restant van gisteren.",
       "Bij Inzendingen: open meldingen van medewerkers en neem ze over in het dagboek."
     ],
-    tip: "Totaal in kas (alle medewerkers) staat in Follow the money — dat is het contante totaal einde van de gekozen dag."
+    tip: "Totaal in kas is het contante geld bij medewerkers, zonder muntenbak. Geld dat naar de muntenbak is verhuisd, zie je alleen bij Muntenbak."
   }
 ];
 

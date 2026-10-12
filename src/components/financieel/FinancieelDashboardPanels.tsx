@@ -181,6 +181,10 @@ export function OverzichtPanel({
             </strong>
           </div>
           <div>
+            <span className="muted">Muntenbak</span>
+            <strong className="financieel-inkomst">{formatGeld(dag.muntenbak, kpis.valuta)}</strong>
+          </div>
+          <div>
             <span className="muted">Mutatie deze dag</span>
             <strong className={dag.netto >= 0 ? "financieel-inkomst" : "financieel-uitgave"}>
               {formatGeld(dag.netto, kpis.valuta)}
@@ -314,7 +318,8 @@ export function VandaagPanel({
               ["Inkomsten totaal", dag.inkomsten, "groen", true],
               ["Openstaande betalingen", dag.openstaand, "oranje", true],
               ["Nettoresultaat vandaag", dag.netto, dag.netto >= 0 ? "groen" : "rood", true],
-              ["Over (eindbalans)", dag.eindbalans, "blauw", true],
+              ["Totaal in kas", dag.eindbalans, "blauw", true],
+              ["Muntenbak", dag.muntenbak, "blauw", true],
               ["Aantal transacties", dag.transacties, "blauw", false]
             ] as const
           ).map(([label, waarde, tone, isGeld]) => (
@@ -1248,14 +1253,14 @@ export function FollowTheMoneyPanel({
             <span className="muted">Totaal in kas (alle medewerkers)</span>
             <strong className="financieel-inkomst">{formatGeld(dag.totaalInKas, dag.valuta)}</strong>
             <span className="fin-kpi-hint muted">
-              Einde van deze dag · opgeteld per medewerker · niet de hele maand/periode
+              Einde van deze dag · opgeteld per medewerker · zonder muntenbak
             </span>
           </div>
           <div>
             <span className="muted">Muntenbak</span>
             <strong className="financieel-inkomst">{formatGeld(dag.totaalMuntenbak, dag.valuta)}</strong>
             <span className="fin-kpi-hint muted">
-              Beschikbaar contant, niet bij een medewerker
+              Uit de kas van de medewerker gehaald · alleen hier zichtbaar
             </span>
           </div>
           <div>
@@ -1274,7 +1279,7 @@ export function FollowTheMoneyPanel({
           <div>
             <span className="muted">Overgedragen intern</span>
             <strong>{formatGeld(dag.totaalOverdracht, dag.valuta)}</strong>
-            <span className="fin-kpi-hint muted">verplaatst tussen medewerkers · kas totaal blijft gelijk</span>
+            <span className="fin-kpi-hint muted">verplaatst tussen medewerkers · zonder muntenbak</span>
           </div>
         </div>
       </section>
@@ -1283,7 +1288,7 @@ export function FollowTheMoneyPanel({
         <div className="section-header">
           <h2>Bij wie ligt het geld?</h2>
           <p className="muted">
-            Beginsaldo is hetzelfde als “Begon met”. Wat je niet besteedt, blijft automatisch in Over en gaat door naar morgen. Vul je openingskas in, dan is dat de telling van vanochtend en vervangt het het restant van gisteren. Muntenbak is beschikbaar geld dat niet bij een medewerker ligt.
+            Beginsaldo is hetzelfde als “Begon met”. Wat je niet besteedt, blijft automatisch in Over en gaat door naar morgen. Vul je openingskas in, dan is dat de telling van vanochtend en vervangt het het restant van gisteren. Muntenbak is beschikbaar geld dat niet bij een medewerker ligt — het telt niet mee in totaal in kas.
           </p>
         </div>
         {dag.personen.length === 0 ? (
@@ -1293,6 +1298,9 @@ export function FollowTheMoneyPanel({
             {dag.personen.map((p) => (
               <article key={p.key} className="ftm-persoon">
                 <h3>{p.naam}</h3>
+                {p.naam.trim().toLowerCase() === "muntenbak" ? (
+                  <p className="muted">Alleen hier zichtbaar, niet in de kas van een medewerker.</p>
+                ) : null}
                 <dl>
                   <div>
                     <dt>Beginsaldo / Begon met</dt>
