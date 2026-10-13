@@ -38,6 +38,7 @@ const {
   resolveRegistrationRole,
   ensureOwnerAccount
 } = require("./store");
+const { herstelJpegPdfVoorWeergave } = require("./jpegToPdf");
 const {
   listOpdrachtenForUser,
   listPrullenbakForUser,
@@ -1039,6 +1040,18 @@ function setBestandDownloadHeaders(res, bestand, inline = false, buffer) {
   res.setHeader("Cache-Control", "private, no-store");
 }
 
+function stuurBestandBuffer(res, bestand, inline, buffer) {
+  const herstel = herstelJpegPdfVoorWeergave(bestand.origineleNaam, bestand.mimeType, buffer);
+  const body = herstel?.buffer || buffer;
+  const naam = herstel?.naam || bestand.origineleNaam;
+  const type = herstel?.mime || bestandContentType(bestand, body);
+  res.setHeader("Content-Type", type);
+  res.setHeader("Content-Disposition", contentDispositionValue(naam, inline));
+  res.setHeader("Cache-Control", "private, no-store");
+  res.setHeader("Content-Length", body.length);
+  return res.end(body);
+}
+
 function naarBuffer(waarde) {
   if (!waarde) return null;
   if (Buffer.isBuffer(waarde)) return waarde.length ? waarde : null;
@@ -1122,9 +1135,7 @@ app.get(["/api/bestanden/:id/download", "/api/bestanden/:id/download/:naam"], au
       void saveBestandInhoud(bestand.id, vanSchijf.buffer).catch((err) => {
         console.warn("Kon bestandinhoud niet bijwerken:", err.message);
       });
-      setBestandDownloadHeaders(res, bestand, inline, vanSchijf.buffer);
-      res.setHeader("Content-Length", vanSchijf.buffer.length);
-      return res.end(vanSchijf.buffer);
+      return stuurBestandBuffer(res, bestand, inline, vanSchijf.buffer);
     }
 
     const inhoud = naarBuffer(await getBestandInhoudById(bestand.id));
@@ -1137,9 +1148,7 @@ app.get(["/api/bestanden/:id/download", "/api/bestanden/:id/download/:naam"], au
           /* cache is optioneel */
         }
       }
-      setBestandDownloadHeaders(res, bestand, inline, inhoud);
-      res.setHeader("Content-Length", inhoud.length);
-      return res.end(inhoud);
+      return stuurBestandBuffer(res, bestand, inline, inhoud);
     }
 
     return res.status(404).json({
