@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Opdracht, OpdrachtStatus, Prioriteit } from "../types";
 import {
   bestandBekijkUrl,
+  bestandPreviewUrl,
   downloadBestand,
   fetchBestandBlob,
   hernoemBestand,
@@ -129,7 +130,8 @@ export function OpdrachtDialoog({
         naam: b.origineleNaam,
         mimeType: b.mimeType,
         fetchBlob: () => fetchBestandBlob(b.id, b.origineleNaam),
-        bekijkUrl: bestandBekijkUrl(b.id, "opdracht", b.origineleNaam)
+        bekijkUrl: bestandBekijkUrl(b.id, "opdracht", b.origineleNaam),
+        previewUrl: bestandPreviewUrl(b.id, "opdracht", b.origineleNaam)
       }));
     return [...wachtend, ...gekoppeld];
   }, [wachtendeBestanden, bewerkt.bestanden]);
@@ -137,9 +139,7 @@ export function OpdrachtDialoog({
   const openBestand = async (id: string) => {
     const wachtend = wachtendeBestanden.find((item) => item.id === id);
     if (wachtend) {
-      if (
-        await openAlsAfbeeldingInApp(wachtend.file.name, wachtend.file.type, async () => wachtend.file)
-      ) {
+      if (await openAlsAfbeeldingInApp(wachtend.file.name, wachtend.file.type, undefined, wachtend.url)) {
         setViewerId(id);
         return;
       }
@@ -151,11 +151,8 @@ export function OpdrachtDialoog({
     }
     const gekoppeld = (bewerkt.bestanden || []).find((item) => item.id === id);
     if (gekoppeld) {
-      if (
-        await openAlsAfbeeldingInApp(gekoppeld.origineleNaam, gekoppeld.mimeType, () =>
-          fetchBestandBlob(gekoppeld.id, gekoppeld.origineleNaam)
-        )
-      ) {
+      const preview = bestandPreviewUrl(gekoppeld.id, "opdracht", gekoppeld.origineleNaam);
+      if (await openAlsAfbeeldingInApp(gekoppeld.origineleNaam, gekoppeld.mimeType, undefined, preview)) {
         setViewerId(id);
         return;
       }
@@ -604,6 +601,7 @@ export function OpdrachtDialoog({
                         <BestandMiniatuur
                           naam={b.origineleNaam}
                           mimeType={b.mimeType}
+                          previewUrl={bestandPreviewUrl(b.id, "opdracht", b.origineleNaam)}
                           fetchBlob={() => fetchBestandBlob(b.id, b.origineleNaam)}
                           onOpen={
                             isBekijkbaarBestand(b.origineleNaam, b.mimeType)

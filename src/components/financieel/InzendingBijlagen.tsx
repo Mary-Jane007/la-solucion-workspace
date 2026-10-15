@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   BestandBron,
   bestandBekijkUrl,
+  bestandPreviewUrl,
   downloadInzendingBijlage,
   fetchInzendingBijlageBlob,
   FinancieelInzendingBijlage,
@@ -31,14 +32,18 @@ export function FinancieelFotos({
         naam: bijlage.origineleNaam,
         mimeType: bijlage.mimeType,
         fetchBlob: () => fetchBlob(bijlage.id, bijlage.origineleNaam),
-        bekijkUrl: bestandBekijkUrl(bijlage.id, bron, bijlage.origineleNaam)
+        bekijkUrl: bestandBekijkUrl(bijlage.id, bron, bijlage.origineleNaam),
+        previewUrl: bestandPreviewUrl(bijlage.id, bron, bijlage.origineleNaam)
       })),
     [bijlagen, fetchBlob, bron]
   );
   const openBijlage = async (bijlage: FinancieelInzendingBijlage) => {
     if (
-      await openAlsAfbeeldingInApp(bijlage.origineleNaam, bijlage.mimeType, () =>
-        fetchBlob(bijlage.id, bijlage.origineleNaam)
+      await openAlsAfbeeldingInApp(
+        bijlage.origineleNaam,
+        bijlage.mimeType,
+        undefined,
+        bestandPreviewUrl(bijlage.id, bron, bijlage.origineleNaam)
       )
     ) {
       setViewerId(bijlage.id);
@@ -59,8 +64,8 @@ export function FinancieelFotos({
           <FinancieelFoto
             key={bijlage.id}
             bijlage={bijlage}
-            fetchBlob={fetchBlob}
             bekijkUrl={bestandBekijkUrl(bijlage.id, bron, bijlage.origineleNaam)}
+            previewUrl={bestandPreviewUrl(bijlage.id, bron, bijlage.origineleNaam)}
             onOpen={() => void openBijlage(bijlage)}
             onDownload={onDownload}
             onVerwijder={onVerwijder}
@@ -91,45 +96,22 @@ export function InzendingBijlagen({ bijlagen }: { bijlagen?: FinancieelInzending
 
 function FinancieelFoto({
   bijlage,
-  fetchBlob,
   bekijkUrl,
+  previewUrl,
   onOpen,
   onDownload,
   onVerwijder
 }: {
   bijlage: FinancieelInzendingBijlage;
-  fetchBlob: (id: string, naam?: string) => Promise<Blob>;
   bekijkUrl?: string | null;
+  previewUrl?: string | null;
   onOpen: () => void;
   onDownload: (id: string, naam: string) => void | Promise<void>;
   onVerwijder?: (id: string) => void;
 }) {
-  const [url, setUrl] = useState<string | null>(null);
-  const [fout, setFout] = useState(false);
+  const [imgFout, setImgFout] = useState(false);
   const isPdf = isPdfBestand(bijlage.origineleNaam, bijlage.mimeType);
-
-  useEffect(() => {
-    if (isPdf) return;
-    let objectUrl: string | null = null;
-    let stop = false;
-    void fetchBlob(bijlage.id, bijlage.origineleNaam)
-      .then((blob) => {
-        const next = URL.createObjectURL(blob);
-        if (stop) {
-          URL.revokeObjectURL(next);
-          return;
-        }
-        objectUrl = next;
-        setUrl(next);
-      })
-      .catch(() => {
-        if (!stop) setFout(true);
-      });
-    return () => {
-      stop = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [bijlage.id, fetchBlob, isPdf]);
+  const fotoSrc = previewUrl || bekijkUrl;
 
   return (
     <figure className="inzending-foto">
@@ -148,19 +130,24 @@ function FinancieelFoto({
           <span aria-hidden>📄</span>
           <span>PDF</span>
         </a>
-      ) : url ? (
+      ) : fotoSrc && !imgFout ? (
         <button
           type="button"
           className="inzending-foto-btn"
           onClick={onOpen}
           title={`Bekijk ${bijlage.origineleNaam}`}
         >
-          <img src={url} alt={bijlage.origineleNaam} />
+          <img
+            src={fotoSrc}
+            alt={bijlage.origineleNaam}
+            referrerPolicy="no-referrer"
+            onError={() => setImgFout(true)}
+          />
         </button>
       ) : (
-        <div className="inzending-foto-placeholder">
-          {fout ? "Foto niet geladen" : "Laden…"}
-        </div>
+        <button type="button" className="inzending-foto-btn" onClick={onOpen} title={`Bekijk ${bijlage.origineleNaam}`}>
+          <div className="inzending-foto-placeholder">{imgFout ? "Foto niet geladen" : "Laden…"}</div>
+        </button>
       )}
       <figcaption>
         <span>{bijlage.origineleNaam}</span>

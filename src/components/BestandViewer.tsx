@@ -1,8 +1,10 @@
 import { MouseEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { openBestandInNieuwTab } from "../api";
 import {
   isAfbeeldingBestand,
   isAfbeeldingBlob,
+  isHeicBestand,
   isPdfBestand,
   normaliseerBestandBlob
 } from "../bestandUtils";
@@ -13,6 +15,7 @@ export interface BestandViewerItem {
   mimeType?: string | null;
   url?: string;
   bekijkUrl?: string | null;
+  previewUrl?: string | null;
   fetchBlob?: () => Promise<Blob>;
 }
 
@@ -86,54 +89,74 @@ export function BestandViewer({ items, startId, onClose, onDownload }: Props) {
 
   useEffect(() => {
     if (!item) return;
+    const src = item.url || item.previewUrl || (item.bekijkUrl ? `${item.bekijkUrl}&preview=1` : null);
+    if (src) {
+      setGeladenUrl(src);
+      setSoort("foto");
+      setLaden(false);
+      setFout(null);
+      return;
+    }
     const ladenBlob = fetchRef.current;
-    if (ladenBlob) {
-      let objectUrl: string | null = null;
-      let stop = false;
-      setLaden(true);
-      setFout(null);
+    if (!ladenBlob) {
+      if (isPdfBestand(item.naam, item.mimeType) && item.bekijkUrl) {
+        setSoort("pdf");
+        setGeladenUrl(item.bekijkUrl);
+        setLaden(false);
+        setFout(null);
+        return;
+      }
       setGeladenUrl(null);
-      void ladenBlob()
-        .then((ruw) => normaliseerBestandBlob(ruw, item.naam, item.mimeType))
-        .then((blob) => {
-          const next = URL.createObjectURL(blob);
-          if (stop) {
-            URL.revokeObjectURL(next);
-            return;
-          }
-          objectUrl = next;
-          setSoort(isAfbeeldingBlob(blob) ? "foto" : isPdfBestand(item.naam, blob.type) ? "pdf" : "foto");
-          setGeladenUrl(next);
-          setLaden(false);
-        })
-        .catch(() => {
-          if (!stop) {
-            setFout("Kon het bestand niet laden.");
-            setLaden(false);
-          }
-        });
-      return () => {
-        stop = true;
-        if (objectUrl) URL.revokeObjectURL(objectUrl);
-      };
-    }
-    if (item.url) {
-      setGeladenUrl(item.url);
-      setSoort(isPdfBestand(item.naam, item.mimeType) ? "pdf" : "foto");
-      setLaden(false);
-      setFout(null);
+      setFout("Dit bestand kan hier niet worden getoond.");
       return;
     }
-    if (isPdfBestand(item.naam, item.mimeType) && item.bekijkUrl) {
-      setSoort("pdf");
-      setGeladenUrl(item.bekijkUrl);
-      setLaden(false);
-      setFout(null);
-      return;
-    }
+    let objectUrl: string | null = null;
+    let stop = false;
+    setLaden(true);
+    setFout(null);
     setGeladenUrl(null);
-    setFout("Dit bestand kan hier niet worden getoond.");
-  }, [item?.id, item?.url, item?.bekijkUrl, item?.naam, item?.mimeType]);
+    void ladenBlob()
+      .then((ruw) => normaliseerBestandBlob(ruw, item.naam, item.mimeType))
+      .then((blob) => {
+        const next = URL.createObjectURL(blob);
+        if (stop) {
+          URL.revokeObjectURL(next);
+          return;
+        }
+        objectUrl = next;
+        setSoort(isAfbeeldingBlob(blob) ? "foto" : isPdfBestand(item.naam, blob.type) ? "pdf" : "foto");
+        setGeladenUrl(next);
+        setLaden(false);
+      })
+      .catch(() => {
+        if (!stop) {
+          setFout("Kon het bestand niet laden.");
+          setLaden(false);
+        }
+      });
+    return () => {
+      stop = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [item?.id, item?.url, item?.previewUrl, item?.bekijkUrl, item?.naam, item?.mimeType]);
+
+  const openPdfInBrowser = () => {
+    const url = item?.bekijkUrl || geladenUrl;
+    if (url) openBestandInNieuwTab(url);
+    onClose();
+  };
+
+  const handleImgError = () => {
+    if (isPdfBestand(item?.naam || "", item?.mimeType) && (item?.bekijkUrl || geladenUrl)) {
+      openPdfInBrowser();
+      return;
+    }
+    if (isHeicBestand(item?.naam || "", item?.mimeType)) {
+      setFout("Deze iPhone-foto (HEIC) kan Chrome niet tonen. Download het bestand of sla het op als JPG.");
+      return;
+    }
+    setFout("Deze foto kan hier niet worden getoond.");
+  };
 
   useEffect(() => {
     const vorigeOverflow = document.body.style.overflow;
@@ -223,7 +246,8 @@ export function BestandViewer({ items, startId, onClose, onDownload }: Props) {
             <img
               src={geladenUrl}
               alt={item.naam}
-              onError={() => setFout("Deze foto kan hier niet worden getoond.")}
+              referrerPolicy="no-referrer"
+              onError={handleImgError}
             />
           )}
           {heeftVorige && soort !== "pdf" && (
@@ -247,26 +271,37 @@ export function BestandMiniatuur({
   naam,
   mimeType,
   url,
+  previewUrl,
   fetchBlob,
   onOpen
 }: {
   naam: string;
   mimeType?: string | null;
   url?: string;
+  previewUrl?: string | null;
   fetchBlob?: () => Promise<Blob>;
   onOpen?: () => void;
 }) {
-  const [src, setSrc] = useState<string | null>(url || null);
+  const [src, setSrc] = useState<string | null>(url || previewUrl || null);
+  const [imgFout, setImgFout] = useState(false);
   const fetchRef = useRef(fetchBlob);
   fetchRef.current = fetchBlob;
 
   useEffect(() => {
+    setImgFout(false);
     if (url) {
       setSrc(url);
       return;
     }
+    if (previewUrl) {
+      setSrc(previewUrl);
+      return;
+    }
     const ladenBlob = fetchRef.current;
-    if (!ladenBlob || !isAfbeeldingBestand(naam, mimeType)) return;
+    if (!ladenBlob || !isAfbeeldingBestand(naam, mimeType)) {
+      setSrc(null);
+      return;
+    }
     let objectUrl: string | null = null;
     let stop = false;
     void ladenBlob()
@@ -287,13 +322,19 @@ export function BestandMiniatuur({
       stop = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [url, naam, mimeType]);
+  }, [url, previewUrl, naam, mimeType]);
 
-  if (!src) {
-    return (
+  if (!src || imgFout) {
+    const icoon = (
       <span className="file-row-icon" aria-hidden>
         {isAfbeeldingBestand(naam, mimeType) ? "🖼" : "📄"}
       </span>
+    );
+    if (!onOpen) return icoon;
+    return (
+      <button type="button" className="file-row-thumb-btn" onClick={onOpen} title={`Bekijk ${naam}`}>
+        {icoon}
+      </button>
     );
   }
 
@@ -304,7 +345,13 @@ export function BestandMiniatuur({
       onClick={onOpen}
       title={`Bekijk ${naam}`}
     >
-      <img className="file-row-thumb" src={src} alt={naam} />
+      <img
+        className="file-row-thumb"
+        src={src}
+        alt={naam}
+        referrerPolicy="no-referrer"
+        onError={() => setImgFout(true)}
+      />
     </button>
   );
 }

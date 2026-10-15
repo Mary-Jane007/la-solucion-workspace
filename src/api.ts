@@ -204,6 +204,15 @@ export function bestandBekijkUrl(
   return `${pad}/${bekijkNaamInUrl(bestandsnaam)}?access_token=${encodeURIComponent(token)}&inline=1`;
 }
 
+export function bestandPreviewUrl(
+  bestandId: string,
+  bron: BestandBron = "opdracht",
+  bestandsnaam?: string
+): string | null {
+  const url = bestandBekijkUrl(bestandId, bron, bestandsnaam);
+  return url ? `${url}&preview=1` : null;
+}
+
 export function openBestandInNieuwTab(url: string): boolean {
   if (!url) return false;
   try {

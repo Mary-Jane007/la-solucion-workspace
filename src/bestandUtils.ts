@@ -44,12 +44,33 @@ export function isAfbeeldingBlob(blob: Blob): boolean {
   return normaliseerMime(blob.type).startsWith("image/");
 }
 
+export function isHeicBestand(naam: string, mime?: string | null): boolean {
+  const gevonden = mimeVanBestand(naam, mime);
+  return gevonden === "image/heic" || gevonden === "image/heif" || /\.hei[cf]$/i.test(String(naam || ""));
+}
+
+export function probeerAfbeeldingUrl(url: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (!url) {
+      resolve(false);
+      return;
+    }
+    const img = new Image();
+    img.onload = () => resolve(true);
+    img.onerror = () => resolve(false);
+    img.referrerPolicy = "no-referrer";
+    img.src = url;
+  });
+}
+
 export async function openAlsAfbeeldingInApp(
   naam: string,
   mime?: string | null,
-  laadBlob?: () => Promise<Blob>
+  laadBlob?: () => Promise<Blob>,
+  previewUrl?: string | null
 ): Promise<boolean> {
-  if (isAfbeeldingBestand(naam, mime)) return true;
+  if (previewUrl && (await probeerAfbeeldingUrl(previewUrl))) return true;
+  if (isAfbeeldingBestand(naam, mime) || isHeicBestand(naam, mime)) return true;
   if (!laadBlob) return false;
   try {
     return isAfbeeldingBlob(await laadBlob());

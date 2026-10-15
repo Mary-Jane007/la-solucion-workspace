@@ -134,7 +134,14 @@ app.use(
 );
 app.use(
   helmet({
-    crossOriginResourcePolicy: { policy: "cross-origin" }
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        "img-src": ["'self'", "data:", "blob:"],
+        "media-src": ["'self'", "blob:"]
+      }
+    }
   })
 );
 if (NODE_ENV === "production") {
@@ -1059,6 +1066,13 @@ function naarBuffer(waarde) {
   if (Buffer.isBuffer(waarde)) return waarde.length ? waarde : null;
   if (waarde instanceof Uint8Array) {
     return waarde.length ? Buffer.from(waarde) : null;
+  }
+  if (typeof waarde === "string") {
+    const hex = waarde.startsWith("\\x") ? waarde.slice(2) : waarde.startsWith("0x") ? waarde.slice(2) : "";
+    if (hex && /^[0-9a-fA-F]+$/.test(hex) && hex.length % 2 === 0) {
+      const buf = Buffer.from(hex, "hex");
+      return buf.length ? buf : null;
+    }
   }
   try {
     const buf = Buffer.from(waarde);

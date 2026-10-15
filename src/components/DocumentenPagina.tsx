@@ -1,5 +1,11 @@
 import { useMemo, useState } from "react";
-import { bestandBekijkUrl, downloadBestand, fetchBestandBlob, openBestandInNieuwTab } from "../api";
+import {
+  bestandBekijkUrl,
+  bestandPreviewUrl,
+  downloadBestand,
+  fetchBestandBlob,
+  openBestandInNieuwTab
+} from "../api";
 import { isBekijkbaarBestand, isPdfBestand, openAlsAfbeeldingInApp } from "../bestandUtils";
 import { flattenDocumenten } from "../opdrachtenUtils";
 import { OpdrachtenWerkruimte } from "../hooks/useOpdrachtenWerkruimte";
@@ -46,7 +52,8 @@ export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
           naam: d.origineleNaam,
           mimeType: d.mimeType,
           fetchBlob: () => fetchBestandBlob(d.id, d.origineleNaam),
-          bekijkUrl: bestandBekijkUrl(d.id, "opdracht", d.origineleNaam)
+          bekijkUrl: bestandBekijkUrl(d.id, "opdracht", d.origineleNaam),
+          previewUrl: bestandPreviewUrl(d.id, "opdracht", d.origineleNaam)
         })),
     [documenten]
   );
@@ -74,8 +81,11 @@ export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
     const doc = documenten.find((item) => item.id === id);
     if (
       doc &&
-      (await openAlsAfbeeldingInApp(doc.origineleNaam, doc.mimeType, () =>
-        fetchBestandBlob(doc.id, doc.origineleNaam)
+      (await openAlsAfbeeldingInApp(
+        doc.origineleNaam,
+        doc.mimeType,
+        undefined,
+        bestandPreviewUrl(doc.id, "opdracht", doc.origineleNaam)
       ))
     ) {
       setViewerId(id);
@@ -130,6 +140,7 @@ export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
                       <BestandMiniatuur
                         naam={d.origineleNaam}
                         mimeType={d.mimeType}
+                        previewUrl={bestandPreviewUrl(d.id, "opdracht", d.origineleNaam)}
                         fetchBlob={() => fetchBestandBlob(d.id, d.origineleNaam)}
                         onOpen={bekijkbaar ? () => void openViewer(d.id) : undefined}
                       />
