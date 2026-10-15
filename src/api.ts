@@ -222,8 +222,13 @@ export function openBestandInNieuwTab(url: string): boolean {
   }
 }
 
-export async function fetchBestandBlob(bestandId: string, bestandsnaam = ""): Promise<Blob> {
-  const res = await apiFetch(`/api/bestanden/${encodeURIComponent(bestandId)}/download`);
+export async function fetchBestandBlob(
+  bestandId: string,
+  bestandsnaam = "",
+  preview = true
+): Promise<Blob> {
+  const q = preview ? "?preview=1" : "";
+  const res = await apiFetch(`/api/bestanden/${encodeURIComponent(bestandId)}/download${q}`);
   if (!res.ok) {
     const data = await readApiJson(res).catch(() => ({ error: "Kon bestand niet ophalen." }));
     throw new Error(String(data.error || "Kon bestand niet ophalen."));
@@ -233,7 +238,7 @@ export async function fetchBestandBlob(bestandId: string, bestandsnaam = ""): Pr
 
 /** Download een bestand via de beveiligde API (Authorization-header). */
 export async function downloadBestand(bestandId: string, bestandsnaam: string): Promise<void> {
-  const blob = await fetchBestandBlob(bestandId, bestandsnaam);
+  const blob = await fetchBestandBlob(bestandId, bestandsnaam, false);
   if (blob.size) {
     triggerBrowserDownload(blob, bestandsnaam || "document");
     return;

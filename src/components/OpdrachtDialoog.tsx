@@ -9,7 +9,12 @@ import {
   uploadBestand,
   verwijderBestand
 } from "../api";
-import { isAfbeeldingBestand, isBekijkbaarBestand, isPdfBestand } from "../bestandUtils";
+import {
+  isAfbeeldingBestand,
+  isBekijkbaarBestand,
+  isPdfBestand,
+  openAlsAfbeeldingInApp
+} from "../bestandUtils";
 import { opdrachtVerwijderBevestiging } from "../opdrachtVerwijderen";
 import { statusLabel, vindOvereenkomstigeOpdrachten } from "../opdrachtenUtils";
 import { BestandBekijkLink, BestandMiniatuur, BestandViewer, BestandViewerItem } from "./BestandViewer";
@@ -129,15 +134,35 @@ export function OpdrachtDialoog({
     return [...wachtend, ...gekoppeld];
   }, [wachtendeBestanden, bewerkt.bestanden]);
 
-  const openBestand = (id: string) => {
+  const openBestand = async (id: string) => {
     const wachtend = wachtendeBestanden.find((item) => item.id === id);
-    if (wachtend && isPdfBestand(wachtend.file.name, wachtend.file.type)) {
-      if (openBestandInNieuwTab(wachtend.url)) return;
+    if (wachtend) {
+      if (
+        await openAlsAfbeeldingInApp(wachtend.file.name, wachtend.file.type, async () => wachtend.file)
+      ) {
+        setViewerId(id);
+        return;
+      }
+      if (isPdfBestand(wachtend.file.name, wachtend.file.type)) {
+        if (openBestandInNieuwTab(wachtend.url)) return;
+      }
+      setViewerId(id);
+      return;
     }
     const gekoppeld = (bewerkt.bestanden || []).find((item) => item.id === id);
-    if (gekoppeld && isPdfBestand(gekoppeld.origineleNaam, gekoppeld.mimeType)) {
-      const url = bestandBekijkUrl(id, "opdracht", gekoppeld.origineleNaam);
-      if (url && openBestandInNieuwTab(url)) return;
+    if (gekoppeld) {
+      if (
+        await openAlsAfbeeldingInApp(gekoppeld.origineleNaam, gekoppeld.mimeType, () =>
+          fetchBestandBlob(gekoppeld.id, gekoppeld.origineleNaam)
+        )
+      ) {
+        setViewerId(id);
+        return;
+      }
+      if (isPdfBestand(gekoppeld.origineleNaam, gekoppeld.mimeType)) {
+        const url = bestandBekijkUrl(id, "opdracht", gekoppeld.origineleNaam);
+        if (url && openBestandInNieuwTab(url)) return;
+      }
     }
     setViewerId(id);
   };
@@ -523,7 +548,7 @@ export function OpdrachtDialoog({
                             <button
                               type="button"
                               className="file-row-thumb-btn"
-                              onClick={() => openBestand(item.id)}
+                              onClick={() => void openBestand(item.id)}
                               title="Foto bekijken"
                             >
                               <img
@@ -543,12 +568,18 @@ export function OpdrachtDialoog({
                             onOpslaan={(naam) => hernoemWachtendBestand(item.id, naam)}
                           />
                           {isPdfBestand(item.file.name, item.file.type) ? (
-                            <BestandBekijkLink href={item.url} />
+                            <BestandBekijkLink
+                              href={item.url}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                void openBestand(item.id);
+                              }}
+                            />
                           ) : isBekijkbaarBestand(item.file.name, item.file.type) ? (
                             <button
                               type="button"
                               className="link-btn file-download-btn"
-                              onClick={() => openBestand(item.id)}
+                              onClick={() => void openBestand(item.id)}
                             >
                               Bekijken
                             </button>
@@ -576,7 +607,7 @@ export function OpdrachtDialoog({
                           fetchBlob={() => fetchBestandBlob(b.id, b.origineleNaam)}
                           onOpen={
                             isBekijkbaarBestand(b.origineleNaam, b.mimeType)
-                              ? () => openBestand(b.id)
+                              ? () => void openBestand(b.id)
                               : undefined
                           }
                         />
@@ -592,12 +623,18 @@ export function OpdrachtDialoog({
                         <span className="file-meta">
                           {(b.grootte / 1024).toFixed(1)} kB
                           {isPdfBestand(b.origineleNaam, b.mimeType) ? (
-                            <BestandBekijkLink href={bestandBekijkUrl(b.id, "opdracht", b.origineleNaam)} />
+                            <BestandBekijkLink
+                              href={bestandBekijkUrl(b.id, "opdracht", b.origineleNaam)}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                void openBestand(b.id);
+                              }}
+                            />
                           ) : isBekijkbaarBestand(b.origineleNaam, b.mimeType) ? (
                             <button
                               type="button"
                               className="link-btn file-download-btn"
-                              onClick={() => openBestand(b.id)}
+                              onClick={() => void openBestand(b.id)}
                             >
                               Bekijken
                             </button>

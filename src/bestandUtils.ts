@@ -31,13 +31,31 @@ export function mimeVanBestand(naam: string, mime?: string | null): string {
 }
 
 export function isAfbeeldingBestand(naam: string, mime?: string | null): boolean {
-  const gevonden = mimeVanBestand(naam, mime);
-  if (gevonden.startsWith("image/")) return true;
-  return /\.(jpe?g|png|webp|gif|bmp|heic|heif)$/i.test(naam);
+  if (/\.(jpe?g|png|webp|gif|bmp|heic|heif)$/i.test(String(naam || ""))) return true;
+  return mimeVanBestand(naam, mime).startsWith("image/");
 }
 
 export function isPdfBestand(naam: string, mime?: string | null): boolean {
-  return mimeVanBestand(naam, mime) === "application/pdf" || /\.pdf$/i.test(naam);
+  if (isAfbeeldingBestand(naam, mime)) return false;
+  return mimeVanBestand(naam, mime) === "application/pdf" || /\.pdf$/i.test(String(naam || ""));
+}
+
+export function isAfbeeldingBlob(blob: Blob): boolean {
+  return normaliseerMime(blob.type).startsWith("image/");
+}
+
+export async function openAlsAfbeeldingInApp(
+  naam: string,
+  mime?: string | null,
+  laadBlob?: () => Promise<Blob>
+): Promise<boolean> {
+  if (isAfbeeldingBestand(naam, mime)) return true;
+  if (!laadBlob) return false;
+  try {
+    return isAfbeeldingBlob(await laadBlob());
+  } catch {
+    return false;
+  }
 }
 
 export function isBekijkbaarBestand(naam: string, mime?: string | null): boolean {

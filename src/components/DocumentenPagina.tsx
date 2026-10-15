@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { bestandBekijkUrl, downloadBestand, fetchBestandBlob, openBestandInNieuwTab } from "../api";
-import { isBekijkbaarBestand, isPdfBestand } from "../bestandUtils";
+import { isBekijkbaarBestand, isPdfBestand, openAlsAfbeeldingInApp } from "../bestandUtils";
 import { flattenDocumenten } from "../opdrachtenUtils";
 import { OpdrachtenWerkruimte } from "../hooks/useOpdrachtenWerkruimte";
 import { useLijstGezienStatus } from "../hooks/useLijstGezienStatus";
@@ -69,9 +69,18 @@ export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
     }
   };
 
-  const openViewer = (id: string) => {
+  const openViewer = async (id: string) => {
     markeerGeopend(id);
     const doc = documenten.find((item) => item.id === id);
+    if (
+      doc &&
+      (await openAlsAfbeeldingInApp(doc.origineleNaam, doc.mimeType, () =>
+        fetchBestandBlob(doc.id, doc.origineleNaam)
+      ))
+    ) {
+      setViewerId(id);
+      return;
+    }
     if (doc && isPdfBestand(doc.origineleNaam, doc.mimeType)) {
       const url = bestandBekijkUrl(id, "opdracht", doc.origineleNaam);
       if (url && openBestandInNieuwTab(url)) return;
@@ -122,7 +131,7 @@ export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
                         naam={d.origineleNaam}
                         mimeType={d.mimeType}
                         fetchBlob={() => fetchBestandBlob(d.id, d.origineleNaam)}
-                        onOpen={bekijkbaar ? () => openViewer(d.id) : undefined}
+                        onOpen={bekijkbaar ? () => void openViewer(d.id) : undefined}
                       />
                     </td>
                     <td>{d.origineleNaam}</td>
@@ -134,8 +143,9 @@ export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
                           className="btn-secondary"
                           href={bestandBekijkUrl(d.id, "opdracht", d.origineleNaam)}
                           onClick={(e) => {
+                            e.preventDefault();
                             e.stopPropagation();
-                            markeerGeopend(d.id);
+                            void openViewer(d.id);
                           }}
                         />
                       ) : bekijkbaar ? (
@@ -144,7 +154,7 @@ export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
                           className="btn-secondary"
                           onClick={(e) => {
                             e.stopPropagation();
-                            openViewer(d.id);
+                            void openViewer(d.id);
                           }}
                         >
                           Bekijken

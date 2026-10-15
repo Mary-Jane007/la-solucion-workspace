@@ -7,7 +7,7 @@ import {
   FinancieelInzendingBijlage,
   openBestandInNieuwTab
 } from "../../api";
-import { isPdfBestand } from "../../bestandUtils";
+import { isPdfBestand, openAlsAfbeeldingInApp } from "../../bestandUtils";
 import { BestandBekijkLink, BestandViewer, BestandViewerItem } from "../BestandViewer";
 
 export function FinancieelFotos({
@@ -35,7 +35,15 @@ export function FinancieelFotos({
       })),
     [bijlagen, fetchBlob, bron]
   );
-  const openBijlage = (bijlage: FinancieelInzendingBijlage) => {
+  const openBijlage = async (bijlage: FinancieelInzendingBijlage) => {
+    if (
+      await openAlsAfbeeldingInApp(bijlage.origineleNaam, bijlage.mimeType, () =>
+        fetchBlob(bijlage.id, bijlage.origineleNaam)
+      )
+    ) {
+      setViewerId(bijlage.id);
+      return;
+    }
     if (isPdfBestand(bijlage.origineleNaam, bijlage.mimeType)) {
       const url = bestandBekijkUrl(bijlage.id, bron, bijlage.origineleNaam);
       if (url && openBestandInNieuwTab(url)) return;
@@ -53,7 +61,7 @@ export function FinancieelFotos({
             bijlage={bijlage}
             fetchBlob={fetchBlob}
             bekijkUrl={bestandBekijkUrl(bijlage.id, bron, bijlage.origineleNaam)}
-            onOpen={() => openBijlage(bijlage)}
+            onOpen={() => void openBijlage(bijlage)}
             onDownload={onDownload}
             onVerwijder={onVerwijder}
           />
@@ -133,7 +141,6 @@ function FinancieelFoto({
           rel="noopener noreferrer"
           title={`Open ${bijlage.origineleNaam} in Chrome`}
           onClick={(event) => {
-            if (bekijkUrl) return;
             event.preventDefault();
             onOpen();
           }}
@@ -158,7 +165,14 @@ function FinancieelFoto({
       <figcaption>
         <span>{bijlage.origineleNaam}</span>
         {isPdf ? (
-          <BestandBekijkLink href={bekijkUrl} onFallback={onOpen} />
+          <BestandBekijkLink
+            href={bekijkUrl}
+            onClick={(event) => {
+              event.preventDefault();
+              onOpen();
+            }}
+            onFallback={onOpen}
+          />
         ) : (
           <button type="button" className="link-btn" onClick={onOpen}>
             Bekijken

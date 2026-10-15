@@ -1,6 +1,11 @@
 import { MouseEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { isAfbeeldingBestand, isPdfBestand, normaliseerBestandBlob } from "../bestandUtils";
+import {
+  isAfbeeldingBestand,
+  isAfbeeldingBlob,
+  isPdfBestand,
+  normaliseerBestandBlob
+} from "../bestandUtils";
 
 export interface BestandViewerItem {
   id: string;
@@ -81,12 +86,36 @@ export function BestandViewer({ items, startId, onClose, onDownload }: Props) {
 
   useEffect(() => {
     if (!item) return;
-    if (isPdfBestand(item.naam, item.mimeType) && item.bekijkUrl) {
-      setSoort("pdf");
-      setGeladenUrl(item.bekijkUrl);
-      setLaden(false);
+    const ladenBlob = fetchRef.current;
+    if (ladenBlob) {
+      let objectUrl: string | null = null;
+      let stop = false;
+      setLaden(true);
       setFout(null);
-      return;
+      setGeladenUrl(null);
+      void ladenBlob()
+        .then((ruw) => normaliseerBestandBlob(ruw, item.naam, item.mimeType))
+        .then((blob) => {
+          const next = URL.createObjectURL(blob);
+          if (stop) {
+            URL.revokeObjectURL(next);
+            return;
+          }
+          objectUrl = next;
+          setSoort(isAfbeeldingBlob(blob) ? "foto" : isPdfBestand(item.naam, blob.type) ? "pdf" : "foto");
+          setGeladenUrl(next);
+          setLaden(false);
+        })
+        .catch(() => {
+          if (!stop) {
+            setFout("Kon het bestand niet laden.");
+            setLaden(false);
+          }
+        });
+      return () => {
+        stop = true;
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+      };
     }
     if (item.url) {
       setGeladenUrl(item.url);
@@ -95,40 +124,15 @@ export function BestandViewer({ items, startId, onClose, onDownload }: Props) {
       setFout(null);
       return;
     }
-    const ladenBlob = fetchRef.current;
-    if (!ladenBlob) {
-      setGeladenUrl(null);
-      setFout("Dit bestand kan hier niet worden getoond.");
+    if (isPdfBestand(item.naam, item.mimeType) && item.bekijkUrl) {
+      setSoort("pdf");
+      setGeladenUrl(item.bekijkUrl);
+      setLaden(false);
+      setFout(null);
       return;
     }
-    let objectUrl: string | null = null;
-    let stop = false;
-    setLaden(true);
-    setFout(null);
     setGeladenUrl(null);
-    void ladenBlob()
-      .then((ruw) => normaliseerBestandBlob(ruw, item.naam, item.mimeType))
-      .then((blob) => {
-        const next = URL.createObjectURL(blob);
-        if (stop) {
-          URL.revokeObjectURL(next);
-          return;
-        }
-        objectUrl = next;
-        setSoort(isPdfBestand(item.naam, blob.type) ? "pdf" : "foto");
-        setGeladenUrl(next);
-        setLaden(false);
-      })
-      .catch(() => {
-        if (!stop) {
-          setFout("Kon het bestand niet laden.");
-          setLaden(false);
-        }
-      });
-    return () => {
-      stop = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
+    setFout("Dit bestand kan hier niet worden getoond.");
   }, [item?.id, item?.url, item?.bekijkUrl, item?.naam, item?.mimeType]);
 
   useEffect(() => {
@@ -219,7 +223,7 @@ export function BestandViewer({ items, startId, onClose, onDownload }: Props) {
             <img
               src={geladenUrl}
               alt={item.naam}
-              onError={() => setFout("Deze foto kan in de browser niet worden getoond.")}
+              onError={() => setFout("Deze foto kan hier niet worden getoond.")}
             />
           )}
           {heeftVorige && soort !== "pdf" && (

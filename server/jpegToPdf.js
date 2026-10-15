@@ -145,24 +145,39 @@ function looksLikePdfNaam(naam, mime) {
   return /\.pdf$/i.test(String(naam || "")) || String(mime || "").toLowerCase().includes("pdf");
 }
 
+function fotoNaamUitPdfNaam(naam) {
+  const raw = String(naam || "foto.pdf");
+  return /\.pdf$/i.test(raw) ? raw.replace(/\.pdf$/i, ".jpg") : raw;
+}
+
+function isEnkelJpegPdf(buf) {
+  if (!buf || buf.length < 16) return false;
+  if (!(buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46)) return false;
+  if (!extractJpegFromPdf(buf)) return false;
+  const text = buf.toString("latin1");
+  const pages = text.match(/\/Type \/Page(?!s)/g);
+  if (!pages || pages.length !== 1) return false;
+  if ((text.match(/\/Filter \/DCTDecode/g) || []).length !== 1) return false;
+  if (/\/Font\b/.test(text) || /\/Type \/Annot/.test(text)) return false;
+  return true;
+}
+
 /**
- * JPEG bytes stored as .pdf cannot be opened by Chrome's PDF viewer.
- * Wrap baseline JPEGs as PDF; progressive JPEGs are served as images instead.
+ * Photo bytes stored as .pdf belong in the in-app image viewer.
+ * Preview requests unwrap a single JPEG-in-PDF; real PDFs stay PDFs.
  */
-function herstelJpegPdfVoorWeergave(origineleNaam, mimeType, buffer) {
-  if (!buffer || !looksLikePdfNaam(origineleNaam, mimeType) || !isJpeg(buffer)) {
-    return null;
+function herstelJpegPdfVoorWeergave(origineleNaam, mimeType, buffer, opties = {}) {
+  if (!buffer) return null;
+  if (isJpeg(buffer) && looksLikePdfNaam(origineleNaam, mimeType)) {
+    return { buffer, naam: fotoNaamUitPdfNaam(origineleNaam), mime: "image/jpeg" };
   }
-  if (jpegSofMarker(buffer) === 0xc2) {
-    const naam = String(origineleNaam || "document.pdf").replace(/\.pdf$/i, ".jpg");
-    return { buffer, naam, mime: "image/jpeg" };
+  if (opties.preview && isEnkelJpegPdf(buffer)) {
+    const jpeg = extractJpegFromPdf(buffer);
+    if (jpeg) {
+      return { buffer: jpeg, naam: fotoNaamUitPdfNaam(origineleNaam), mime: "image/jpeg" };
+    }
   }
-  try {
-    return { buffer: jpegToPdf(buffer), naam: origineleNaam, mime: "application/pdf" };
-  } catch {
-    const naam = String(origineleNaam || "document.pdf").replace(/\.pdf$/i, ".jpg");
-    return { buffer, naam, mime: "image/jpeg" };
-  }
+  return null;
 }
 
 module.exports = {

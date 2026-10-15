@@ -1040,8 +1040,10 @@ function setBestandDownloadHeaders(res, bestand, inline = false, buffer) {
   res.setHeader("Cache-Control", "private, no-store");
 }
 
-function stuurBestandBuffer(res, bestand, inline, buffer) {
-  const herstel = herstelJpegPdfVoorWeergave(bestand.origineleNaam, bestand.mimeType, buffer);
+function stuurBestandBuffer(res, bestand, inline, buffer, preview = false) {
+  const herstel = herstelJpegPdfVoorWeergave(bestand.origineleNaam, bestand.mimeType, buffer, {
+    preview
+  });
   const body = herstel?.buffer || buffer;
   const naam = herstel?.naam || bestand.origineleNaam;
   const type = herstel?.mime || bestandContentType(bestand, body);
@@ -1130,12 +1132,13 @@ app.get(["/api/bestanden/:id/download", "/api/bestanden/:id/download/:naam"], au
     }
 
     const inline = String(req.query.inline || "") === "1";
+    const preview = String(req.query.preview || "") === "1";
     const vanSchijf = leesBestandVanSchijf(bestand.opslagNaam);
     if (vanSchijf) {
       void saveBestandInhoud(bestand.id, vanSchijf.buffer).catch((err) => {
         console.warn("Kon bestandinhoud niet bijwerken:", err.message);
       });
-      return stuurBestandBuffer(res, bestand, inline, vanSchijf.buffer);
+      return stuurBestandBuffer(res, bestand, inline, vanSchijf.buffer, preview);
     }
 
     const inhoud = naarBuffer(await getBestandInhoudById(bestand.id));
@@ -1148,7 +1151,7 @@ app.get(["/api/bestanden/:id/download", "/api/bestanden/:id/download/:naam"], au
           /* cache is optioneel */
         }
       }
-      return stuurBestandBuffer(res, bestand, inline, inhoud);
+      return stuurBestandBuffer(res, bestand, inline, inhoud, preview);
     }
 
     return res.status(404).json({
