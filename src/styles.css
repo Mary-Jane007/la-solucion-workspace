@@ -715,6 +715,9 @@ body {
   border-radius: 12px;
   padding: 8px;
   border: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .board-column-header {
@@ -742,9 +745,23 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 260px;
+  max-height: min(72dvh, 900px);
   overflow: auto;
   padding-right: 2px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+@media (max-width: 1100px) {
+  .board-column-body {
+    max-height: min(58dvh, 720px);
+  }
+}
+
+@media (max-width: 640px) {
+  .board-column-body {
+    max-height: min(72dvh, 800px);
+  }
 }
 
 .board-empty {
