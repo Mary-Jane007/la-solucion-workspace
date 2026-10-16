@@ -15,6 +15,7 @@ import {
   helpVideoEmbed,
   helpVideoIsBestand
 } from "../helpConfig";
+import { KasUitlegVideo } from "./KasUitlegVideo";
 
 type HelpStap = {
   id?: string;
@@ -27,9 +28,10 @@ const HELP_ONDERWERPEN: HelpStap[] = [
   {
     titel: "Uitlegvideo",
     stappen: [
-      "Bovenaan Help staat de rondleidingvideo door de app.",
-      "Klik op afspelen om de video in de browser te bekijken.",
-      "Klik op Video downloaden om het bestand op je computer te zetten. Zo kun je de uitleg later offline terugkijken.",
+      "Helemaal bovenaan Help staat de video Kas doorgeven, met ondertitel en gesproken uitleg.",
+      "Tik op Afspelen. Ondertitels blijven altijd zichtbaar. Zet Geluid aan als je de uitleg wilt horen.",
+      "Daaronder kan de eigenaar een rondleidingvideo van de hele app zetten.",
+      "Bij die rondleiding: klik op afspelen, of op Video downloaden om hem offline te bewaren.",
       "Staat er een YouTube- of Vimeo-link? Dan open je de video daar; die kun je niet als bestand vanuit Help downloaden."
     ]
   },
@@ -112,7 +114,8 @@ const HELP_ONDERWERPEN: HelpStap[] = [
     id: "kas-doorgeven",
     titel: "Kas doorgeven (medewerkers)",
     stappen: [
-      "Kies Kas doorgeven in het menu. Bovenaan staat een knop Hulp — die brengt je hier terug.",
+      "Bekijk eerst de video helemaal bovenaan deze pagina. Ondertitels staan altijd aan; zet geluid aan voor gesproken uitleg.",
+      "Kies Kas doorgeven in het menu. Bovenaan die pagina staat een knop Hulp — die brengt je hier terug.",
       "Kies de munt waarin je telt (meestal SRD).",
       "Stap 1: vul in hoeveel er vanochtend in je kas lag. Weet je het niet? Sla over.",
       "Stap 2: tik op een grote knop (Benzine, Uitprinten, Taxi, Eten, of wat jullie vaak doen). Vul het bedrag in. Foto van de bon mag.",
@@ -499,8 +502,15 @@ export function HelpPagina({ isEigenaar }: { isEigenaar: boolean }) {
     }
   };
 
+  const kasOnderwerp = HELP_ONDERWERPEN.find((onderwerp) => onderwerp.id === "kas-doorgeven");
+  const overigeOnderwerpen = HELP_ONDERWERPEN.filter((onderwerp) => onderwerp.id !== "kas-doorgeven");
+
   return (
     <div className="info-stack help-page">
+      <div id="help-kas-doorgeven" className="help-kas-top">
+        <KasUitlegVideo />
+        {kasOnderwerp && <HelpOnderwerp {...kasOnderwerp} id={undefined} />}
+      </div>
       <HelpVideoBlok
         isEigenaar={isEigenaar}
         video={video}
@@ -518,7 +528,7 @@ export function HelpPagina({ isEigenaar }: { isEigenaar: boolean }) {
         onVerwijderen={handleVerwijderen}
         onDownload={handleDownload}
       />
-      {HELP_ONDERWERPEN.map((onderwerp) => (
+      {overigeOnderwerpen.map((onderwerp) => (
         <HelpOnderwerp key={onderwerp.titel} {...onderwerp} />
       ))}
     </div>

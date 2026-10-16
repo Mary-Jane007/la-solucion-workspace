@@ -2530,6 +2530,240 @@ a.btn-secondary {
   margin: 0 0 8px;
 }
 
+.help-kas-top {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  scroll-margin-top: 24px;
+}
+
+.kasvid-podium {
+  position: relative;
+  width: 100%;
+  min-height: 280px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #042f2e;
+  border: 1px solid var(--color-border);
+  color: #ecfdf5;
+  display: flex;
+  flex-direction: column;
+}
+
+.kasvid-beeld {
+  flex: 1 1 auto;
+  padding: 22px 20px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  min-height: 200px;
+}
+
+.kasvid-start h3 {
+  margin: 0;
+  font-size: 1.8rem;
+}
+
+.kasvid-kicker {
+  margin: 0;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 700;
+  color: #5eead4;
+}
+
+.kasvid-nr {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(20, 184, 166, 0.25);
+  color: #5eead4;
+  font-weight: 800;
+  margin: 0;
+}
+
+.kasvid-vraag {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.kasvid-bedrag {
+  margin: 0;
+  font-size: 2.4rem;
+  font-weight: 800;
+  color: #5eead4;
+}
+
+.kasvid-bedrag small {
+  font-size: 1rem;
+  color: #99f6e4;
+}
+
+.kasvid-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 280px;
+}
+
+.kasvid-menu span,
+.kasvid-menu strong {
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.kasvid-menu strong {
+  background: #14b8a6;
+  color: #042f2e;
+}
+
+.kasvid-pijl {
+  margin: 0;
+  color: #5eead4;
+  font-weight: 700;
+}
+
+.kasvid-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.kasvid-chips span {
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.kasvid-chips .is-actief {
+  background: #14b8a6;
+  color: #042f2e;
+  font-weight: 800;
+  border-color: #14b8a6;
+}
+
+.kasvid-tegels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.kasvid-tegels span {
+  padding: 16px 12px;
+  border-radius: 14px;
+  background: rgba(20, 184, 166, 0.2);
+  font-weight: 700;
+}
+
+.kasvid-knoppen {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.kasvid-knoppen em,
+.kasvid-knoppen strong {
+  font-style: normal;
+  padding: 10px 14px;
+  border-radius: 14px;
+}
+
+.kasvid-knoppen em {
+  border: 2px solid #14b8a6;
+  color: #5eead4;
+}
+
+.kasvid-knoppen strong {
+  background: #14b8a6;
+  color: #042f2e;
+}
+
+.kasvid-lijst {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kasvid-lijst li {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.kasvid-actie {
+  margin: 8px 0 0;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: #14b8a6;
+  color: #042f2e;
+  font-weight: 800;
+  text-align: center;
+}
+
+.kasvid-ondertitel {
+  margin: 0;
+  padding: 12px 16px 14px;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kasvid-ondertitel strong {
+  color: #5eead4;
+  font-size: 14px;
+}
+
+.kasvid-ondertitel span {
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.kasvid-bediening {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.kasvid-play {
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-weight: 800;
+  background: #14b8a6;
+  color: #042f2e;
+  cursor: pointer;
+}
+
+.kasvid-voortgang {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.kasvid-geluid-aan {
+  border-color: #14b8a6;
+  color: #0f766e;
+}
+
+.kasvid-start ol {
+  margin: 8px 0 0;
+  padding-left: 22px;
+}
+
 .stats-split {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
