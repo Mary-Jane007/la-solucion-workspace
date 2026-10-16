@@ -49,15 +49,28 @@ export function isHeicBestand(naam: string, mime?: string | null): boolean {
   return gevonden === "image/heic" || gevonden === "image/heif" || /\.hei[cf]$/i.test(String(naam || ""));
 }
 
-export function probeerAfbeeldingUrl(url: string): Promise<boolean> {
+export function probeerAfbeeldingUrl(url: string, timeoutMs = 4000): Promise<boolean> {
   return new Promise((resolve) => {
     if (!url) {
       resolve(false);
       return;
     }
     const img = new Image();
-    img.onload = () => resolve(true);
-    img.onerror = () => resolve(false);
+    let klaar = false;
+    const done = (ok: boolean) => {
+      if (klaar) return;
+      klaar = true;
+      resolve(ok);
+    };
+    const timer = window.setTimeout(() => done(false), timeoutMs);
+    img.onload = () => {
+      window.clearTimeout(timer);
+      done(true);
+    };
+    img.onerror = () => {
+      window.clearTimeout(timer);
+      done(false);
+    };
     img.referrerPolicy = "no-referrer";
     img.src = url;
   });

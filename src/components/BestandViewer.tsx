@@ -6,7 +6,8 @@ import {
   isAfbeeldingBlob,
   isHeicBestand,
   isPdfBestand,
-  normaliseerBestandBlob
+  normaliseerBestandBlob,
+  probeerAfbeeldingUrl
 } from "../bestandUtils";
 
 export interface BestandViewerItem {
@@ -89,51 +90,78 @@ export function BestandViewer({ items, startId, onClose, onDownload }: Props) {
 
   useEffect(() => {
     if (!item) return;
-    const src = item.url || item.previewUrl || (item.bekijkUrl ? `${item.bekijkUrl}&preview=1` : null);
-    if (src) {
-      setGeladenUrl(src);
-      setSoort("foto");
-      setLaden(false);
-      setFout(null);
-      return;
-    }
-    const ladenBlob = fetchRef.current;
-    if (!ladenBlob) {
-      if (isPdfBestand(item.naam, item.mimeType) && item.bekijkUrl) {
-        setSoort("pdf");
-        setGeladenUrl(item.bekijkUrl);
-        setLaden(false);
-        setFout(null);
-        return;
-      }
-      setGeladenUrl(null);
-      setFout("Dit bestand kan hier niet worden getoond.");
-      return;
-    }
     let objectUrl: string | null = null;
     let stop = false;
-    setLaden(true);
-    setFout(null);
-    setGeladenUrl(null);
-    void ladenBlob()
-      .then((ruw) => normaliseerBestandBlob(ruw, item.naam, item.mimeType))
-      .then((blob) => {
-        const next = URL.createObjectURL(blob);
-        if (stop) {
-          URL.revokeObjectURL(next);
+
+    const toon = (src: string, soortNext: "foto" | "pdf") => {
+      if (stop) return;
+      setGeladenUrl(src);
+      setSoort(soortNext);
+      setLaden(false);
+      setFout(null);
+    };
+
+    const toonBlob = (blob: Blob) => {
+      const next = URL.createObjectURL(blob);
+      if (stop) {
+        URL.revokeObjectURL(next);
+        return;
+      }
+      objectUrl = next;
+      if (isAfbeeldingBlob(blob)) {
+        toon(next, "foto");
+        return;
+      }
+      toon(next, isPdfBestand(item.naam, blob.type) ? "pdf" : "foto");
+    };
+
+    const run = async () => {
+      if (item.url) {
+        toon(item.url, isPdfBestand(item.naam, item.mimeType) ? "pdf" : "foto");
+        return;
+      }
+
+      setLaden(true);
+      setFout(null);
+      setGeladenUrl(null);
+
+      const ladenBlob = fetchRef.current;
+      if (ladenBlob) {
+        try {
+          const blob = await normaliseerBestandBlob(await ladenBlob(), item.naam, item.mimeType);
+          toonBlob(blob);
+          return;
+        } catch (err) {
+          if (stop) return;
+          const preview = item.previewUrl || (item.bekijkUrl ? `${item.bekijkUrl}&preview=1` : null);
+          if (preview && (await probeerAfbeeldingUrl(preview))) {
+            toon(preview, "foto");
+            return;
+          }
+          setFout(err instanceof Error ? err.message : "Kon het bestand niet laden.");
+          setLaden(false);
           return;
         }
-        objectUrl = next;
-        setSoort(isAfbeeldingBlob(blob) ? "foto" : isPdfBestand(item.naam, blob.type) ? "pdf" : "foto");
-        setGeladenUrl(next);
+      }
+
+      const preview = item.previewUrl || (item.bekijkUrl ? `${item.bekijkUrl}&preview=1` : null);
+      if (preview && (await probeerAfbeeldingUrl(preview))) {
+        toon(preview, "foto");
+        return;
+      }
+
+      if (isPdfBestand(item.naam, item.mimeType) && item.bekijkUrl) {
+        toon(item.bekijkUrl, "pdf");
+        return;
+      }
+      if (!stop) {
+        setGeladenUrl(null);
+        setFout("Dit bestand kan hier niet worden getoond.");
         setLaden(false);
-      })
-      .catch(() => {
-        if (!stop) {
-          setFout("Kon het bestand niet laden.");
-          setLaden(false);
-        }
-      });
+      }
+    };
+
+    void run();
     return () => {
       stop = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
@@ -147,6 +175,33 @@ export function BestandViewer({ items, startId, onClose, onDownload }: Props) {
   };
 
   const handleImgError = () => {
+    const ladenBlob = fetchRef.current;
+    if (ladenBlob) {
+      setLaden(true);
+      setFout(null);
+      void ladenBlob()
+        .then((ruw) => normaliseerBestandBlob(ruw, item?.naam || "", item?.mimeType))
+        .then((blob) => {
+          if (isAfbeeldingBlob(blob)) {
+            setGeladenUrl(URL.createObjectURL(blob));
+            setSoort("foto");
+            setFout(null);
+            setLaden(false);
+            return;
+          }
+          if (isPdfBestand(item?.naam || "", blob.type) && (item?.bekijkUrl || geladenUrl)) {
+            openPdfInBrowser();
+            return;
+          }
+          setFout("Dit bestand kan hier niet worden getoond.");
+          setLaden(false);
+        })
+        .catch((err) => {
+          setFout(err instanceof Error ? err.message : "Kon het bestand niet laden.");
+          setLaden(false);
+        });
+      return;
+    }
     if (isPdfBestand(item?.naam || "", item?.mimeType) && (item?.bekijkUrl || geladenUrl)) {
       openPdfInBrowser();
       return;
@@ -349,6 +404,8 @@ export function BestandMiniatuur({
         className="file-row-thumb"
         src={src}
         alt={naam}
+        loading="lazy"
+        decoding="async"
         referrerPolicy="no-referrer"
         onError={() => setImgFout(true)}
       />
