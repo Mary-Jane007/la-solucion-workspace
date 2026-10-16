@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { KAS_HELP_SLIDES, KasHelpSlide } from "../kasHelpVideo";
+import { HelpSlide, HelpVideoGids } from "../helpVideos";
+
+const PLAY_EVENT = "la-solucion-help-play";
 
 function kiesNederlandseStem(stemmen: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
   const nl = stemmen.filter((stem) => /^nl(-|$)/i.test(stem.lang));
@@ -10,109 +12,73 @@ function kiesNederlandseStem(stemmen: SpeechSynthesisVoice[]): SpeechSynthesisVo
   );
 }
 
-function SlideBeeld({ slide }: { slide: KasHelpSlide }) {
-  if (slide.id === "start") {
-    return (
-      <div className="kasvid-beeld kasvid-start">
-        <p className="kasvid-kicker">La-Solución</p>
-        <h3>Kas doorgeven</h3>
-        <p>Elke dag, in vier stappen</p>
-        <ol>
-          <li>Vanochtend</li>
-          <li>Tik wat je deed</li>
-          <li>Je lijst</li>
-          <li>Tel en stuur</li>
-        </ol>
-      </div>
-    );
-  }
-  if (slide.id === "menu") {
-    return (
-      <div className="kasvid-beeld">
-        <div className="kasvid-menu">
-          <span>Home</span>
-          <span>Opdrachtenbord</span>
-          <strong>Kas doorgeven</strong>
-          <span>Help</span>
-        </div>
-        <p className="kasvid-pijl">← Tik hier</p>
-      </div>
-    );
-  }
-  if (slide.id === "munt") {
-    return (
-      <div className="kasvid-beeld">
-        <p className="kasvid-vraag">In welke munt tel je vandaag?</p>
-        <div className="kasvid-chips">
-          <span className="is-actief">SRD</span>
-          <span>USD</span>
-          <span>EUR</span>
-        </div>
-      </div>
-    );
-  }
-  if (slide.id === "ochtend") {
-    return (
-      <div className="kasvid-beeld">
-        <p className="kasvid-nr">1</p>
-        <p className="kasvid-vraag">Hoeveel lag er vanochtend in je kas?</p>
-        <p className="kasvid-bedrag">500 <small>SRD</small></p>
-      </div>
-    );
-  }
-  if (slide.id === "tegels") {
-    return (
-      <div className="kasvid-beeld">
-        <p className="kasvid-nr">2</p>
-        <div className="kasvid-tegels">
-          <span>⛽ Benzine</span>
-          <span>🖨 Uitprinten</span>
-          <span>🚕 Taxi</span>
-          <span>🍽 Eten</span>
-        </div>
-      </div>
-    );
-  }
-  if (slide.id === "bedrag") {
-    return (
-      <div className="kasvid-beeld">
-        <p className="kasvid-vraag">⛽ Benzine</p>
-        <p className="kasvid-bedrag">80 <small>SRD</small></p>
-        <div className="kasvid-knoppen">
-          <em>Nog een bedrag</em>
-          <strong>Bedrag toevoegen</strong>
-        </div>
-      </div>
-    );
-  }
-  if (slide.id === "lijst") {
-    return (
-      <div className="kasvid-beeld">
-        <p className="kasvid-vraag">Jouw dag tot nu toe</p>
-        <ul className="kasvid-lijst">
-          <li>
-            <span>⛽ Benzine</span>
-            <b>80 SRD</b>
-          </li>
-          <li>
-            <span>🖨 Uitprinten</span>
-            <b>45 SRD</b>
-          </li>
-        </ul>
-      </div>
-    );
-  }
+function SlideBeeld({ slide }: { slide: HelpSlide }) {
   return (
-    <div className="kasvid-beeld">
-      <p className="kasvid-nr">4</p>
-      <p className="kasvid-vraag">Hoeveel ligt er nu nog?</p>
-      <p className="kasvid-bedrag">375 <small>SRD</small></p>
-      <p className="kasvid-actie">Dag doorgeven</p>
+    <div className={slide.kop ? "kasvid-beeld kasvid-start" : "kasvid-beeld"}>
+      {slide.kicker && <p className="kasvid-kicker">{slide.kicker}</p>}
+      {slide.kop && <h3>{slide.kop}</h3>}
+      {slide.lead && <p>{slide.lead}</p>}
+      {slide.nr && <p className="kasvid-nr">{slide.nr}</p>}
+      {slide.vraag && <p className="kasvid-vraag">{slide.vraag}</p>}
+      {slide.bedrag && (
+        <p className="kasvid-bedrag">
+          {slide.bedrag.waarde}
+          {slide.bedrag.valuta ? <small> {slide.bedrag.valuta}</small> : null}
+        </p>
+      )}
+      {slide.menu && (
+        <div className="kasvid-menu">
+          {slide.menu.items.map((item) =>
+            item === slide.menu?.actief ? <strong key={item}>{item}</strong> : <span key={item}>{item}</span>
+          )}
+        </div>
+      )}
+      {slide.pijl && <p className="kasvid-pijl">{slide.pijl}</p>}
+      {slide.chips && (
+        <div className="kasvid-chips">
+          {slide.chips.items.map((item) => (
+            <span key={item} className={item === slide.chips?.actief ? "is-actief" : undefined}>
+              {item}
+            </span>
+          ))}
+        </div>
+      )}
+      {slide.stappen && (
+        <ol>
+          {slide.stappen.map((stap) => (
+            <li key={stap}>{stap}</li>
+          ))}
+        </ol>
+      )}
+      {slide.tegels && (
+        <div className="kasvid-tegels">
+          {slide.tegels.map((tegel) => (
+            <span key={tegel}>{tegel}</span>
+          ))}
+        </div>
+      )}
+      {slide.lijst && (
+        <ul className="kasvid-lijst">
+          {slide.lijst.map((rij) => (
+            <li key={rij.label}>
+              <span>{rij.label}</span>
+              {rij.extra ? <b>{rij.extra}</b> : null}
+            </li>
+          ))}
+        </ul>
+      )}
+      {slide.knoppen && (
+        <div className="kasvid-knoppen">
+          {slide.knoppen.secundair && <em>{slide.knoppen.secundair}</em>}
+          {slide.knoppen.primair && <strong>{slide.knoppen.primair}</strong>}
+        </div>
+      )}
+      {slide.actie && <p className="kasvid-actie">{slide.actie}</p>}
     </div>
   );
 }
 
-export function KasUitlegVideo() {
+export function HelpStappenVideo({ gids, ingebouwd = false }: { gids: HelpVideoGids; ingebouwd?: boolean }) {
   const [index, setIndex] = useState(0);
   const [spelen, setSpelen] = useState(false);
   const [geluid, setGeluid] = useState(true);
@@ -120,7 +86,7 @@ export function KasUitlegVideo() {
   const timerRef = useRef<number | null>(null);
   const runId = useRef(0);
 
-  const slide = KAS_HELP_SLIDES[index];
+  const slide = gids.slides[index];
   const nederlands = useMemo(() => kiesNederlandseStem(stemmen), [stemmen]);
 
   useEffect(() => {
@@ -130,6 +96,21 @@ export function KasUitlegVideo() {
     window.speechSynthesis.addEventListener("voiceschanged", laad);
     return () => window.speechSynthesis.removeEventListener("voiceschanged", laad);
   }, []);
+
+  useEffect(() => {
+    const onAnder = (event: Event) => {
+      const id = (event as CustomEvent<string>).detail;
+      if (id === gids.id) return;
+      setSpelen(false);
+      if (timerRef.current) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+    };
+    window.addEventListener(PLAY_EVENT, onAnder);
+    return () => window.removeEventListener(PLAY_EVENT, onAnder);
+  }, [gids.id]);
 
   useEffect(() => {
     return () => {
@@ -152,12 +133,12 @@ export function KasUitlegVideo() {
       timerRef.current = null;
     }
     stopSpraak();
-    setIndex(Math.max(0, Math.min(KAS_HELP_SLIDES.length - 1, volgende)));
+    setIndex(Math.max(0, Math.min(gids.slides.length - 1, volgende)));
   };
 
   useEffect(() => {
     if (!spelen) return;
-    const huidig = KAS_HELP_SLIDES[index];
+    const huidig = gids.slides[index];
     if (!huidig) {
       setSpelen(false);
       return;
@@ -165,7 +146,7 @@ export function KasUitlegVideo() {
     const my = ++runId.current;
     const klaar = () => {
       if (runId.current !== my) return;
-      if (index >= KAS_HELP_SLIDES.length - 1) {
+      if (index >= gids.slides.length - 1) {
         setSpelen(false);
         return;
       }
@@ -197,7 +178,7 @@ export function KasUitlegVideo() {
       }
       stopSpraak();
     };
-  }, [spelen, index, geluid, nederlands]);
+  }, [spelen, index, geluid, nederlands, gids.slides]);
 
   const toggleSpelen = () => {
     if (spelen) {
@@ -206,44 +187,33 @@ export function KasUitlegVideo() {
       if (timerRef.current) window.clearTimeout(timerRef.current);
       return;
     }
+    window.dispatchEvent(new CustomEvent(PLAY_EVENT, { detail: gids.id }));
     setSpelen(true);
   };
 
-  return (
-    <section id="help-kas-video" className="card page-card help-video-section kasvid">
-      <div className="section-header">
-        <h2>Video: Kas doorgeven</h2>
-        <p className="muted">
-          Speel de uitleg af. Ondertitels staan altijd onder het beeld. Zet geluid aan voor
-          gesproken Nederlands.
-        </p>
-      </div>
-
+  const bediening = (
+    <>
       <div className="kasvid-podium" aria-live="polite">
-        <SlideBeeld slide={slide} />
-        <p className="kasvid-ondertitel">
-          <strong>{slide.titel}</strong>
-          <span>{slide.ondertitel}</span>
-        </p>
+        {slide && <SlideBeeld slide={slide} />}
+        {slide && (
+          <p className="kasvid-ondertitel">
+            <strong>{slide.titel}</strong>
+            <span>{slide.ondertitel}</span>
+          </p>
+        )}
       </div>
-
       <div className="kasvid-bediening">
         <button type="button" className="kasvid-play" onClick={toggleSpelen}>
           {spelen ? "Pauzeren" : "Afspelen"}
         </button>
-        <button
-          type="button"
-          className="kasdag-mini"
-          onClick={() => naar(index - 1)}
-          disabled={index === 0}
-        >
+        <button type="button" className="kasdag-mini" onClick={() => naar(index - 1)} disabled={index === 0}>
           Vorige
         </button>
         <button
           type="button"
           className="kasdag-mini"
           onClick={() => naar(index + 1)}
-          disabled={index === KAS_HELP_SLIDES.length - 1}
+          disabled={index === gids.slides.length - 1}
         >
           Volgende
         </button>
@@ -258,9 +228,26 @@ export function KasUitlegVideo() {
           {geluid ? "Geluid aan" : "Alleen ondertitel"}
         </button>
         <span className="kasvid-voortgang">
-          {index + 1} / {KAS_HELP_SLIDES.length}
+          {index + 1} / {gids.slides.length}
         </span>
       </div>
+    </>
+  );
+
+  if (ingebouwd) {
+    return <div className="kasvid kasvid-ingebouwd">{bediening}</div>;
+  }
+
+  return (
+    <section className="card page-card help-video-section kasvid">
+      <div className="section-header">
+        <h2>Video: {gids.titel}</h2>
+        <p className="muted">
+          Speel de uitleg af. Ondertitels staan altijd onder het beeld. Zet geluid aan voor
+          gesproken Nederlands.
+        </p>
+      </div>
+      {bediening}
     </section>
   );
 }

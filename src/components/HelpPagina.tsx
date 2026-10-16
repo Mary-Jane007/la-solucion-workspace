@@ -1,41 +1,19 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import {
-  deleteHelpVideo,
-  downloadHelpVideo,
-  fetchHelpVideo,
-  helpVideoStreamUrl,
-  saveHelpVideoUrl,
-  uploadHelpVideoFile
-} from "../api";
-import {
-  HELP_VIDEO_ACCEPT,
-  HELP_VIDEO_MAX_MB,
-  HelpVideoInfo,
-  helpVideoBestandsnaam,
-  helpVideoEmbed,
-  helpVideoIsBestand
-} from "../helpConfig";
-import { KasUitlegVideo } from "./KasUitlegVideo";
+import { useEffect } from "react";
+import { HelpStappenVideo } from "./HelpStappenVideo";
+import { HELP_VIDEOS } from "../helpVideos";
 
 type HelpStap = {
-  id?: string;
+  id: string;
   titel: string;
   stappen: string[];
   tip?: string;
+  videoId?: keyof typeof HELP_VIDEOS;
 };
 
 const HELP_ONDERWERPEN: HelpStap[] = [
   {
-    titel: "Uitlegvideo",
-    stappen: [
-      "Helemaal bovenaan Help staat de video Kas doorgeven, met ondertitel en gesproken uitleg.",
-      "Tik op Afspelen. Ondertitels blijven altijd zichtbaar. Zet Geluid aan als je de uitleg wilt horen.",
-      "Daaronder kan de eigenaar een rondleidingvideo van de hele app zetten.",
-      "Bij die rondleiding: klik op afspelen, of op Video downloaden om hem offline te bewaren.",
-      "Staat er een YouTube- of Vimeo-link? Dan open je de video daar; die kun je niet als bestand vanuit Help downloaden."
-    ]
-  },
-  {
+    id: "inloggen",
+    videoId: "inloggen",
     titel: "Inloggen",
     stappen: [
       "Open het portaal in je browser en ga naar het inlogscherm.",
@@ -47,6 +25,8 @@ const HELP_ONDERWERPEN: HelpStap[] = [
     tip: "Werkt inloggen niet? Controleer of de backend draait (lokaal: npm run dev). Zie de rode melding op het inlogscherm."
   },
   {
+    id: "opdracht",
+    videoId: "opdracht",
     titel: "Opdracht aanmaken",
     stappen: [
       "Ga als eigenaar naar Beheer → Nieuwe opdracht, of klik op het dashboard op Nieuwe opdracht.",
@@ -59,6 +39,8 @@ const HELP_ONDERWERPEN: HelpStap[] = [
     tip: "P1-opdrachten verschijnen ook op Home en bij Meldingen — gebruik P1 alleen voor urgente zaken."
   },
   {
+    id: "prioriteiten",
+    videoId: "prioriteiten",
     titel: "Prioriteiten",
     stappen: [
       "P1 — Hoog: urgent, moet snel. Verschijnt op Home en bij Meldingen.",
@@ -69,6 +51,8 @@ const HELP_ONDERWERPEN: HelpStap[] = [
     ]
   },
   {
+    id: "bewerken",
+    videoId: "bewerken",
     titel: "Opdracht bewerken & status",
     stappen: [
       "Klik op een kaart op het opdrachtenbord om het detailvenster te openen.",
@@ -78,6 +62,8 @@ const HELP_ONDERWERPEN: HelpStap[] = [
     ]
   },
   {
+    id: "documenten",
+    videoId: "documenten",
     titel: "Documenten uploaden",
     stappen: [
       "Open een toegewezen opdracht (eigenaar: elke opdracht).",
@@ -90,6 +76,8 @@ const HELP_ONDERWERPEN: HelpStap[] = [
     tip: "Iedereen met een login kan bestanden toevoegen aan opdrachten die aan hen zijn toegewezen. De eigenaar kan dat bij alle opdrachten."
   },
   {
+    id: "prullenbak",
+    videoId: "prullenbak",
     titel: "Verwijderen & prullenbak",
     stappen: [
       "Open de opdracht en kies Verwijderen (alleen eigenaar).",
@@ -101,6 +89,8 @@ const HELP_ONDERWERPEN: HelpStap[] = [
     tip: "Twijfel je? Herstel liever eerst uit de prullenbak in plaats van opnieuw alles in te voeren."
   },
   {
+    id: "statistieken",
+    videoId: "statistieken",
     titel: "Statistieken",
     stappen: [
       "Ga in het menu naar Statistieken (eigenaar).",
@@ -112,9 +102,10 @@ const HELP_ONDERWERPEN: HelpStap[] = [
   },
   {
     id: "kas-doorgeven",
+    videoId: "kas-doorgeven",
     titel: "Kas doorgeven (medewerkers)",
     stappen: [
-      "Bekijk eerst de video helemaal bovenaan deze pagina. Ondertitels staan altijd aan; zet geluid aan voor gesproken uitleg.",
+      "Bekijk eerst de video hierboven. Ondertitels staan altijd aan; zet geluid aan voor gesproken uitleg.",
       "Kies Kas doorgeven in het menu. Bovenaan die pagina staat een knop Hulp — die brengt je hier terug.",
       "Kies de munt waarin je telt (meestal SRD).",
       "Stap 1: vul in hoeveel er vanochtend in je kas lag. Weet je het niet? Sla over.",
@@ -130,6 +121,8 @@ const HELP_ONDERWERPEN: HelpStap[] = [
     tip: "Je hoeft geen boekhoudwoorden in te vullen. Tik wat je deed, vul het bedrag in, stuur de dag door."
   },
   {
+    id: "financieel",
+    videoId: "financieel",
     titel: "Financiën (eigenaar)",
     stappen: [
       "Ga naar Financiën in het menu (alleen zichtbaar voor de eigenaar).",
@@ -142,10 +135,12 @@ const HELP_ONDERWERPEN: HelpStap[] = [
   }
 ];
 
-function HelpOnderwerp({ id, titel, stappen, tip }: HelpStap) {
+function HelpOnderwerp({ id, titel, stappen, tip, videoId }: HelpStap) {
+  const gids = videoId ? HELP_VIDEOS[videoId] : undefined;
   return (
-    <section id={id ? `help-${id}` : undefined} className="card page-card help-section">
+    <section id={`help-${id}`} className="card page-card help-section">
       <h2>{titel}</h2>
+      {gids && <HelpStappenVideo gids={gids} ingebouwd />}
       <ol className="help-steps">
         {stappen.map((stap) => (
           <li key={stap}>{stap}</li>
@@ -160,230 +155,7 @@ function HelpOnderwerp({ id, titel, stappen, tip }: HelpStap) {
   );
 }
 
-function HelpVideoBlok({
-  isEigenaar,
-  video,
-  inputUrl,
-  gekozenBestand,
-  laden,
-  bezig,
-  downloadBezig,
-  fout,
-  succes,
-  onInputChange,
-  onBestandChange,
-  onOpslaanLink,
-  onUploadBestand,
-  onVerwijderen,
-  onDownload
-}: {
-  isEigenaar: boolean;
-  video: HelpVideoInfo | null;
-  inputUrl: string;
-  gekozenBestand: File | null;
-  laden: boolean;
-  bezig: boolean;
-  downloadBezig: boolean;
-  fout: string | null;
-  succes: string | null;
-  onInputChange: (url: string) => void;
-  onBestandChange: (file: File | null) => void;
-  onOpslaanLink: (e: FormEvent) => void;
-  onUploadBestand: () => void;
-  onVerwijderen: () => void;
-  onDownload: () => void;
-}) {
-  const streamUrl = useMemo(() => helpVideoStreamUrl(), [video?.source]);
-  const embed = helpVideoEmbed(video, streamUrl);
-  const linkOngeldig = Boolean(inputUrl.trim()) && !helpVideoEmbed(
-    { source: "link", playbackUrl: inputUrl.trim() },
-    streamUrl
-  );
-  const bestandTeGroot = Boolean(
-    gekozenBestand && gekozenBestand.size > HELP_VIDEO_MAX_MB * 1024 * 1024
-  );
-  const kanDownloaden = helpVideoIsBestand(video, embed);
-  const downloadNaam = helpVideoBestandsnaam(video);
-  const externeLink = video?.source === "link" ? video.playbackUrl : "";
-
-  return (
-    <section className="card page-card help-video-section">
-      <div className="section-header">
-        <h2>Video: rondleiding door de app</h2>
-        <p className="muted">
-          Bekijk de uitlegvideo hier, of download hem om later offline terug te kijken. Daarna
-          staan per onderwerp de stappen op een rij.
-        </p>
-      </div>
-
-      {isEigenaar && (
-        <div className="help-video-beheer">
-          <div className="help-video-beheer-blok">
-            <h3>Videobestand uploaden</h3>
-            <p className="muted">Mp4, webm of mov — max. {HELP_VIDEO_MAX_MB} MB.</p>
-            <label className="form-label">
-              Kies bestand
-              <input
-                type="file"
-                className="form-input"
-                accept={HELP_VIDEO_ACCEPT}
-                disabled={bezig || laden}
-                onChange={(e) => onBestandChange(e.target.files?.[0] || null)}
-              />
-            </label>
-            {gekozenBestand && (
-              <p className="muted">
-                Geselecteerd: <strong>{gekozenBestand.name}</strong> (
-                {(gekozenBestand.size / (1024 * 1024)).toFixed(1)} MB)
-              </p>
-            )}
-            {bestandTeGroot && (
-              <p className="login-hint login-error">
-                Bestand is te groot. Maximum is {HELP_VIDEO_MAX_MB} MB.
-              </p>
-            )}
-            <button
-              type="button"
-              className="btn-primary"
-              disabled={bezig || laden || !gekozenBestand || bestandTeGroot}
-              onClick={onUploadBestand}
-            >
-              {bezig ? "Bezig met uploaden..." : "Videobestand uploaden"}
-            </button>
-          </div>
-
-          <p className="help-video-of" aria-hidden="true">
-            of
-          </p>
-
-          <form className="help-video-beheer-blok" onSubmit={onOpslaanLink}>
-            <h3>Videolink plakken</h3>
-            <p className="muted">YouTube, Vimeo of een directe mp4-link.</p>
-            <label className="form-label">
-              Link
-              <input
-                type="url"
-                className="form-input"
-                value={inputUrl}
-                onChange={(e) => onInputChange(e.target.value)}
-                placeholder="https://www.youtube.com/watch?v=..."
-                disabled={bezig || laden}
-              />
-            </label>
-            {linkOngeldig && (
-              <p className="login-hint login-error">
-                Deze link wordt niet herkend. Gebruik YouTube, Vimeo of een directe mp4/webm-link.
-              </p>
-            )}
-            <button
-              type="submit"
-              className="btn-secondary"
-              disabled={bezig || laden || linkOngeldig || !inputUrl.trim()}
-            >
-              {bezig ? "Bezig..." : "Link opslaan"}
-            </button>
-          </form>
-
-          <div className="help-video-actions">
-            {video && (
-              <button type="button" className="btn-secondary" disabled={bezig || laden} onClick={onVerwijderen}>
-                Video verwijderen
-              </button>
-            )}
-          </div>
-          {fout && <p className="login-hint login-error">{fout}</p>}
-          {succes && <p className="login-hint login-success">{succes}</p>}
-          <p className="muted help-video-beheer-hint">
-            Upload een bestand of plak een link. Een geüpload bestand wordt opgeslagen in de
-            database en blijft beschikbaar na herstart. Medewerkers kunnen de video afspelen en
-            downloaden.
-          </p>
-        </div>
-      )}
-
-      {laden ? (
-        <p className="muted">Video laden...</p>
-      ) : embed ? (
-        <>
-          {video?.source === "file" && video.originalName && (
-            <p className="muted help-video-bestandsnaam">{video.originalName}</p>
-          )}
-          <div className="help-video-frame">
-            {embed.kind === "file" ? (
-              <video className="help-video-native" controls preload="metadata" src={embed.src}>
-                Je browser ondersteunt deze video niet.{" "}
-                <a href={embed.src} download={downloadNaam}>
-                  Download de video
-                </a>
-                .
-              </video>
-            ) : (
-              <iframe
-                className="help-video-embed"
-                src={embed.src}
-                title="App-uitlegvideo"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-              />
-            )}
-          </div>
-        </>
-      ) : (
-        <div className="help-video-placeholder" aria-label="Geen uitlegvideo">
-          <p>
-            <strong>Nog geen uitlegvideo</strong>
-          </p>
-          <p className="muted">
-            {isEigenaar
-              ? "Upload hierboven een videobestand of plak een link. Daarna verschijnt de speler op deze plek voor iedereen."
-              : "De eigenaar kan een uitlegvideo toevoegen. Zodra die is geplaatst, zie je hem hier en kun je hem downloaden."}
-          </p>
-        </div>
-      )}
-      {embed && (
-        <div className="help-video-download">
-          {kanDownloaden ? (
-            <>
-              <button
-                type="button"
-                className="btn-secondary"
-                disabled={bezig || laden || downloadBezig}
-                onClick={onDownload}
-              >
-                {downloadBezig ? "Downloaden..." : "Video downloaden"}
-              </button>
-              <p className="muted">
-                Sla <strong>{downloadNaam}</strong> op je computer op om de uitleg later offline te
-                bekijken.
-              </p>
-            </>
-          ) : externeLink ? (
-            <>
-              <a className="btn-secondary" href={externeLink} target="_blank" rel="noopener noreferrer">
-                Openen op {embed.kind === "vimeo" ? "Vimeo" : "YouTube"}
-              </a>
-              <p className="muted">
-                Deze video staat op een externe site. Downloaden als bestand kan alleen bij een
-                geüpload videobestand.
-              </p>
-            </>
-          ) : null}
-        </div>
-      )}
-    </section>
-  );
-}
-
-export function HelpPagina({ isEigenaar }: { isEigenaar: boolean }) {
-  const [video, setVideo] = useState<HelpVideoInfo | null>(null);
-  const [inputUrl, setInputUrl] = useState("");
-  const [gekozenBestand, setGekozenBestand] = useState<File | null>(null);
-  const [laden, setLaden] = useState(true);
-  const [bezig, setBezig] = useState(false);
-  const [downloadBezig, setDownloadBezig] = useState(false);
-  const [fout, setFout] = useState<string | null>(null);
-  const [succes, setSucces] = useState<string | null>(null);
-
+export function HelpPagina({ isEigenaar: _isEigenaar }: { isEigenaar: boolean }) {
   useEffect(() => {
     try {
       const focus = sessionStorage.getItem("la-solucion-help-focus");
@@ -398,138 +170,18 @@ export function HelpPagina({ isEigenaar }: { isEigenaar: boolean }) {
     }
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const info = await fetchHelpVideo();
-        if (!cancelled) {
-          setVideo(info);
-          setInputUrl(info?.source === "link" ? info.playbackUrl : "");
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setFout(err instanceof Error ? err.message : "Kon uitlegvideo niet laden.");
-        }
-      } finally {
-        if (!cancelled) setLaden(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const handleOpslaanLink = async (e: FormEvent) => {
-    e.preventDefault();
-    setFout(null);
-    setSucces(null);
-    try {
-      setBezig(true);
-      const saved = await saveHelpVideoUrl(inputUrl.trim());
-      setVideo(saved);
-      setGekozenBestand(null);
-      setSucces("Videolink opgeslagen. Medewerkers zien hem nu op Help.");
-    } catch (err) {
-      setFout(err instanceof Error ? err.message : "Opslaan mislukt.");
-    } finally {
-      setBezig(false);
-    }
-  };
-
-  const handleUploadBestand = async () => {
-    if (!gekozenBestand) return;
-    setFout(null);
-    setSucces(null);
-    try {
-      setBezig(true);
-      const saved = await uploadHelpVideoFile(gekozenBestand);
-      setVideo(saved);
-      setInputUrl("");
-      setGekozenBestand(null);
-      setSucces("Videobestand opgeslagen. De video blijft bewaard, is af te spelen en te downloaden op Help.");
-    } catch (err) {
-      setFout(err instanceof Error ? err.message : "Upload mislukt.");
-    } finally {
-      setBezig(false);
-    }
-  };
-
-  const handleDownload = async () => {
-    setFout(null);
-    setSucces(null);
-    try {
-      setDownloadBezig(true);
-      if (video?.source === "file") {
-        await downloadHelpVideo(helpVideoBestandsnaam(video));
-        setSucces("Video gedownload.");
-        return;
-      }
-      const bron = video?.playbackUrl || helpVideoEmbed(video, helpVideoStreamUrl())?.src;
-      if (!bron) {
-        throw new Error("Geen videobestand beschikbaar om te downloaden.");
-      }
-      const a = document.createElement("a");
-      a.href = bron;
-      a.download = helpVideoBestandsnaam(video);
-      a.rel = "noopener";
-      a.target = "_blank";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    } catch (err) {
-      setFout(err instanceof Error ? err.message : "Download mislukt.");
-    } finally {
-      setDownloadBezig(false);
-    }
-  };
-
-  const handleVerwijderen = async () => {
-    if (!window.confirm("Weet je zeker dat je de uitlegvideo wilt verwijderen?")) return;
-    setFout(null);
-    setSucces(null);
-    try {
-      setBezig(true);
-      await deleteHelpVideo();
-      setVideo(null);
-      setInputUrl("");
-      setGekozenBestand(null);
-      setSucces("Uitlegvideo verwijderd.");
-    } catch (err) {
-      setFout(err instanceof Error ? err.message : "Verwijderen mislukt.");
-    } finally {
-      setBezig(false);
-    }
-  };
-
-  const kasOnderwerp = HELP_ONDERWERPEN.find((onderwerp) => onderwerp.id === "kas-doorgeven");
-  const overigeOnderwerpen = HELP_ONDERWERPEN.filter((onderwerp) => onderwerp.id !== "kas-doorgeven");
-
   return (
     <div className="info-stack help-page">
-      <div id="help-kas-doorgeven" className="help-kas-top">
-        <KasUitlegVideo />
-        {kasOnderwerp && <HelpOnderwerp {...kasOnderwerp} id={undefined} />}
-      </div>
-      <HelpVideoBlok
-        isEigenaar={isEigenaar}
-        video={video}
-        inputUrl={inputUrl}
-        gekozenBestand={gekozenBestand}
-        laden={laden}
-        bezig={bezig}
-        downloadBezig={downloadBezig}
-        fout={fout}
-        succes={succes}
-        onInputChange={setInputUrl}
-        onBestandChange={setGekozenBestand}
-        onOpslaanLink={handleOpslaanLink}
-        onUploadBestand={handleUploadBestand}
-        onVerwijderen={handleVerwijderen}
-        onDownload={handleDownload}
-      />
-      {overigeOnderwerpen.map((onderwerp) => (
-        <HelpOnderwerp key={onderwerp.titel} {...onderwerp} />
+      <section className="card page-card help-section">
+        <h2>Uitlegvideo’s</h2>
+        <p className="muted">
+          Elk onderwerp hieronder heeft een korte video met stappen. Tik op Afspelen. Ondertitels
+          blijven altijd zichtbaar. Zet Geluid aan voor gesproken Nederlands. Als je een andere
+          video start, stopt de vorige vanzelf.
+        </p>
+      </section>
+      {HELP_ONDERWERPEN.map((onderwerp) => (
+        <HelpOnderwerp key={onderwerp.id} {...onderwerp} />
       ))}
     </div>
   );

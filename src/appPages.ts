@@ -104,7 +104,7 @@ export const PAGINA_INFO: Record<AppPagina, { titel: string; ondertitel: string 
   },
   help: {
     titel: "Help",
-    ondertitel: "Eerst de video Kas doorgeven, daarna de stappen en de rondleiding door de app."
+    ondertitel: "Korte video’s met stappen en gesproken uitleg, per onderwerp."
   },
   contact: {
     titel: "Contact",

@@ -2537,6 +2537,10 @@ a.btn-secondary {
   scroll-margin-top: 24px;
 }
 
+.kasvid-ingebouwd {
+  margin: 8px 0 16px;
+}
+
 .kasvid-podium {
   position: relative;
   width: 100%;
@@ -2759,9 +2763,15 @@ a.btn-secondary {
   color: var(--color-nav-active);
 }
 
-.kasvid-start ol {
+.kasvid-start ol,
+.kasvid-beeld ol {
   margin: 8px 0 0;
   padding-left: 22px;
+}
+
+.kasvid-beeld h3 {
+  margin: 0;
+  font-size: 1.8rem;
 }
 
 .stats-split {
