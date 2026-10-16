@@ -150,6 +150,7 @@ type GebruikFormRij = {
   soort: FinancieelGebruikSoort;
   bedrag: string;
   waaraan: string;
+  zelfInvullen: boolean;
   bank: string;
   medewerker: string;
   doelValuta: "" | FinancieelValuta;
@@ -159,6 +160,25 @@ type GebruikFormRij = {
   saldoBedrag: string;
   toelichting: string;
 };
+
+function isZelfInvullenWaaraan(soort: FinancieelGebruikSoort, waaraan: string): boolean {
+  const tekst = waaraan.trim();
+  if (!tekst) return false;
+  if (soort === "ERBIJ") {
+    return !isInkomstKas(tekst) && !isMuntenbakGebruik(tekst);
+  }
+  return !(
+    (UITGAVE_CATEGORIEEN as readonly string[]).includes(tekst) ||
+    isBankstorting(tekst) ||
+    isOverdrachtMedewerker(tekst) ||
+    isValutaOmzetting(tekst) ||
+    isMuntenbakGebruik(tekst)
+  );
+}
+
+function rijIsInkomstKas(rij: Pick<GebruikFormRij, "soort" | "waaraan" | "zelfInvullen">): boolean {
+  return rij.soort === "ERBIJ" && !rij.zelfInvullen && (isInkomstKas(rij.waaraan) || !rij.waaraan.trim());
+}
 
 type FormState = {
   datum: string;
@@ -206,6 +226,7 @@ function legeGebruikRij(
     soort,
     bedrag: "",
     waaraan: soort === "ERBIJ" ? GEBRUIK_INKOMST_KAS : "",
+    zelfInvullen: false,
     bank: "",
     medewerker: "",
     doelValuta: "",
@@ -657,12 +678,8 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       geldVanNaam: post.geldVanNaam || "",
       status: post.status,
       notities: post.notities || "",
-      gebruikingen: (post.gebruikingen || []).map((g) => ({
-        id: g.id,
-        datum: naarDateTimeLocal(g.datum),
-        soort: g.soort,
-        bedrag: String(g.bedrag).replace(".", ","),
-        waaraan: isBankstorting(g.waaraan)
+      gebruikingen: (post.gebruikingen || []).map((g) => {
+        const waaraan = isBankstorting(g.waaraan)
           ? GEBRUIK_BANKSTORTING
           : isOverdrachtMedewerker(g.waaraan)
             ? GEBRUIK_OVERDRACHT_MEDEWERKER
@@ -670,7 +687,14 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
               ? GEBRUIK_INKOMST_KAS
               : isMuntenbakGebruik(g.waaraan)
                 ? GEBRUIK_MUNTENBAK
-                : g.waaraan || "",
+                : g.waaraan || "";
+        return {
+        id: g.id,
+        datum: naarDateTimeLocal(g.datum),
+        soort: g.soort,
+        bedrag: String(g.bedrag).replace(".", ","),
+        waaraan,
+        zelfInvullen: isZelfInvullenWaaraan(g.soort, waaraan),
         bank: g.bank || bankUitWaaraan(g.waaraan),
         medewerker: g.medewerker || medewerkerUitWaaraan(g.waaraan),
         doelValuta:
@@ -682,7 +706,8 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
         heeftSaldo: g.heeftSaldo === "JA" || g.heeftSaldo === "NEE" ? g.heeftSaldo : "",
         saldoBedrag: g.saldoBedrag == null ? "" : String(g.saldoBedrag).replace(".", ","),
         toelichting: g.toelichting || ""
-      }))
+      };
+      })
     });
     window.setTimeout(() => formulierRef.current?.scrollIntoView({ behavior: "smooth" }), 0);
   };
@@ -731,6 +756,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
               ...legeGebruikRij(),
               bedrag: String(item.bedrag).replace(".", ","),
               waaraan,
+              zelfInvullen: isZelfInvullenWaaraan("AF", waaraan),
               bank: item.bank || "",
               medewerker: isOverdrachtMedewerker(waaraan) ? item.geldBijNaam || "" : "",
               klantNaam: item.klantNaam || "",
@@ -891,7 +917,11 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
         }
         doelBedrag = Math.round(gebruikBedrag * gebruikWisselkoers * 100) / 100;
       }
-      const inkomstKas = rij.soort === "ERBIJ" && (isInkomstKas(rij.waaraan) || !rij.waaraan.trim());
+      if (rij.zelfInvullen && !rij.waaraan.trim()) {
+        setFout("Vul bij ‘Anders’ zelf in waaraan het geld is besteed.");
+        return;
+      }
+      const inkomstKas = rijIsInkomstKas(rij);
       const muntenbakGebruik = isMuntenbakGebruik(rij.waaraan);
       const klantBetaling = inkomstKas || (rij.soort === "ERBIJ" && muntenbakGebruik);
       if (klantBetaling && !rij.klantNaam.trim()) {
@@ -1591,21 +1621,10 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                     </p>
                   </div>
                   {form.gebruikingen.map((rij, index) => {
-                    const inkomstKas =
-                      rij.soort === "ERBIJ" && (isInkomstKas(rij.waaraan) || !rij.waaraan.trim());
+                    const inkomstKas = rijIsInkomstKas(rij);
                     const muntenbakGebruik = isMuntenbakGebruik(rij.waaraan);
                     const rijKlantSaldo = klantSaldoVoor(alleKlantSaldi, rij.klantNaam, form.valuta);
-                    const toonZelfInvullen =
-                      rij.soort === "ERBIJ"
-                        ? !inkomstKas && !muntenbakGebruik && !!rij.waaraan.trim()
-                        : !(
-                            (UITGAVE_CATEGORIEEN as readonly string[]).includes(rij.waaraan) ||
-                            isBankstorting(rij.waaraan) ||
-                            isOverdrachtMedewerker(rij.waaraan) ||
-                            isValutaOmzetting(rij.waaraan) ||
-                            isMuntenbakGebruik(rij.waaraan) ||
-                            !rij.waaraan
-                          );
+                    const toonZelfInvullen = rij.zelfInvullen;
                     return (
                     <div key={rij.id} className={`financieel-gebruik-rij${rij.soort === "ERBIJ" ? " inkomst" : ""}`}>
                       <label className="form-label">
@@ -1619,6 +1638,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                             gebruikingen[index] = {
                               ...rij,
                               soort,
+                              zelfInvullen: soort === "ERBIJ" ? false : rij.zelfInvullen,
                               waaraan: soort === "ERBIJ" ? GEBRUIK_INKOMST_KAS : isInkomstKas(rij.waaraan) ? "" : rij.waaraan,
                               klantNaam: soort === "ERBIJ" ? rij.klantNaam || form.klantNaam : rij.klantNaam || form.klantNaam,
                               heeftSaldo: soort === "ERBIJ" ? rij.heeftSaldo || "" : rij.heeftSaldo,
@@ -1660,6 +1680,8 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                                 : muntenbakGebruik
                                   ? GEBRUIK_MUNTENBAK
                                 : "__anders__"
+                              : rij.zelfInvullen
+                                ? "__anders__"
                               : isBankstorting(rij.waaraan)
                                 ? GEBRUIK_BANKSTORTING
                                 : isOverdrachtMedewerker(rij.waaraan)
@@ -1681,6 +1703,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                               gebruikingen[index] = {
                                 ...rij,
                                 soort: "ERBIJ",
+                                zelfInvullen: false,
                                 waaraan: GEBRUIK_INKOMST_KAS,
                                 bank: "",
                                 medewerker: "",
@@ -1689,6 +1712,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                             } else if (gekozen === GEBRUIK_MUNTENBAK) {
                               gebruikingen[index] = {
                                 ...rij,
+                                zelfInvullen: false,
                                 waaraan: GEBRUIK_MUNTENBAK,
                                 bank: "",
                                 medewerker: "",
@@ -1699,6 +1723,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                             } else if (gekozen === GEBRUIK_BANKSTORTING) {
                               gebruikingen[index] = {
                                 ...rij,
+                                zelfInvullen: false,
                                 waaraan: GEBRUIK_BANKSTORTING,
                                 medewerker: "",
                                 soort: rij.soort,
@@ -1708,6 +1733,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                             } else if (gekozen === GEBRUIK_OVERDRACHT_MEDEWERKER) {
                               gebruikingen[index] = {
                                 ...rij,
+                                zelfInvullen: false,
                                 waaraan: GEBRUIK_OVERDRACHT_MEDEWERKER,
                                 bank: "",
                                 soort: "AF",
@@ -1717,6 +1743,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                             } else if (gekozen === GEBRUIK_VALUTA_OMZETTING) {
                               gebruikingen[index] = {
                                 ...rij,
+                                zelfInvullen: false,
                                 waaraan: GEBRUIK_VALUTA_OMZETTING,
                                 bank: "",
                                 medewerker: "",
@@ -1729,13 +1756,15 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                             } else if (gekozen === "__anders__") {
                               gebruikingen[index] = {
                                 ...rij,
-                                waaraan: "Anders",
+                                zelfInvullen: true,
+                                waaraan: "",
                                 bank: "",
                                 medewerker: ""
                               };
                             } else {
                               gebruikingen[index] = {
                                 ...rij,
+                                zelfInvullen: false,
                                 waaraan: gekozen,
                                 bank: "",
                                 medewerker: ""
@@ -1820,10 +1849,12 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                             list="financieel-gebruik-waaraan"
                             placeholder={rij.soort === "AF" ? "Taxi, wisselgeld, eten..." : "Fooi, extra kas..."}
                             value={rij.waaraan}
+                            autoFocus={!rij.waaraan}
                             onChange={(e) => {
                               const gebruikingen = form.gebruikingen.slice();
                               gebruikingen[index] = {
                                 ...rij,
+                                zelfInvullen: true,
                                 waaraan: e.target.value,
                                 bank: "",
                                 medewerker: ""
