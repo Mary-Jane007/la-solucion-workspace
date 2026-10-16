@@ -468,6 +468,19 @@ export interface FinancieelInzending {
   bijlagen?: FinancieelInzendingBijlage[];
 }
 
+export type KasSuggestieTegel = {
+  id: string;
+  label: string;
+  soort: "UITGAVE" | "INKOMST" | "MUNTENBAK" | "OVERDRACHT";
+};
+
+export async function fetchKasSuggesties(): Promise<KasSuggestieTegel[]> {
+  const res = await apiFetch("/api/financieel-kas-suggesties");
+  const data = await readApiJson(res);
+  if (!res.ok) throw new Error(String(data.error || "Kon suggesties niet ophalen."));
+  return Array.isArray(data.tegels) ? (data.tegels as KasSuggestieTegel[]) : [];
+}
+
 export async function fetchFinancieelInzendingen(): Promise<{
   inzendingen: FinancieelInzending[];
   ongelezen: number;

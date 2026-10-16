@@ -88,7 +88,7 @@ export const PAGINA_INFO: Record<AppPagina, { titel: string; ondertitel: string 
   },
   "kas-doorgeven": {
     titel: "Kas doorgeven",
-    ondertitel: "Vul financiële info in en verstuur naar de eigenaar."
+    ondertitel: "Tik wat je vandaag deed. Aan het eind stuur je de hele dag in één keer door."
   },
   export: {
     titel: "Export",

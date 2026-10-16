@@ -272,7 +272,17 @@ function IngelogdeApp({
         <FinancieleAdministratiePagina opdrachten={opdrachten} />
       )}
       {huidigePagina === "kas-doorgeven" && !isEigenaar && (
-        <MedewerkerFinancieelPagina gebruiker={gebruiker} />
+        <MedewerkerFinancieelPagina
+          gebruiker={gebruiker}
+          onNaarHelp={() => {
+            try {
+              sessionStorage.setItem("la-solucion-help-focus", "kas-doorgeven");
+            } catch {
+              /* privémodus */
+            }
+            handleNavigeer("help");
+          }}
+        />
       )}
       {huidigePagina === "export" && isEigenaar && <ExportPagina werkruimte={werkruimte} />}
       {huidigePagina === "profiel" && <ProfielPagina gebruiker={gebruiker} />}

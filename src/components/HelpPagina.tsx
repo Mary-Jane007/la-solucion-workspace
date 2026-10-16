@@ -17,6 +17,7 @@ import {
 } from "../helpConfig";
 
 type HelpStap = {
+  id?: string;
   titel: string;
   stappen: string[];
   tip?: string;
@@ -108,16 +109,21 @@ const HELP_ONDERWERPEN: HelpStap[] = [
     ]
   },
   {
+    id: "kas-doorgeven",
     titel: "Kas doorgeven (medewerkers)",
     stappen: [
-      "Log in als medewerker.",
-      "Kies Kas doorgeven in het menu (niet Financiën — dat is alleen voor de eigenaar).",
-      "Vul bedrag, valuta, omschrijving en bij wie het geld ligt in.",
-      "Voeg optioneel foto’s toe (bon, kas, betalingsbewijs).",
-      "Klik op Versturen. De eigenaar krijgt een melding op Home, bij Meldingen en bij Financiën.",
-      "De eigenaar verwerkt de inzending in Financiën → Inzendingen."
+      "Kies Kas doorgeven in het menu. Bovenaan staat een knop Hulp — die brengt je hier terug.",
+      "Kies de munt waarin je telt (meestal SRD).",
+      "Stap 1: vul in hoeveel er vanochtend in je kas lag. Weet je het niet? Sla over.",
+      "Stap 2: tik op een grote knop (Benzine, Uitprinten, Taxi, Eten, of wat jullie vaak doen). Vul het bedrag in. Foto van de bon mag.",
+      "De regel komt op “Jouw dag tot nu toe”. Zo kun je de hele dag bijhouden zonder steeds te versturen.",
+      "Vergeten wat je gisteren doorgaf? Tik op Zelfde als gisteren en vul de nieuwe bedragen in.",
+      "Wil je één regel alvast sturen? Tik bij die regel op Nu sturen. Anders wacht je tot het eind.",
+      "Stap 4: tel hoeveel er nu nog in kas ligt.",
+      "Tik op Dag doorgeven. Alles op de lijst plus de kas-telling gaat in één keer naar de eigenaar.",
+      "De eigenaar ziet het bij Financiën → Inzendingen en maakt daar de boekhouding af."
     ],
-    tip: "Stuur kas op de dag zelf door — zo blijft Follow the money en het dagverslag kloppen."
+    tip: "Je hoeft geen boekhoudwoorden in te vullen. Tik wat je deed, vul het bedrag in, stuur de dag door."
   },
   {
     titel: "Financiën (eigenaar)",
@@ -132,9 +138,9 @@ const HELP_ONDERWERPEN: HelpStap[] = [
   }
 ];
 
-function HelpOnderwerp({ titel, stappen, tip }: HelpStap) {
+function HelpOnderwerp({ id, titel, stappen, tip }: HelpStap) {
   return (
-    <section className="card page-card help-section">
+    <section id={id ? `help-${id}` : undefined} className="card page-card help-section">
       <h2>{titel}</h2>
       <ol className="help-steps">
         {stappen.map((stap) => (
@@ -373,6 +379,20 @@ export function HelpPagina({ isEigenaar }: { isEigenaar: boolean }) {
   const [downloadBezig, setDownloadBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
   const [succes, setSucces] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const focus = sessionStorage.getItem("la-solucion-help-focus");
+      if (focus) {
+        sessionStorage.removeItem("la-solucion-help-focus");
+        window.setTimeout(() => {
+          document.getElementById(`help-${focus}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 80);
+      }
+    } catch {
+      /* privémodus */
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

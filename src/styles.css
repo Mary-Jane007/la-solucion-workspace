@@ -3573,3 +3573,489 @@ a.btn-secondary {
   cursor: pointer;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.help-section {
+  scroll-margin-top: 24px;
+}
+
+.kasdag {
+  --kas-accent: #14b8a6;
+  --kas-accent-strong: #0f766e;
+  --kas-accent-soft: rgba(20, 184, 166, 0.16);
+  --kas-warm: #fbbf24;
+  --kas-inkomst: #34d399;
+  --kas-pad: 20px;
+  max-width: 560px;
+  margin: 0 auto 88px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  color: var(--color-text);
+}
+
+.kasdag-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 2px 8px;
+}
+
+.kasdag-kicker {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--kas-accent);
+  font-weight: 700;
+}
+
+.kasdag-titel {
+  margin: 4px 0 8px;
+  font-size: 1.55rem;
+  line-height: 1.2;
+  text-transform: capitalize;
+}
+
+.kasdag-lead {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 15px;
+  line-height: 1.45;
+  max-width: 38ch;
+}
+
+.kasdag-hulp {
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-size: 15px;
+  font-weight: 700;
+  background: var(--kas-accent);
+  color: #042f2e;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(20, 184, 166, 0.28);
+}
+
+.kasdag-hulp:hover {
+  filter: brightness(1.08);
+}
+
+.kasdag-fout,
+.kasdag-ok {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  font-size: 14px;
+}
+
+.kasdag-fout {
+  background: var(--color-danger-bg);
+  color: var(--color-danger-strong);
+}
+
+.kasdag-ok {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.kasdag-kaart {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 22px;
+  padding: var(--kas-pad);
+  box-shadow: var(--shadow-subtle);
+}
+
+.kasdag-stap {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.kasdag-nr {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--kas-accent-soft);
+  color: var(--kas-accent);
+  font-weight: 800;
+  font-size: 16px;
+}
+
+.kasdag-stap-body h3,
+.kasdag-kaart > h3 {
+  margin: 2px 0 6px;
+  font-size: 1.12rem;
+}
+
+.kasdag-hulptekst,
+.kasdag-leeg {
+  margin: 0 0 12px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.kasdag-vraag,
+.kasdag-groepnaam {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-subtle);
+}
+
+.kasdag-groepnaam {
+  margin-top: 14px;
+}
+
+.kasdag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.kasdag-chip,
+.kasdag-mini,
+.kasdag-tekstknop {
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-control-bg);
+  color: var(--color-text);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.kasdag-chip.is-actief {
+  background: var(--kas-accent-soft);
+  border-color: var(--kas-accent);
+  color: var(--kas-accent);
+  font-weight: 700;
+}
+
+.kasdag-tekstknop {
+  background: transparent;
+  border: 0;
+  padding: 4px 0;
+  color: var(--kas-accent);
+  font-weight: 700;
+}
+
+.kasdag-bedrag-label {
+  position: relative;
+  display: block;
+}
+
+.kasdag-bedrag,
+.kasdag-invoer {
+  width: 100%;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-control-bg);
+  color: var(--color-text);
+  border-radius: 16px;
+  padding: 14px 72px 14px 16px;
+  font-size: 1.35rem;
+}
+
+.kasdag-invoer {
+  padding-right: 16px;
+  font-size: 1rem;
+  margin-top: 6px;
+}
+
+.kasdag-valuta-tag {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.kasdag-tegels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.kasdag-tegel {
+  min-height: 108px;
+  border: 1px solid var(--color-border);
+  background: var(--kas-accent-soft);
+  color: var(--color-text);
+  border-radius: 18px;
+  padding: 14px 12px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kasdag-tegel:hover,
+.kasdag-tegel:focus-visible {
+  border-color: var(--kas-accent);
+  transform: translateY(-1px);
+}
+
+.kasdag-tegel-icoon {
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+.kasdag-tegel strong {
+  font-size: 1.02rem;
+}
+
+.kasdag-tegel span {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.kasdag-tegel-inkomst {
+  background: rgba(52, 211, 153, 0.14);
+}
+
+.kasdag-tegel-muntenbak,
+.kasdag-tegel-overdracht {
+  background: rgba(251, 191, 36, 0.12);
+}
+
+.kasdag-rij-kop {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.kasdag-lijst,
+.kasdag-verzonden {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.kasdag-regel {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  border-radius: 16px;
+  background: var(--color-item-bg);
+}
+
+.kasdag-regel.is-verzonden {
+  opacity: 0.78;
+}
+
+.kasdag-regel-icoon {
+  font-size: 1.25rem;
+  text-align: center;
+}
+
+.kasdag-regel-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.kasdag-regel-main span,
+.kasdag-regel-main em {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-style: normal;
+}
+
+.kasdag-regel-acties {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kasdag-mini-weg {
+  color: var(--color-danger);
+}
+
+.kasdag-check {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.kasdag-actiebar {
+  padding: 12px;
+  border-radius: 20px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-subtle);
+}
+
+.kasdag-verstuur {
+  width: 100%;
+  border: 0;
+  border-radius: 16px;
+  padding: 16px 18px;
+  font-size: 1.12rem;
+  font-weight: 800;
+  background: var(--kas-accent);
+  color: #042f2e;
+  cursor: pointer;
+}
+
+.kasdag-verstuur:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.kasdag-actiebar p {
+  margin: 8px 0 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.kasdag-verzonden li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.kasdag-status {
+  font-size: 12px;
+  color: var(--kas-accent);
+}
+
+.kasdag-meta {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.kasdag-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: var(--color-overlay-heavy);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px;
+}
+
+.kasdag-blad {
+  width: min(520px, 100%);
+  max-height: min(92dvh, 760px);
+  overflow: auto;
+  background: var(--color-bg-elevated);
+  color: var(--color-text);
+  border-radius: 24px 24px 18px 18px;
+  padding: 20px 18px 16px;
+  box-shadow: var(--shadow-soft);
+}
+
+.kasdag-blad-icoon {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.kasdag-blad h3 {
+  margin: 4px 0 4px;
+  font-size: 1.35rem;
+}
+
+.kasdag-veld {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 14px 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.kasdag-foto-rij,
+.kasdag-blad-acties {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.kasdag-blad-acties {
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.kasdag-verstuur-blad {
+  width: auto;
+  padding: 12px 22px;
+  font-size: 1rem;
+}
+
+.kasdag-previews {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.kasdag-previews figure {
+  margin: 0;
+  width: 72px;
+}
+
+.kasdag-previews img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 10px;
+}
+
+[data-theme="licht"] .kasdag {
+  --kas-accent: #0f766e;
+  --kas-accent-strong: #115e59;
+  --kas-accent-soft: rgba(13, 148, 136, 0.12);
+}
+
+[data-theme="licht"] .kasdag-hulp,
+[data-theme="licht"] .kasdag-verstuur {
+  color: #ffffff;
+}
+
+@media (max-width: 520px) {
+  .kasdag-tegels-ook {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .kasdag-regel {
+    grid-template-columns: 28px minmax(0, 1fr);
+  }
+
+  .kasdag-regel-acties {
+    grid-column: 2;
+    flex-direction: row;
+  }
+}
+

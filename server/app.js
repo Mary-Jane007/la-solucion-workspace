@@ -82,6 +82,7 @@ const {
   getInzendingBijlageById
 } = require("./financieInzendingStore");
 const { buildBackup, restoreBackup, parseBackupError } = require("./financieBackup");
+const { listKasSuggestieTegels } = require("./kasSuggesties");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -1405,6 +1406,17 @@ const inzendingSchema = z.object({
       path: ["datum"],
       message: "Ongeldige datum/tijd."
     });
+  }
+});
+
+app.get("/api/financieel-kas-suggesties", authRequired, async (_req, res) => {
+  try {
+    if (!hasDb()) return res.json({ tegels: [] });
+    const tegels = await listKasSuggestieTegels();
+    return res.json({ tegels });
+  } catch (err) {
+    console.error("Fout bij GET /api/financieel-kas-suggesties:", err);
+    return res.status(500).json({ error: "Kon suggesties niet ophalen." });
   }
 });
 
