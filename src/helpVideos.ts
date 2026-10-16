@@ -377,6 +377,52 @@ export const HELP_VIDEOS: Record<string, HelpVideoGids> = {
         ]
       }
     ]
+  },
+  "bestand-toevoegen": {
+    id: "bestand-toevoegen",
+    titel: "Bestand toevoegen bij opdracht",
+    slides: [
+      {
+        id: "start",
+        titel: "Bestand bij de opdracht",
+        ondertitel:
+          "Een paspoort, formulier of foto hoort bij de opdracht zelf. Open eerst de opdracht, en voeg het bestand daar toe.",
+        kicker: "Opdracht",
+        kop: "Bestand toevoegen",
+        lead: "PDF, foto of Word"
+      },
+      {
+        id: "openen",
+        titel: "Open de opdracht",
+        ondertitel:
+          "Ga naar Opdrachtenbord of Mijn opdrachten. Tik op de kaart van de klant. Het detailvenster gaat open.",
+        menu: { items: ["Home", "Opdrachtenbord", "Mijn opdrachten"], actief: "Mijn opdrachten" },
+        pijl: "← Open de kaart"
+      },
+      {
+        id: "kiezen",
+        titel: "Kies het bestand",
+        ondertitel:
+          "Scroll naar Documenten toevoegen. Tik op Bestand kiezen. Kies een of meerdere bestanden: PDF, foto of Word.",
+        vraag: "Documenten toevoegen",
+        knoppen: { primair: "Bestand kiezen" }
+      },
+      {
+        id: "opslaan",
+        titel: "Opslaan",
+        ondertitel:
+          "Het bestand staat klaar bij de opdracht. Pas de naam aan als dat helpt. Tik daarna op Opslaan. Pas dan is het gekoppeld.",
+        lijst: [{ label: "paspoort-perez.pdf", extra: "Nieuw" }],
+        knoppen: { primair: "Opslaan" }
+      },
+      {
+        id: "bekijken",
+        titel: "Bekijken",
+        ondertitel:
+          "Tik op Bekijken. Foto’s blijven in de app. PDF’s openen in Chrome. Verwijderen mag ook, als het verkeerde bestand is.",
+        knoppen: { secundair: "Bekijken", primair: "Opslaan" }
+      }
+    ]
   }
 };
 
@@ -389,5 +435,6 @@ export const HELP_VIDEO_VOLGORDE = [
   "prullenbak",
   "statistieken",
   "kas-doorgeven",
+  "bestand-toevoegen",
   "financieel"
 ] as const;

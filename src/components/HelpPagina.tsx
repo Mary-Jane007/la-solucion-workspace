@@ -121,6 +121,22 @@ const HELP_ONDERWERPEN: HelpStap[] = [
     tip: "Je hoeft geen boekhoudwoorden in te vullen. Tik wat je deed, vul het bedrag in, stuur de dag door."
   },
   {
+    id: "bestand-toevoegen",
+    videoId: "bestand-toevoegen",
+    titel: "Bestand toevoegen bij opdracht",
+    stappen: [
+      "Bekijk eerst de video hierboven. Ondertitels staan altijd aan; zet geluid aan voor gesproken uitleg.",
+      "Ga naar Opdrachtenbord of Mijn opdrachten en tik op de kaart van de klant.",
+      "Scroll in het detailvenster naar Documenten toevoegen.",
+      "Tik op Bestand kiezen. Kies een of meerdere bestanden: PDF, foto of Word.",
+      "Pas de bestandsnaam aan als dat duidelijker is. Tik Verwijderen als het het verkeerde bestand is.",
+      "Tik op Opslaan. Pas dan is het bestand gekoppeld aan de opdracht.",
+      "Tik op Bekijken: foto’s blijven in de app. PDF’s openen in Chrome.",
+      "Heb je de opdracht nog niet opgeslagen? Het bestand wordt gekoppeld zodra je Opslaan tikt."
+    ],
+    tip: "Iedereen met een login kan bestanden toevoegen aan een opdracht die aan hen is toegewezen. De eigenaar kan dat bij alle opdrachten."
+  },
+  {
     id: "financieel",
     videoId: "financieel",
     titel: "Financiën (eigenaar)",
