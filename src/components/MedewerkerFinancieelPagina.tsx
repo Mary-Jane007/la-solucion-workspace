@@ -23,6 +23,7 @@ import {
   MAX_KAS_FOTO_BYTES,
   MAX_KAS_FOTOS,
   KAS_DAG_VALUTAS,
+  VASTE_ANDERE_TEGELS,
   regelNaarPayload,
   tellingNaarPayload,
   verwachtRestant
@@ -93,6 +94,8 @@ export function MedewerkerFinancieelPagina({ gebruiker, onNaarHelp }: Props) {
   const [toonOuder, setToonOuder] = useState(false);
   const cameraRef = useRef<HTMLInputElement | null>(null);
   const albumRef = useRef<HTMLInputElement | null>(null);
+  const bladBedragRef = useRef<HTMLInputElement | null>(null);
+  const overigTegel = VASTE_ANDERE_TEGELS.find((tegel) => tegel.id === "overig")!;
 
   const alleTegels = useMemo(() => [...tegelsVaak, ...tegelsOok], [tegelsVaak, tegelsOok]);
 
@@ -184,7 +187,7 @@ export function MedewerkerFinancieelPagina({ gebruiker, onNaarHelp }: Props) {
     return samen;
   };
 
-  const zetOpLijst = () => {
+  const zetOpLijst = (nogEen = false) => {
     if (!blad) return;
     const bedrag = parseGeldInvoer(blad.bedrag);
     if (bedrag === null || bedrag < 0) {
@@ -209,13 +212,20 @@ export function MedewerkerFinancieelPagina({ gebruiker, onNaarHelp }: Props) {
       extra: blad.extra.trim(),
       notitie: blad.notitie.trim()
     };
+    const zelfdeTegel = blad.tegel;
     setConcept((huidig) => ({ ...huidig, regels: [...huidig.regels, regel] }));
     if (blad.fotos.length) {
       setFotosPerRegel((huidig) => ({ ...huidig, [id]: blad.fotos }));
     }
-    setBlad(null);
     setFout(null);
-    setSucces(`${regel.label} staat op je lijst. Stuur de dag door als je klaar bent.`);
+    if (nogEen) {
+      setBlad({ tegel: zelfdeTegel, bedrag: "", extra: "", notitie: "", fotos: [] });
+      setSucces(`${regel.label} staat op de lijst. Vul het volgende aparte bedrag in.`);
+      window.setTimeout(() => bladBedragRef.current?.focus(), 40);
+    } else {
+      setBlad(null);
+      setSucces(`${regel.label} staat op je lijst. Tik Bedrag toevoegen voor een apart bedrag.`);
+    }
   };
 
   const verwijderRegel = (id: string) => {
@@ -390,7 +400,10 @@ export function MedewerkerFinancieelPagina({ gebruiker, onNaarHelp }: Props) {
         </span>
         <div className="kasdag-stap-body">
           <h3>Tik wat je deed</h3>
-          <p className="kasdag-hulptekst">Grote knoppen voor wat jullie het meest doen. Foto van de bon mag, hoeft niet.</p>
+          <p className="kasdag-hulptekst">
+            Grote knoppen voor wat jullie het meest doen. Elk apart bedrag is een eigen regel — tik
+            zo vaak als je nodig hebt. Foto van de bon mag, hoeft niet.
+          </p>
           <p className="kasdag-groepnaam">Vaak gebruikt</p>
           <div className="kasdag-tegels">
             {tegelsVaak.map((tegel) => (
@@ -420,6 +433,9 @@ export function MedewerkerFinancieelPagina({ gebruiker, onNaarHelp }: Props) {
               </button>
             ))}
           </div>
+          <button type="button" className="kasdag-regel-toevoegen" onClick={() => openTegel(overigTegel)}>
+            + Bedrag toevoegen
+          </button>
         </div>
       </section>
 
@@ -434,8 +450,12 @@ export function MedewerkerFinancieelPagina({ gebruiker, onNaarHelp }: Props) {
               Zelfde als gisteren
             </button>
           </div>
+          <p className="kasdag-hulptekst">
+            Benzine apart, printen apart, eten apart — niet optellen. Tik Bedrag toevoegen voor elk
+            bedrag.
+          </p>
           {concept.regels.length === 0 ? (
-            <p className="kasdag-leeg">Nog niets. Tik hierboven op wat je deed — benzine, printen, eten…</p>
+            <p className="kasdag-leeg">Nog niets. Tik hierboven op wat je deed, of op Bedrag toevoegen.</p>
           ) : (
             <ul className="kasdag-lijst">
               {concept.regels.map((regel) => {
@@ -457,6 +477,17 @@ export function MedewerkerFinancieelPagina({ gebruiker, onNaarHelp }: Props) {
                       <em>{regel.verzondenId ? "Al doorgestuurd" : "Nog op je lijst"}</em>
                     </div>
                     <div className="kasdag-regel-acties">
+                      <button
+                        type="button"
+                        className="kasdag-mini"
+                        onClick={() => {
+                          const tegel =
+                            alleTegels.find((t) => t.id === regel.tegelId) || overigTegel;
+                          openTegel(tegel);
+                        }}
+                      >
+                        Nog een
+                      </button>
                       {!regel.verzondenId && (
                         <button
                           type="button"
@@ -491,6 +522,9 @@ export function MedewerkerFinancieelPagina({ gebruiker, onNaarHelp }: Props) {
               })}
             </ul>
           )}
+          <button type="button" className="kasdag-regel-toevoegen" onClick={() => openTegel(overigTegel)}>
+            + Bedrag toevoegen
+          </button>
         </div>
       </section>
 
@@ -593,7 +627,11 @@ export function MedewerkerFinancieelPagina({ gebruiker, onNaarHelp }: Props) {
               {blad.tegel.icoon}
             </p>
             <h3 id="kasdag-blad-titel">{blad.tegel.label}</h3>
-            <p className="kasdag-hulptekst">{blad.tegel.hint}. Alleen bedrag is verplicht.</p>
+            <p className="kasdag-hulptekst">
+              {blad.tegel.hint}. Alleen dit bedrag — heb je er nog een, tik daarna Nog een bedrag.
+            </p>
+            {fout && <p className="kasdag-fout">{fout}</p>}
+            {succes && blad && <p className="kasdag-ok">{succes}</p>}
 
             {blad.tegel.id === "overig" && (
               <label className="kasdag-veld">
@@ -649,6 +687,7 @@ export function MedewerkerFinancieelPagina({ gebruiker, onNaarHelp }: Props) {
                   : "Hoeveel was het?"}
               <span className="kasdag-bedrag-label">
                 <input
+                  ref={bladBedragRef}
                   className="kasdag-bedrag"
                   inputMode="decimal"
                   placeholder="0"
@@ -729,9 +768,16 @@ export function MedewerkerFinancieelPagina({ gebruiker, onNaarHelp }: Props) {
 
             <div className="kasdag-blad-acties">
               <button type="button" className="kasdag-mini" onClick={() => setBlad(null)}>
-                Annuleren
+                Klaar
               </button>
-              <button type="button" className="kasdag-verstuur kasdag-verstuur-blad" onClick={zetOpLijst}>
+              <button
+                type="button"
+                className="kasdag-secundair"
+                onClick={() => zetOpLijst(true)}
+              >
+                Nog een bedrag
+              </button>
+              <button type="button" className="kasdag-verstuur kasdag-verstuur-blad" onClick={() => zetOpLijst(false)}>
                 Op de lijst
               </button>
             </div>
