@@ -16,6 +16,7 @@ import {
   isPdfBestand,
   openAlsAfbeeldingInApp
 } from "../bestandUtils";
+import { maakZipBlob, startBestandDownload, veiligeDownloadNaam } from "../zipUtils";
 import { opdrachtVerwijderBevestiging } from "../opdrachtVerwijderen";
 import { statusLabel, vindOvereenkomstigeOpdrachten } from "../opdrachtenUtils";
 import { BestandBekijkLink, BestandMiniatuur, BestandViewer, BestandViewerItem } from "./BestandViewer";
@@ -322,6 +323,73 @@ export function OpdrachtDialoog({
     }
   };
 
+  const downloadAlleBestanden = async () => {
+    const gekoppeld = bewerkt.bestanden || [];
+    if (!gekoppeld.length && !wachtendeBestanden.length) return;
+    try {
+      setFout(null);
+      setIsBezig(true);
+      const stukken: Array<{ naam: string; data: Blob }> = [];
+      for (const item of wachtendeBestanden) {
+        stukken.push({ naam: item.file.name, data: item.file });
+      }
+      for (const bestand of gekoppeld) {
+        const blob = await fetchBestandBlob(bestand.id, bestand.origineleNaam, false);
+        if (!blob.size) {
+          throw new Error(`“${bestand.origineleNaam}” is leeg en kon niet worden gedownload.`);
+        }
+        stukken.push({ naam: bestand.origineleNaam, data: blob });
+      }
+      const zip = await maakZipBlob(stukken);
+      const klant = veiligeDownloadNaam(bewerkt.klantNaam, "opdracht");
+      startBestandDownload(zip, `${klant}-documenten.zip`);
+    } catch (err) {
+      setFout(
+        err instanceof Error
+          ? err.message
+          : "Download van alle bestanden mislukt. Er is niets verwijderd."
+      );
+    } finally {
+      setIsBezig(false);
+    }
+  };
+
+  const verwijderAlleBestanden = async () => {
+    const gekoppeld = bewerkt.bestanden || [];
+    const wachtendAantal = wachtendeBestanden.length;
+    const totaal = gekoppeld.length + wachtendAantal;
+    if (!totaal) return;
+    const bevestigd = window.confirm(
+      totaal === 1
+        ? "Dit ene document van de opdracht verwijderen?\n\nDownload het eerst als je het nog nodig hebt."
+        : `Alle ${totaal} documenten van deze opdracht verwijderen?\n\nDownload ze eerst als je ze nog nodig hebt. Dit kan niet ongedaan worden gemaakt.`
+    );
+    if (!bevestigd) return;
+    let blijven = [...gekoppeld];
+    try {
+      setFout(null);
+      setIsBezig(true);
+      if (wachtendAantal) wisWachtendeBestanden();
+      for (const bestand of gekoppeld) {
+        await verwijderBestand(bestand.id);
+        blijven = blijven.filter((b) => b.id !== bestand.id);
+        setBewerkt((huidig) => ({ ...huidig, bestanden: blijven }));
+      }
+      if (!isToevoegen) {
+        try {
+          setBewerkt(await onBewaar({ ...bewerkt, bestanden: blijven }));
+        } catch {
+          /* opdracht-gegevens; bestanden zijn al per stuk bijgewerkt */
+        }
+      }
+    } catch {
+      setBewerkt((huidig) => ({ ...huidig, bestanden: blijven }));
+      setFout("Niet alle bestanden konden worden verwijderd. Wat overbleef staat nog bij de opdracht.");
+    } finally {
+      setIsBezig(false);
+    }
+  };
+
   const verwijderGekoppeldBestand = async (bestandId: string, naam: string) => {
     const bevestigd = window.confirm(`Bestand “${naam}” verwijderen?`);
     if (!bevestigd) return;
@@ -529,6 +597,28 @@ export function OpdrachtDialoog({
 
               {kanDocumentenToevoegen && (
                 <DocumentenToevoegen disabled={isBezig} onBestanden={uploadBestanden} />
+              )}
+              {(bewerkt.bestanden?.length || wachtendeBestanden.length) > 0 && (
+                <div className="files-list-acties">
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    disabled={isBezig}
+                    onClick={() => void downloadAlleBestanden()}
+                  >
+                    Alles downloaden
+                  </button>
+                  {kanDocumentenToevoegen && (
+                    <button
+                      type="button"
+                      className="btn-secondary btn-danger"
+                      disabled={isBezig}
+                      onClick={() => void verwijderAlleBestanden()}
+                    >
+                      Alles verwijderen
+                    </button>
+                  )}
+                </div>
               )}
               <div className="files-list">
                 {wachtendeBestanden.length > 0 && (
