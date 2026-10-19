@@ -64,7 +64,7 @@ import {
   totaalInkomstKas,
   totaalMuntenbakErbij,
   extraUitgaveUitGebruik,
-  echteMedewerkerUserId,
+  koppelMedewerkerIdentiteit,
   voegVasteMedewerkersToe,
   isBankBetaling,
   isMedewerkerZakBetaling,
@@ -811,26 +811,17 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       return;
     }
     const gekozen = form.opdrachtId ? opdrachtenById.get(form.opdrachtId) : undefined;
-    const medewerker = form.afgehandeldDoorUserId
-      ? medewerkerOpties.find((u) => u.id === form.afgehandeldDoorUserId)
-      : undefined;
     const wijze = form.betalingswijze || null;
-    const medewerkerNaam =
-      vraagtMedewerkerNaam(wijze)
-        ? medewerker?.name || form.afgehandeldDoorNaam.trim()
-        : "";
-    const geldBijPersoon = form.geldBijUserId
-      ? medewerkerOpties.find((u) => u.id === form.geldBijUserId)
-      : undefined;
-    const geldVanPersoonTeam = form.geldVanUserId
-      ? medewerkerOpties.find((u) => u.id === form.geldVanUserId)
-      : undefined;
-    const geldVanNaam = toontKasAf
-      ? geldVanPersoonTeam?.name || form.geldVanNaam.trim()
-      : "";
-    const geldBijNaam = toontKasErbij
-      ? geldBijPersoon?.name || form.geldBijNaam.trim()
-      : "";
+    const afgehandeld = koppelMedewerkerIdentiteit(
+      form.afgehandeldDoorNaam,
+      form.afgehandeldDoorUserId,
+      medewerkerOpties
+    );
+    const geldBijGekoppeld = koppelMedewerkerIdentiteit(form.geldBijNaam, form.geldBijUserId, medewerkerOpties);
+    const geldVanGekoppeld = koppelMedewerkerIdentiteit(form.geldVanNaam, form.geldVanUserId, medewerkerOpties);
+    const medewerkerNaam = vraagtMedewerkerNaam(wijze) ? afgehandeld.naam : "";
+    const geldVanNaam = toontKasAf ? geldVanGekoppeld.naam : "";
+    const geldBijNaam = toontKasErbij ? geldBijGekoppeld.naam : "";
     if (form.type === "OVERDRACHT" && (!geldVanNaam || !geldBijNaam)) {
       setFout("Bij een overdracht vul je in van wie het geld komt én bij wie het nu is.");
       return;
@@ -984,7 +975,9 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
               ? GEBRUIK_INKOMST_KAS
               : rij.waaraan.trim(),
         bank: isBankstorting(rij.waaraan) ? rij.bank.trim() : "",
-        medewerker: isOverdrachtMedewerker(rij.waaraan) ? rij.medewerker.trim() : "",
+        medewerker: isOverdrachtMedewerker(rij.waaraan)
+          ? koppelMedewerkerIdentiteit(rij.medewerker, null, medewerkerOpties).naam
+          : "",
         doelValuta,
         wisselkoers: gebruikWisselkoers,
         doelBedrag,
@@ -1010,15 +1003,14 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       referentie: form.referentie.trim(),
       klantNaam: (gekozen?.klantNaam || form.klantNaam).trim(),
       opdrachtId: form.opdrachtId || null,
-      afgehandeldDoorUserId:
-        vraagtMedewerkerNaam(wijze) ? echteMedewerkerUserId(form.afgehandeldDoorUserId) : null,
+      afgehandeldDoorUserId: vraagtMedewerkerNaam(wijze) ? afgehandeld.userId : null,
       afgehandeldDoorNaam: medewerkerNaam,
       betalingswijze: wijze,
       kasEffect: toontBank ? kasEffect || "NEE" : null,
       bank: toontBank ? form.bank.trim() : "",
-      geldBijUserId: toontKasErbij ? echteMedewerkerUserId(form.geldBijUserId) : null,
+      geldBijUserId: toontKasErbij ? geldBijGekoppeld.userId : null,
       geldBijNaam,
-      geldVanUserId: toontKasAf ? echteMedewerkerUserId(form.geldVanUserId) : null,
+      geldVanUserId: toontKasAf ? geldVanGekoppeld.userId : null,
       geldVanNaam,
       status: form.type === "OVERDRACHT" || form.type === "KASGELD" ? "BETAALD" : form.status,
       notities: form.notities.trim(),

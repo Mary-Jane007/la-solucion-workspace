@@ -342,6 +342,164 @@ async function migrate() {
   );
 
   await query(`alter table bestanden add column if not exists inhoud bytea;`, []);
+
+  await koppelLoginAccountsAanFinancieleNamen();
+}
+
+const VASTE_MEDEWERKER_NAMEN = ["Natasha", "Vanessa"];
+
+/**
+ * Naam-only posten (oude extra vakjes) koppelen aan het login-account met dezelfde naam.
+ * Bedragen blijven staan; alleen identiteit wordt gelijkgetrokken.
+ */
+async function koppelLoginAccountsAanFinancieleNamen() {
+  const { rows: users } = await query(
+    `
+    select id::text as id, btrim(name) as name
+    from users
+    where coalesce(btrim(name), '') <> ''
+    order by created_at asc
+    `,
+    []
+  );
+  const byName = new Map();
+  for (const u of users) {
+    const key = String(u.name || "").trim().toLowerCase();
+    if (!key || byName.has(key)) continue;
+    byName.set(key, { id: String(u.id), name: String(u.name).trim() });
+  }
+
+  for (const vasteNaam of VASTE_MEDEWERKER_NAMEN) {
+    await canoniseerFinancieleNaam(vasteNaam, byName.get(vasteNaam.toLowerCase()) || null);
+  }
+
+  for (const [sleutel, account] of byName) {
+    if (VASTE_MEDEWERKER_NAMEN.some((n) => n.toLowerCase() === sleutel)) continue;
+    await canoniseerFinancieleNaam(account.name, account);
+  }
+}
+
+async function canoniseerFinancieleNaam(naam, account) {
+  const match = String(naam || "").trim();
+  if (!match) return;
+  const sleutel = match.toLowerCase();
+  const userId = account?.id || null;
+  const canon = account?.name || match;
+
+  await query(
+    `
+    update financiele_posten set
+      afgehandeld_door_user_id = case
+        when $2::text is not null
+          and (
+            lower(btrim(coalesce(afgehandeld_door_naam, ''))) = $1
+            or afgehandeld_door_user_id = $2
+          )
+          and (
+            afgehandeld_door_user_id is null
+            or btrim(afgehandeld_door_user_id) = ''
+            or afgehandeld_door_user_id = $2
+          )
+        then $2
+        else afgehandeld_door_user_id
+      end,
+      afgehandeld_door_naam = case
+        when lower(btrim(coalesce(afgehandeld_door_naam, ''))) = $1
+          or ($2::text is not null and afgehandeld_door_user_id = $2)
+        then $3
+        else afgehandeld_door_naam
+      end,
+      geld_bij_user_id = case
+        when $2::text is not null
+          and (
+            lower(btrim(coalesce(geld_bij_naam, ''))) = $1
+            or geld_bij_user_id = $2
+          )
+          and (
+            geld_bij_user_id is null
+            or btrim(geld_bij_user_id) = ''
+            or geld_bij_user_id = $2
+          )
+        then $2
+        else geld_bij_user_id
+      end,
+      geld_bij_naam = case
+        when lower(btrim(coalesce(geld_bij_naam, ''))) = $1
+          or ($2::text is not null and geld_bij_user_id = $2)
+        then $3
+        else geld_bij_naam
+      end,
+      geld_van_user_id = case
+        when $2::text is not null
+          and (
+            lower(btrim(coalesce(geld_van_naam, ''))) = $1
+            or geld_van_user_id = $2
+          )
+          and (
+            geld_van_user_id is null
+            or btrim(geld_van_user_id) = ''
+            or geld_van_user_id = $2
+          )
+        then $2
+        else geld_van_user_id
+      end,
+      geld_van_naam = case
+        when lower(btrim(coalesce(geld_van_naam, ''))) = $1
+          or ($2::text is not null and geld_van_user_id = $2)
+        then $3
+        else geld_van_naam
+      end,
+      updated_at = now()
+    where
+      lower(btrim(coalesce(afgehandeld_door_naam, ''))) = $1
+      or lower(btrim(coalesce(geld_bij_naam, ''))) = $1
+      or lower(btrim(coalesce(geld_van_naam, ''))) = $1
+      or ($2::text is not null and afgehandeld_door_user_id = $2)
+      or ($2::text is not null and geld_bij_user_id = $2)
+      or ($2::text is not null and geld_van_user_id = $2)
+    `,
+    [sleutel, userId, canon]
+  );
+
+  await query(
+    `
+    update financiele_posten
+    set
+      gebruikingen = coalesce((
+        select jsonb_agg(
+          case
+            when lower(btrim(coalesce(elem->>'medewerker', ''))) = $1
+            then jsonb_set(elem, '{medewerker}', to_jsonb($2::text))
+            else elem
+          end
+          order by ordinality
+        )
+        from jsonb_array_elements(gebruikingen) with ordinality as t(elem, ordinality)
+      ), '[]'::jsonb),
+      updated_at = now()
+    where jsonb_typeof(gebruikingen) = 'array'
+      and exists (
+        select 1
+        from jsonb_array_elements(gebruikingen) e
+        where lower(btrim(coalesce(e->>'medewerker', ''))) = $1
+      )
+    `,
+    [sleutel, canon]
+  );
+
+  await query(
+    `
+    update financiele_inzendingen set
+      van_naam = case when lower(btrim(coalesce(van_naam, ''))) = $1 then $2 else van_naam end,
+      geld_bij_naam = case when lower(btrim(coalesce(geld_bij_naam, ''))) = $1 then $2 else geld_bij_naam end,
+      geld_van_naam = case when lower(btrim(coalesce(geld_van_naam, ''))) = $1 then $2 else geld_van_naam end
+    where
+      lower(btrim(coalesce(van_naam, ''))) = $1
+      or lower(btrim(coalesce(geld_bij_naam, ''))) = $1
+      or lower(btrim(coalesce(geld_van_naam, ''))) = $1
+    `,
+    [sleutel, canon]
+  );
 }
 
 module.exports = {

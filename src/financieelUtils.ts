@@ -105,12 +105,45 @@ export function echteMedewerkerUserId(id?: string | null): string | null {
   return id;
 }
 
+/** Zet VANESSA/vanessa terug naar de vaste spelling, zodat extra vakjes samenvallen. */
+export function canoniekeMedewerkerNaam(naam?: string | null): string {
+  const n = String(naam || "").trim();
+  if (!n) return "";
+  const vast = FINANCIEEL_VASTE_MEDEWERKERS.find((item) => item.toLowerCase() === n.toLowerCase());
+  return vast || n;
+}
+
+/**
+ * Koppel een ingevulde naam aan het login-account als dat er is.
+ * Zo blijven oude naam-only posten en de huidige Vanessa één persoon.
+ */
+export function koppelMedewerkerIdentiteit(
+  naam?: string | null,
+  userId?: string | null,
+  team: Array<{ id: string; name: string }> = []
+): { naam: string; userId: string | null } {
+  const id = echteMedewerkerUserId(userId);
+  const teamById = id ? team.find((u) => u.id === id) : undefined;
+  const ruweNaam = canoniekeMedewerkerNaam(naam || teamById?.name || "");
+  if (teamById) {
+    return { naam: canoniekeMedewerkerNaam(teamById.name) || ruweNaam, userId: teamById.id };
+  }
+  const sleutel = ruweNaam.toLowerCase();
+  const teamByNaam = sleutel
+    ? team.find((u) => u.name.trim().toLowerCase() === sleutel && !isVasteMedewerkerSelectId(u.id))
+    : undefined;
+  if (teamByNaam) {
+    return { naam: canoniekeMedewerkerNaam(teamByNaam.name) || teamByNaam.name.trim(), userId: teamByNaam.id };
+  }
+  return { naam: ruweNaam, userId: id };
+}
+
 /**
  * Eén persoon, één vak: groepeer op naam.
  * Anders splitsen posten met login-id en posten met alleen “Vanessa” in twee vakken.
  */
 export function persoonGroepSleutel(naam?: string | null, userId?: string | null): string {
-  const n = String(naam || "").trim().toLowerCase();
+  const n = canoniekeMedewerkerNaam(naam).toLowerCase();
   if (n && n !== "onbekend") return n;
   const raw = String(userId || "").trim();
   if (isVasteMedewerkerSelectId(raw)) {
@@ -780,12 +813,12 @@ export function berekenTotalenPerValuta(posten: FinancieelPost[]): FinancieelTot
 type GeldPersoon = { naam: string; userId: string | null };
 
 function geldPersoon(naam?: string | null, userId?: string | null): GeldPersoon | null {
-  const n = (naam || "").trim();
+  const n = canoniekeMedewerkerNaam(naam);
   const rawId = (userId || "").trim() || null;
   const id = echteMedewerkerUserId(rawId);
   const naamUitId =
     !n && rawId && isVasteMedewerkerSelectId(rawId)
-      ? rawId.slice(VASTE_MEDEWERKER_ID_PREFIX.length).trim()
+      ? canoniekeMedewerkerNaam(rawId.slice(VASTE_MEDEWERKER_ID_PREFIX.length))
       : "";
   const weergave = n || naamUitId;
   if (!weergave && !id) return null;
@@ -852,7 +885,10 @@ function bumpPersoon(
   };
   bestaand[veld] += bedrag;
   bestaand.aantalPosten += 1;
-  if (!bestaand.naam || bestaand.naam === "Onbekend") bestaand.naam = wie.naam;
+  if (!bestaand.userId && wie.userId) bestaand.userId = wie.userId;
+  const canon = canoniekeMedewerkerNaam(wie.naam);
+  if (canon) bestaand.naam = canon;
+  else if (!bestaand.naam || bestaand.naam === "Onbekend") bestaand.naam = wie.naam;
   map.set(key, bestaand);
 }
 
@@ -909,7 +945,7 @@ export function berekenGeldBijTotalen(posten: FinancieelPost[]): GeldBijTotaal[]
       // Overdracht naar medewerker vanuit gebruiksregels: kas blijft gelijk, geld verplaatst.
       for (const g of normaliseerGebruikingen(p.gebruikingen)) {
         if (g.soort !== "AF" || !isOverdrachtMedewerker(g.waaraan)) continue;
-        const naam = medewerkerUitGebruik(g);
+        const naam = canoniekeMedewerkerNaam(medewerkerUitGebruik(g));
         if (!naam) continue;
         bumpPersoon(map, { naam, userId: null }, valuta, "ontvangenOverdracht", g.bedrag);
       }

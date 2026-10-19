@@ -26,6 +26,7 @@ import {
   isOpeningsKas,
   isMedewerkerZakBetaling,
   isOverdrachtMedewerker,
+  canoniekeMedewerkerNaam,
   medewerkerUitGebruik,
   MUNTENBAK_NAAM,
   normaliseerGebruikingen,
@@ -1695,18 +1696,26 @@ function followKasSaldo(saldo: number): number {
   return geldRond(Math.max(0, saldo));
 }
 
+function followWeergaveNaam(naam?: string | null): string {
+  return canoniekeMedewerkerNaam(naam) || String(naam || "").trim();
+}
+
 function bumpFollowSaldo(saldi: Map<string, FollowSaldo>, wie: { naam: string; userId: string | null }, delta: number) {
   const key = followSleutel(wie.naam, wie.userId);
-  const cur = saldi.get(key) || { naam: wie.naam, saldo: 0 };
-  if (!cur.naam || cur.naam === "Onbekend" || cur.naam === wie.userId) cur.naam = wie.naam;
+  const weergave = followWeergaveNaam(wie.naam);
+  const cur = saldi.get(key) || { naam: weergave, saldo: 0 };
+  if (weergave && (!cur.naam || cur.naam === "Onbekend" || cur.naam === wie.userId)) cur.naam = weergave;
+  else if (weergave) cur.naam = weergave;
   cur.saldo = geldRond(cur.saldo + delta);
   saldi.set(key, cur);
 }
 
 function zetFollowSaldo(saldi: Map<string, FollowSaldo>, wie: { naam: string; userId: string | null }, saldo: number) {
   const key = followSleutel(wie.naam, wie.userId);
-  const cur = saldi.get(key) || { naam: wie.naam, saldo: 0 };
-  if (!cur.naam || cur.naam === "Onbekend") cur.naam = wie.naam;
+  const weergave = followWeergaveNaam(wie.naam);
+  const cur = saldi.get(key) || { naam: weergave, saldo: 0 };
+  if (weergave) cur.naam = weergave;
+  else if (!cur.naam || cur.naam === "Onbekend") cur.naam = wie.naam;
   cur.saldo = geldRond(saldo);
   saldi.set(key, cur);
 }
@@ -1951,7 +1960,7 @@ function followOpsVanPost(p: FinancieelPost, valuta: FinancieelValuta): FollowOp
       continue;
     }
     if (g.soort === "AF" && isOverdrachtMedewerker(g.waaraan)) {
-      const medewerker = medewerkerUitGebruik(g) || "Onbekende medewerker";
+      const medewerker = followWeergaveNaam(medewerkerUitGebruik(g)) || "Onbekende medewerker";
       const bron = geldNaarPersoon(p) || geldVanPersoon(p);
       const deltas: NonNullable<FollowOp["handmatigeDeltas"]> = [];
       if (bron) deltas.push({ naam: bron.naam, userId: bron.userId, delta: -g.bedrag });
@@ -2293,7 +2302,7 @@ function berekenFollowTheMoneyDag(
     const deltas = op.handmatigeDeltas
       ? op.handmatigeDeltas.map((d) => ({
           key: followSleutel(d.naam, d.userId),
-          naam: d.naam,
+          naam: followWeergaveNaam(d.naam) || d.naam,
           delta: d.delta
         }))
       : followPersoonDeltas(op.post, op.bedrag);

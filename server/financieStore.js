@@ -127,7 +127,56 @@ function rowToPost(row) {
   };
 }
 
-function postValues(id, input) {
+const VASTE_MEDEWERKER_NAMEN = ["Natasha", "Vanessa"];
+
+function vasteMedewerkerNaam(naam) {
+  const n = String(naam || "").trim();
+  if (!n) return "";
+  const vast = VASTE_MEDEWERKER_NAMEN.find((item) => item.toLowerCase() === n.toLowerCase());
+  return vast || n;
+}
+
+async function loadMedewerkerAccounts() {
+  const { rows } = await query(
+    `
+    select id::text as id, btrim(name) as name
+    from users
+    where coalesce(btrim(name), '') <> ''
+    order by created_at asc
+    `,
+    []
+  );
+  const byId = new Map();
+  const byName = new Map();
+  for (const row of rows) {
+    byId.set(row.id, row.name);
+    const key = String(row.name || "").trim().toLowerCase();
+    if (key && !byName.has(key)) byName.set(key, { id: row.id, name: row.name });
+  }
+  return { byId, byName };
+}
+
+function koppelMedewerker(naam, userId, accounts) {
+  const rawId = String(userId || "").trim();
+  const id = rawId && !rawId.startsWith("naam:") ? rawId : "";
+  if (id && accounts.byId.has(id)) {
+    return { naam: vasteMedewerkerNaam(accounts.byId.get(id)), userId: id };
+  }
+  const n = vasteMedewerkerNaam(naam);
+  const hit = n ? accounts.byName.get(n.toLowerCase()) : null;
+  if (hit) return { naam: vasteMedewerkerNaam(hit.name), userId: hit.id };
+  return { naam: n, userId: id || null };
+}
+
+async function postValues(id, input) {
+  const accounts = await loadMedewerkerAccounts();
+  const afgehandeld = koppelMedewerker(input.afgehandeldDoorNaam, input.afgehandeldDoorUserId, accounts);
+  const geldBij = koppelMedewerker(input.geldBijNaam, input.geldBijUserId, accounts);
+  const geldVan = koppelMedewerker(input.geldVanNaam, input.geldVanUserId, accounts);
+  const gebruikingen = normalizeGebruikingen(input.gebruikingen).map((item) => ({
+    ...item,
+    medewerker: koppelMedewerker(item.medewerker, null, accounts).naam
+  }));
   return [
     id,
     input.datum,
@@ -140,18 +189,18 @@ function postValues(id, input) {
     input.referentie || "",
     input.klantNaam || "",
     input.opdrachtId || null,
-    input.afgehandeldDoorUserId || null,
-    input.afgehandeldDoorNaam || "",
+    afgehandeld.userId,
+    afgehandeld.naam,
     normalizeBetalingswijze(input.betalingswijze),
     normalizeKasEffect(input.kasEffect),
     input.bank || "",
-    input.geldBijUserId || null,
-    input.geldBijNaam || "",
-    input.geldVanUserId || null,
-    input.geldVanNaam || "",
+    geldBij.userId,
+    geldBij.naam,
+    geldVan.userId,
+    geldVan.naam,
     input.type === "OVERDRACHT" || input.type === "KASGELD" ? "BETAALD" : input.status,
     input.notities || "",
-    JSON.stringify(normalizeGebruikingen(input.gebruikingen))
+    JSON.stringify(gebruikingen)
   ];
 }
 
@@ -177,14 +226,14 @@ async function createFinancielePost(input) {
       ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23::jsonb)
     returning ${POST_SELECT}
     `,
-    postValues(id, input)
+    await postValues(id, input)
   );
   return withOne(rowToPost(res.rows[0]));
 }
 
 async function updateFinancielePost(id, input) {
   if (!hasDb()) throw new Error("Database niet geconfigureerd.");
-  const values = postValues(id, input);
+  const values = await postValues(id, input);
   const res = await query(
     `
     update financiele_posten set
