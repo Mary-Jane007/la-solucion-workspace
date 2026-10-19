@@ -29,7 +29,9 @@ import {
   gebruikingenSamenvatting,
   inkomstKasRegels,
   KlantSaldo,
+  MedewerkerZakSaldo,
   normalizeValuta,
+  postEigenaarSaldoClass,
   postStatusLabel,
   restantBedrag,
   typeLabel,
@@ -132,7 +134,8 @@ export function OverzichtPanel({
   tijdreeks,
   overzichtDag,
   onOverzichtDag,
-  onOpenTab
+  onOpenTab,
+  medewerkerZakSaldi
 }: {
   kpis: DashboardKpis;
   gezondheid: GezondheidItem[];
@@ -142,7 +145,10 @@ export function OverzichtPanel({
   overzichtDag: string;
   onOverzichtDag: (dag: string) => void;
   onOpenTab: (tab: string) => void;
+  medewerkerZakSaldi?: MedewerkerZakSaldo[];
 }) {
+  const zakInValuta = (medewerkerZakSaldi || []).filter((s) => s.valuta === kpis.valuta);
+  const zakOpen = zakInValuta.reduce((n, s) => n + s.teBetalen, 0);
   return (
     <div className="fin-panel-stack">
       <section className="card page-card fin-today-strip">
@@ -194,6 +200,12 @@ export function OverzichtPanel({
             <span className="muted">Nog te ontvangen</span>
             <strong>{formatGeld(dag.openstaand, kpis.valuta)}</strong>
           </div>
+          <div>
+            <span className="muted">Terug te betalen aan medewerkers</span>
+            <strong className={zakOpen > 0 ? "financieel-uitgave" : "financieel-inkomst"}>
+              {formatGeld(zakOpen, kpis.valuta)}
+            </strong>
+          </div>
         </div>
         <div className="ftm-day-nav">
           <button type="button" className="btn-secondary" onClick={() => onOpenTab("vandaag")}>
@@ -212,6 +224,8 @@ export function OverzichtPanel({
         </div>
         <KpiGrid kaarten={kpis.kaarten} />
       </section>
+
+      {zakInValuta.length > 0 && <MedewerkerZakSaldoPanel saldi={zakInValuta} />}
 
       <section className="card page-card">
         <div className="section-header">
@@ -447,18 +461,28 @@ export function PostenTabel({
             const dossier = p.opdrachtId
               ? opdrachtenById.get(p.opdrachtId)?.omschrijving || "Dossier"
               : "—";
+            const eigenaarSaldoClass = postEigenaarSaldoClass(p);
             return (
-              <tr key={p.id}>
+              <tr
+                key={p.id}
+                className={
+                  eigenaarSaldoClass
+                    ? `financieel-row-eigenaar-saldo ${eigenaarSaldoClass === "saldo-ok" ? "is-ok" : "is-open"}`
+                    : undefined
+                }
+              >
                 <td>{formatDatumTijd(p.datum).split(",")[0] || formatDatumTijd(p.datum)}</td>
                 <td>{tijd}</td>
                 <td>
                   <span
                     className={
-                      p.type === "UITGAVE"
-                        ? "financieel-pill uitgave"
-                        : p.type === "OVERDRACHT"
-                          ? "financieel-pill overdracht"
-                          : "financieel-pill inkomst"
+                      eigenaarSaldoClass
+                        ? `financieel-pill ${eigenaarSaldoClass}`
+                        : p.type === "UITGAVE"
+                          ? "financieel-pill uitgave"
+                          : p.type === "OVERDRACHT"
+                            ? "financieel-pill overdracht"
+                            : "financieel-pill inkomst"
                     }
                   >
                     {typeLabel(p.type, p)}
@@ -475,7 +499,17 @@ export function PostenTabel({
                     "—"}
                 </td>
                 <td>{dossier}</td>
-                <td className={p.type === "UITGAVE" ? "financieel-uitgave" : p.type === "OVERDRACHT" ? "" : "financieel-inkomst"}>
+                <td
+                  className={
+                    eigenaarSaldoClass === "saldo-ok"
+                      ? "financieel-inkomst"
+                      : p.type === "UITGAVE" || eigenaarSaldoClass === "saldo-te-betalen"
+                        ? "financieel-uitgave"
+                        : p.type === "OVERDRACHT"
+                          ? ""
+                          : "financieel-inkomst"
+                  }
+                >
                   {formatGeldUtil(p.bedrag, p.valuta)}
                 </td>
                 <td>
@@ -483,7 +517,13 @@ export function PostenTabel({
                 </td>
                 <td>{normalizeValuta(p.valuta)}</td>
                 <td>{betalingsLabel(p) || "—"}</td>
-                <td>{postStatusLabel(p)}</td>
+                <td>
+                  {eigenaarSaldoClass ? (
+                    <span className={`financieel-pill ${eigenaarSaldoClass}`}>{postStatusLabel(p)}</span>
+                  ) : (
+                    postStatusLabel(p)
+                  )}
+                </td>
                 <td>{p.referentie || "—"}</td>
                 <td>{p.notities || "—"}</td>
                 <td>{gebruikingenSamenvatting(p) || "—"}</td>
@@ -1164,6 +1204,53 @@ export function InstellingenPanel({
         )}
       </section>
     </div>
+  );
+}
+
+export function MedewerkerZakSaldoPanel({ saldi }: { saldi: MedewerkerZakSaldo[] }) {
+  if (saldi.length === 0) return null;
+  return (
+    <section className="card page-card">
+      <div className="section-header">
+        <h2>Saldo eigenaar · voorgeschoten door medewerkers</h2>
+        <p className="muted">
+          Geld uit eigen zak van een medewerker. Rood tot jullie het hebben terugbetaald, groen als het is vergoed.
+        </p>
+      </div>
+      <div className="owner-table-wrapper">
+        <table className="owner-table">
+          <thead>
+            <tr>
+              <th>Medewerker</th>
+              <th>Valuta</th>
+              <th>Nog terug te betalen</th>
+              <th>Al terugbetaald</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {saldi.map((s) => (
+              <tr
+                key={`${s.medewerkerNaam}-${s.valuta}`}
+                className={`financieel-row-eigenaar-saldo ${s.teBetalen > 0 ? "is-open" : "is-ok"}`}
+              >
+                <td>{s.medewerkerNaam}</td>
+                <td>{s.valuta}</td>
+                <td className={s.teBetalen > 0 ? "financieel-uitgave" : undefined}>
+                  {formatGeldUtil(s.teBetalen, s.valuta)}
+                </td>
+                <td className={s.uitbetaald > 0 && s.teBetalen === 0 ? "financieel-inkomst" : undefined}>
+                  {formatGeldUtil(s.uitbetaald, s.valuta)}
+                </td>
+                <td>
+                  <span className={`financieel-pill ${s.statusClass}`}>{s.statusLabel}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 

@@ -2388,6 +2388,34 @@ a.btn-secondary {
   color: var(--color-success);
 }
 
+.financieel-row-eigenaar-saldo.is-open td {
+  background: color-mix(in srgb, var(--color-danger-bg) 70%, transparent);
+}
+
+.financieel-row-eigenaar-saldo.is-ok td {
+  background: color-mix(in srgb, var(--color-success-bg) 55%, transparent);
+}
+
+.financieel-klant-saldo-hint.eigenaar-saldo-open {
+  color: var(--color-danger);
+  font-weight: 560;
+}
+
+.financieel-klant-saldo-hint.eigenaar-saldo-ok {
+  color: var(--color-success);
+  font-weight: 560;
+}
+
+.form-input.financieel-status-open {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.form-input.financieel-status-ok {
+  border-color: var(--color-success);
+  color: var(--color-success);
+}
+
 .financieel-pill.saldo-mix {
   background: var(--color-info-bg);
   color: var(--color-info);

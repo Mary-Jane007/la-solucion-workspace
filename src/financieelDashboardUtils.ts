@@ -24,6 +24,7 @@ import {
   isMuntenbakPost,
   isValutaOmzetting,
   isOpeningsKas,
+  isMedewerkerZakBetaling,
   isOverdrachtMedewerker,
   medewerkerUitGebruik,
   MUNTENBAK_NAAM,
@@ -400,6 +401,15 @@ export function berekenDashboardKpis(
   const dNetto = deltaPct(h.netto, v.netto);
   const dOpen = deltaPct(h.teOntvangen, v.teOntvangen);
   const dOntv = deltaPct(h.ontvangen, v.ontvangen);
+  const teBetalenMedewerker = kasPosten
+    .filter(
+      (p) =>
+        p.type === "UITGAVE" &&
+        isMedewerkerZakBetaling(p.betalingswijze) &&
+        p.status === "OPEN" &&
+        normalizeValuta(p.valuta) === valuta
+    )
+    .reduce((n, p) => n + p.bedrag, 0);
 
   const kaarten: KpiKaart[] = [
     {
@@ -467,6 +477,15 @@ export function berekenDashboardKpis(
       tone: h.teOntvangen > 0 ? "oranje" : "blauw",
       deltaPct: dOpen,
       deltaLabel: formatDelta(dOpen, true)
+    },
+    {
+      id: "medewerker-zak",
+      label: "Terug te betalen aan medewerkers",
+      waarde: formatGeld(teBetalenMedewerker, valuta),
+      hint: "Voorgeschoten uit eigen zak · saldo eigenaar",
+      tone: teBetalenMedewerker > 0 ? "rood" : "groen",
+      deltaPct: null,
+      deltaLabel: null
     },
     {
       id: "transacties",
@@ -1287,6 +1306,25 @@ export function berekenSignaleringen(
         actie: "Controleer of deze uitgave klopt."
       });
     }
+  }
+
+  const openZak = posten.filter(
+    (p) =>
+      p.type === "UITGAVE" &&
+      isMedewerkerZakBetaling(p.betalingswijze) &&
+      p.status === "OPEN" &&
+      normalizeValuta(p.valuta) === valuta
+  );
+  if (openZak.length > 0) {
+    const totaalZak = openZak.reduce((n, p) => n + p.bedrag, 0);
+    items.push({
+      id: "medewerker-zak-open",
+      ernst: "waarschuwing",
+      datum: openZak[0].datum,
+      onderwerp: "Nog terug te betalen aan medewerkers",
+      uitleg: `${formatGeld(totaalZak, valuta)} voorgeschoten uit eigen zak (${openZak.length} post${openZak.length === 1 ? "" : "en"}).`,
+      actie: "Markeer als terugbetaald als je het hebt vergoed."
+    });
   }
 
   const open = berekenOpenstaandeBetalingen(posten);

@@ -26,6 +26,7 @@ import {
   berekenDossierSaldi,
   berekenGeldBijTotalen,
   berekenKlantSaldi,
+  berekenMedewerkerZakSaldi,
   BETALINGSWIJZE_LABELS,
   dateTimeLocalNaarIso,
   DossierSaldo,
@@ -125,6 +126,7 @@ import {
   InkomstenStats,
   InstellingenPanel,
   KlantbetalingenPanel,
+  MedewerkerZakSaldoPanel,
   KostenPanel,
   OpenstaandPanel,
   OverzichtPanel,
@@ -587,6 +589,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
   const geldBijTotalen = useMemo(() => berekenGeldBijTotalen(gezochtePosten), [gezochtePosten]);
   const klantSaldi = useMemo(() => berekenKlantSaldi(gezochtePosten), [gezochtePosten]);
   const alleKlantSaldi = useMemo(() => berekenKlantSaldi(posten), [posten]);
+  const medewerkerZakSaldi = useMemo(() => berekenMedewerkerZakSaldi(gezochtePosten), [gezochtePosten]);
   const dossierSaldi = useMemo(
     () => berekenDossierSaldi(gezochtePosten, opdrachtenById),
     [gezochtePosten, opdrachtenById]
@@ -1220,6 +1223,9 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                 <p className="muted">Geen posten, wel inzendingen hieronder.</p>
               )}
             </section>
+            {medewerkerZakSaldi.length > 0 && (
+              <MedewerkerZakSaldoPanel saldi={medewerkerZakSaldi} />
+            )}
             {klantSaldi.length > 0 && (
               <KlantbetalingenPanel saldi={klantSaldi} />
             )}
@@ -1278,6 +1284,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
             overzichtDag={overzichtDag}
             onOverzichtDag={setOverzichtDag}
             onOpenTab={(id) => setTab(id as FinancieelTabId)}
+            medewerkerZakSaldi={medewerkerZakSaldi.filter((s) => s.valuta === dashboardValuta)}
           />
         )}
         {!laden && !zoekQuery && tab === "inzendingen" && (
@@ -1324,15 +1331,19 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
           </div>
         )}
         {!laden && !zoekQuery && tab === "uitgaven" && (
-          <section className="card page-card">
-            <div className="section-header"><h2>Uitgaven</h2><p className="muted">Gebruik in het formulier type Uitgave.</p></div>
-            <PostenTabel posten={uitgavenPosten} opdrachtenById={opdrachtenById} onBewerk={startBewerk} onDelete={(id) => void handleDelete(id)} emptyText="Geen uitgaven gevonden." />
-          </section>
+          <div className="fin-panel-stack">
+            <MedewerkerZakSaldoPanel saldi={medewerkerZakSaldi.filter((s) => s.valuta === dashboardValuta)} />
+            <section className="card page-card">
+              <div className="section-header"><h2>Uitgaven</h2><p className="muted">Gebruik in het formulier type Uitgave.</p></div>
+              <PostenTabel posten={uitgavenPosten} opdrachtenById={opdrachtenById} onBewerk={startBewerk} onDelete={(id) => void handleDelete(id)} emptyText="Geen uitgaven gevonden." />
+            </section>
+          </div>
         )}
         {!laden && !zoekQuery && tab === "openstaand" && <OpenstaandPanel rijen={openstaand} valuta={dashboardValuta} />}
         {!laden && !zoekQuery && tab === "facturen" && <FacturenPanel facturen={facturen.filter((f) => f.valuta === dashboardValuta)} />}
         {!laden && !zoekQuery && tab === "klantbetalingen" && (
           <div className="fin-panel-stack">
+            <MedewerkerZakSaldoPanel saldi={medewerkerZakSaldi.filter((s) => s.valuta === dashboardValuta)} />
             <KlantbetalingenPanel saldi={klantSaldi.filter((s) => s.valuta === dashboardValuta)} />
             <section className="card page-card">
               <div className="section-header"><h2>Dossiersaldo’s</h2><p className="muted">Openstaande en betaalde bedragen per gekoppeld dossier.</p></div>
@@ -1462,9 +1473,16 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                 <label className="form-label">Wisselkoers<input className="form-input" inputMode="decimal" placeholder="bijv. 40,5" value={form.wisselkoers} onChange={(e) => setForm({ ...form, wisselkoers: e.target.value })} /></label>
                 <label className="form-label">
                   Status
-                  <select className="form-input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as FinancieelStatus })} disabled={form.type === "KASGELD" || form.type === "OVERDRACHT"}>
+                  <select className={`form-input${eigenZak ? (form.status === "OPEN" ? " financieel-status-open" : " financieel-status-ok") : ""}`} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as FinancieelStatus })} disabled={form.type === "KASGELD" || form.type === "OVERDRACHT"}>
                     {form.type === "KASGELD" ? <option value="BETAALD">{isMuntenbakPost(form) ? "In muntenbak" : "In kas"}</option> : form.type === "OVERDRACHT" ? <option value="BETAALD">Overgedragen</option> : eigenZak ? <><option value="OPEN">Nog terug te betalen aan medewerker</option><option value="BETAALD">Terugbetaald aan medewerker</option></> : form.type === "INKOMST" ? <><option value="OPEN">Nog te betalen door klant</option><option value="BETAALD">Betaald door klant</option></> : <><option value="OPEN">Nog te betalen door ons</option><option value="BETAALD">Uitbetaald</option></>}
                   </select>
+                  {eigenZak && (
+                    <p className={`financieel-klant-saldo-hint ${form.status === "OPEN" ? "eigenaar-saldo-open" : "eigenaar-saldo-ok"}`}>
+                      {form.status === "OPEN"
+                        ? "Saldo bij de eigenaar: rood, nog terug te betalen aan de medewerker."
+                        : "Saldo bij de eigenaar: groen, terugbetaald aan de medewerker."}
+                    </p>
+                  )}
                 </label>
                 <label className="form-label financieel-span-2">
                   Dossier (opdracht)
@@ -1504,7 +1522,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                     <span className="help-text">Pinpas gaat naar de bank, niet in kas bij een medewerker.</span>
                   )}
                   {eigenZak && (
-                    <span className="help-text">Niet van de kas: de medewerker betaalde uit eigen zak. Zet de status op Nog terug te betalen tot jullie het hebben vergoed.</span>
+                    <span className="help-text">Niet van de kas: dit is een saldo bij de eigenaar. Rood tot het is terugbetaald, groen als je de status op Terugbetaald zet.</span>
                   )}
                 </label>
                 {toontBank ? (

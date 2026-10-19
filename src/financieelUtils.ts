@@ -187,6 +187,15 @@ export type DossierSaldo = SaldoCijfers & {
   statusClass: string;
 };
 
+/** Saldo van de eigenaar tegenover een medewerker die uit eigen zak voorschoot. */
+export type MedewerkerZakSaldo = SaldoCijfers & {
+  medewerkerNaam: string;
+  valuta: FinancieelValuta;
+  netto: number;
+  statusLabel: string;
+  statusClass: string;
+};
+
 export type FinancieelTotalen = {
   valuta: FinancieelValuta;
   inkomsten: number;
@@ -652,6 +661,24 @@ export function saldoStatus(s: SaldoCijfers): { statusLabel: string; statusClass
   return { statusLabel: "Alles betaald", statusClass: "saldo-ok" };
 }
 
+export function medewerkerZakSaldoStatus(s: Pick<SaldoCijfers, "teBetalen">): {
+  statusLabel: string;
+  statusClass: string;
+} {
+  if (s.teBetalen > 0) {
+    return { statusLabel: "Nog terug te betalen", statusClass: "saldo-te-betalen" };
+  }
+  return { statusLabel: "Terugbetaald", statusClass: "saldo-ok" };
+}
+
+/** Rood/groen zoals klantsaldo, maar voor voorgeschoten eigen-zak-uitgaven bij de eigenaar. */
+export function postEigenaarSaldoClass(
+  p: Pick<FinancieelPost, "betalingswijze" | "status">
+): "saldo-te-betalen" | "saldo-ok" | null {
+  if (!isMedewerkerZakBetaling(p.betalingswijze)) return null;
+  return p.status === "BETAALD" ? "saldo-ok" : "saldo-te-betalen";
+}
+
 function leegSaldo(): SaldoCijfers {
   return { teOntvangen: 0, ontvangen: 0, teBetalen: 0, uitbetaald: 0 };
 }
@@ -1017,6 +1044,7 @@ export function berekenKlantSaldi(posten: FinancieelPost[]): KlantSaldo[] {
   const map = new Map<string, SaldoCijfers & { klantNaam: string; valuta: FinancieelValuta }>();
 
   for (const p of posten) {
+    if (isMedewerkerZakBetaling(p.betalingswijze)) continue;
     const valuta = normalizeValuta(p.valuta);
     const naam = (p.klantNaam || "").trim();
     if (naam) {
@@ -1070,6 +1098,7 @@ export function berekenDossierSaldi(
   >();
 
   for (const p of posten) {
+    if (isMedewerkerZakBetaling(p.betalingswijze)) continue;
     const id = (p.opdrachtId || "").trim();
     if (!id) continue;
     const valuta = normalizeValuta(p.valuta);
@@ -1122,6 +1151,32 @@ export function berekenDossierSaldi(
       if (aOpen !== bOpen) return bOpen - aOpen;
       const label = a.dossierLabel.localeCompare(b.dossierLabel, "nl");
       if (label !== 0) return label;
+      return a.valuta.localeCompare(b.valuta);
+    });
+}
+
+export function berekenMedewerkerZakSaldi(posten: FinancieelPost[]): MedewerkerZakSaldo[] {
+  const map = new Map<string, SaldoCijfers & { medewerkerNaam: string; valuta: FinancieelValuta }>();
+
+  for (const p of posten) {
+    if (p.type !== "UITGAVE" || !isMedewerkerZakBetaling(p.betalingswijze)) continue;
+    const valuta = normalizeValuta(p.valuta);
+    const naam = (p.afgehandeldDoorNaam || "").trim() || "Onbekende medewerker";
+    const key = `${naam.toLowerCase()}||${valuta}`;
+    const bestaand = map.get(key) || { medewerkerNaam: naam, valuta, ...leegSaldo() };
+    map.set(key, { ...telPostOp(bestaand, p), medewerkerNaam: naam, valuta });
+  }
+
+  return [...map.values()]
+    .map((s) => ({
+      ...s,
+      netto: -s.teBetalen,
+      ...medewerkerZakSaldoStatus(s)
+    }))
+    .sort((a, b) => {
+      if (a.teBetalen !== b.teBetalen) return b.teBetalen - a.teBetalen;
+      const naam = a.medewerkerNaam.localeCompare(b.medewerkerNaam, "nl");
+      if (naam !== 0) return naam;
       return a.valuta.localeCompare(b.valuta);
     });
 }
