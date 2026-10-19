@@ -137,6 +137,8 @@ import {
 } from "./financieel/FinancieelDashboardPanels";
 import { FinancieelInzendingenPanel } from "./financieel/FinancieelInzendingenPanel";
 import { FinancieelFotos } from "./financieel/InzendingBijlagen";
+import { BestandDropzone } from "./BestandDropzone";
+import { bestandenUitLijst } from "../bestandUtils";
 import { inzendingMatchtZoekterm } from "../financieelInzendingUtils";
 import {
   downloadFinancieelBackupBestand,
@@ -625,9 +627,9 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       for (const preview of fotoPreviews) URL.revokeObjectURL(preview.url);
     };
   }, [fotoPreviews]);
-  const handleFotos = (lijst: FileList | null) => {
-    if (!lijst?.length) return;
-    const gekozen = Array.from(lijst);
+  const handleFotos = (lijst: FileList | File[] | null) => {
+    const gekozen = bestandenUitLijst(lijst);
+    if (!gekozen.length) return;
     const teGroot = gekozen.find((file) => file.size > MAX_POST_FOTO_BYTES);
     if (teGroot) {
       setFout(`“${teGroot.name}” is groter dan 8 MB.`);
@@ -2212,19 +2214,14 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                 <label className="form-label financieel-span-2">Notities<textarea className="form-input" rows={2} value={form.notities} onChange={(e) => setForm({ ...form, notities: e.target.value })} /></label>
                 <div className="form-label financieel-span-2">
                   Foto’s bijvoegen
-                  <input
-                    type="file"
-                    className="form-input"
+                  <BestandDropzone
                     accept="image/*"
                     multiple
-                    onChange={(e) => {
-                      handleFotos(e.target.files);
-                      e.target.value = "";
-                    }}
+                    knopLabel="Foto’s kiezen"
+                    titel="Sleep foto’s hierheen"
+                    hint={`Bon, screenshot of kasfoto. JPG/PNG/WEBP, max. ${MAX_POST_FOTOS} stuks, 8 MB per foto.`}
+                    onBestanden={handleFotos}
                   />
-                  <span className="help-text">
-                    Bon, screenshot of kasfoto. JPG/PNG/WEBP, max. {MAX_POST_FOTOS} stuks, 8 MB per foto.
-                  </span>
                   {bewerkId && (
                     <FinancieelFotos
                       bijlagen={posten.find((p) => p.id === bewerkId)?.bijlagen}

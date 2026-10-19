@@ -56,6 +56,18 @@ export function AppLayout({
   const sidebarOpen = !fullscreen || menuOpen;
 
   useEffect(() => {
+    const voorkomBrowserOpenen = (e: DragEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("dragover", voorkomBrowserOpenen);
+    window.addEventListener("drop", voorkomBrowserOpenen);
+    return () => {
+      window.removeEventListener("dragover", voorkomBrowserOpenen);
+      window.removeEventListener("drop", voorkomBrowserOpenen);
+    };
+  }, []);
+
+  useEffect(() => {
     const mq = window.matchMedia("(max-width: 960px)");
     const sync = () => {
       const nuCompact = mq.matches;

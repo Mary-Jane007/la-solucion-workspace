@@ -28,6 +28,8 @@ import {
   tellingNaarPayload,
   verwachtRestant
 } from "../kasDag";
+import { BestandDropzone } from "./BestandDropzone";
+import { bestandenUitLijst } from "../bestandUtils";
 import {
   FINANCIEEL_VASTE_MEDEWERKERS,
   formatDatumTijd,
@@ -93,7 +95,6 @@ export function MedewerkerFinancieelPagina({ gebruiker, onNaarHelp }: Props) {
   const [succes, setSucces] = useState<string | null>(null);
   const [toonOuder, setToonOuder] = useState(false);
   const cameraRef = useRef<HTMLInputElement | null>(null);
-  const albumRef = useRef<HTMLInputElement | null>(null);
   const bladBedragRef = useRef<HTMLInputElement | null>(null);
   const overigTegel = VASTE_ANDERE_TEGELS.find((tegel) => tegel.id === "overig")!;
 
@@ -171,9 +172,9 @@ export function MedewerkerFinancieelPagina({ gebruiker, onNaarHelp }: Props) {
     setBlad({ tegel, bedrag: "", extra: "", notitie: "", fotos: [] });
   };
 
-  const voegFotosToe = (lijst: FileList | null, huidig: File[]) => {
-    if (!lijst?.length) return huidig;
-    const gekozen = Array.from(lijst);
+  const voegFotosToe = (lijst: FileList | File[] | null, huidig: File[]) => {
+    const gekozen = bestandenUitLijst(lijst);
+    if (!gekozen.length) return huidig;
     const teGroot = gekozen.find((file) => file.size > MAX_KAS_FOTO_BYTES);
     if (teGroot) {
       setFout(`“${teGroot.name}” is groter dan 8 MB. Kies een kleinere foto.`);
@@ -704,9 +705,6 @@ export function MedewerkerFinancieelPagina({ gebruiker, onNaarHelp }: Props) {
                 <button type="button" className="kasdag-mini" onClick={() => cameraRef.current?.click()}>
                   Foto maken
                 </button>
-                <button type="button" className="kasdag-mini" onClick={() => albumRef.current?.click()}>
-                  Uit album
-                </button>
               </div>
               <input
                 ref={cameraRef}
@@ -721,18 +719,15 @@ export function MedewerkerFinancieelPagina({ gebruiker, onNaarHelp }: Props) {
                   e.target.value = "";
                 }}
               />
-              <input
-                ref={albumRef}
-                type="file"
+              <BestandDropzone
+                compact
                 accept="image/*"
                 multiple
-                hidden
-                onChange={(e) => {
-                  setBlad((huidig) =>
-                    huidig ? { ...huidig, fotos: voegFotosToe(e.target.files, huidig.fotos) } : huidig
-                  );
-                  e.target.value = "";
-                }}
+                knopLabel="Uit album"
+                titel="Sleep de foto hierheen"
+                onBestanden={(files) =>
+                  setBlad((huidig) => (huidig ? { ...huidig, fotos: voegFotosToe(files, huidig.fotos) } : huidig))
+                }
               />
               {bladPreviews.length > 0 && (
                 <div className="kasdag-previews">

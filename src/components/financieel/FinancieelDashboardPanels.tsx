@@ -1,5 +1,5 @@
-import { useRef } from "react";
 import { FinancieelPost, FinancieelValuta } from "../../api";
+import { BestandDropzone } from "../BestandDropzone";
 import {
   AfsluitingRapport,
   AgingBucket,
@@ -989,7 +989,6 @@ export function RapportagesPanel({
   backupMelding: string | null;
   disabled: boolean;
 }) {
-  const restoreInputRef = useRef<HTMLInputElement>(null);
   return (
     <div className="fin-panel-stack">
       <section className="card page-card">
@@ -1010,26 +1009,18 @@ export function RapportagesPanel({
           >
             {backupBezig ? "Bezig..." : "Backup opslaan"}
           </button>
-          <button
-            type="button"
-            className="btn-secondary"
-            disabled={backupBezig}
-            onClick={() => restoreInputRef.current?.click()}
-          >
-            Terugzetten uit bestand
-          </button>
-          <input
-            ref={restoreInputRef}
-            type="file"
-            accept="application/json,.json"
-            hidden
-            onChange={(e) => {
-              const bestand = e.target.files?.[0];
-              e.target.value = "";
-              if (bestand) onBackupTerugzetten(bestand);
-            }}
-          />
         </div>
+        <BestandDropzone
+          accept="application/json,.json"
+          multiple={false}
+          disabled={backupBezig}
+          knopLabel="Terugzetten uit bestand"
+          titel="Sleep het backupbestand hierheen"
+          hint="Alleen een eerder opgeslagen backupbestand (.json)."
+          onBestanden={(files) => {
+            if (files[0]) onBackupTerugzetten(files[0]);
+          }}
+        />
         {backupMelding && <p className="muted" style={{ marginTop: 10 }}>{backupMelding}</p>}
         <p className="muted" style={{ marginTop: 10 }}>
           Excel, Word en PDF zijn alleen om te bekijken of af te drukken. Alleen dit backupbestand

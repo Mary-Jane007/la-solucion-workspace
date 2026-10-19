@@ -175,7 +175,7 @@ export const HELP_VIDEOS: Record<string, HelpVideoGids> = {
       {
         id: "toevoegen",
         titel: "Bestanden kiezen",
-        ondertitel: "Scroll naar Documenten toevoegen. Kies een of meerdere bestanden: PDF, foto, Word, en meer.",
+        ondertitel: "Scroll naar Documenten toevoegen. Sleep de bestanden in het vak, of tik op Bestand kiezen. PDF, foto of Word mag.",
         actie: "Documenten toevoegen"
       },
       {
@@ -403,7 +403,7 @@ export const HELP_VIDEOS: Record<string, HelpVideoGids> = {
         id: "kiezen",
         titel: "Kies het bestand",
         ondertitel:
-          "Scroll naar Documenten toevoegen. Tik op Bestand kiezen. Kies een of meerdere bestanden: PDF, foto of Word.",
+          "Scroll naar Documenten toevoegen. Sleep de bestanden in het vak, of tik op Bestand kiezen. PDF, foto of Word mag.",
         vraag: "Documenten toevoegen",
         knoppen: { primair: "Bestand kiezen" }
       },

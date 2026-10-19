@@ -7,7 +7,10 @@ const MIME_PER_EXT: Record<string, string> = {
   bmp: "image/bmp",
   heic: "image/heic",
   heif: "image/heif",
-  pdf: "application/pdf"
+  pdf: "application/pdf",
+  json: "application/json",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 };
 
 export function normaliseerMime(mime?: string | null): string {
@@ -20,6 +23,39 @@ export function normaliseerMime(mime?: string | null): string {
 export function mimeUitBestandsnaam(naam: string): string {
   const ext = (String(naam || "").match(/\.([a-z0-9]{1,8})$/i) || [])[1];
   return ext ? MIME_PER_EXT[ext.toLowerCase()] || "" : "";
+}
+
+export function bestandenUitLijst(lijst: FileList | File[] | null | undefined): File[] {
+  if (!lijst) return [];
+  return Array.isArray(lijst) ? lijst.filter(Boolean) : Array.from(lijst);
+}
+
+export function bestandenUitDataTransfer(data: DataTransfer | null | undefined): File[] {
+  if (!data) return [];
+  const uitFiles = bestandenUitLijst(data.files);
+  if (uitFiles.length) return uitFiles;
+  const files: File[] = [];
+  for (const item of Array.from(data.items || [])) {
+    if (item.kind !== "file") continue;
+    const file = item.getAsFile();
+    if (file) files.push(file);
+  }
+  return files;
+}
+
+export function bestandPastBijAccept(file: File, accept?: string | null): boolean {
+  const regels = String(accept || "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  if (!regels.length) return true;
+  const naam = file.name.toLowerCase();
+  const type = (file.type || mimeUitBestandsnaam(file.name)).toLowerCase();
+  return regels.some((regel) => {
+    if (regel.startsWith(".")) return naam.endsWith(regel);
+    if (regel.endsWith("/*")) return type.startsWith(regel.slice(0, -1));
+    return type === regel;
+  });
 }
 
 export function mimeVanBestand(naam: string, mime?: string | null): string {

@@ -2321,7 +2321,54 @@ a.btn-secondary {
   gap: 8px;
 }
 
-.documenten-file-input {
+.bestand-dropzone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 16px;
+  border: 1.5px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-item-bg);
+  color: var(--color-text-muted);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.bestand-dropzone:hover {
+  border-color: var(--color-link);
+  color: var(--color-text);
+}
+
+.bestand-dropzone.is-sleep {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-text);
+}
+
+.bestand-dropzone.is-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.bestand-dropzone-titel {
+  margin: 0;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.bestand-dropzone-hint {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.bestand-dropzone-compact {
+  padding: 12px 10px;
+}
+
+.bestand-dropzone-input {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -2333,10 +2380,13 @@ a.btn-secondary {
   border: 0;
 }
 
-.documenten-acties {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+.form-label .bestand-dropzone {
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.financieel-export-actions + .bestand-dropzone {
+  margin-top: 12px;
 }
 
 .documenten-wachtrij {

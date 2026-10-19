@@ -68,7 +68,7 @@ const HELP_ONDERWERPEN: HelpStap[] = [
     stappen: [
       "Open een toegewezen opdracht (eigenaar: elke opdracht).",
       "Scroll in het detailvenster naar Documenten toevoegen.",
-      "Kies een of meerdere bestanden (PDF, foto, Word, enz.).",
+      "Sleep de bestanden in het vak, of tik op Bestand kiezen (PDF, foto, Word, enz.).",
       "Klik op Opslaan om de bestanden te koppelen.",
       "Klik op Bekijken: foto’s blijven in de viewer. PDF’s openen in Chrome.",
       "Alle bijlagen van opdrachten vind je ook terug onder Documenten in het menu (eigenaar)."
@@ -128,7 +128,7 @@ const HELP_ONDERWERPEN: HelpStap[] = [
       "Bekijk eerst de video hierboven. Ondertitels staan altijd aan; zet geluid aan voor gesproken uitleg.",
       "Ga naar Opdrachtenbord of Mijn opdrachten en tik op de kaart van de klant.",
       "Scroll in het detailvenster naar Documenten toevoegen.",
-      "Tik op Bestand kiezen. Kies een of meerdere bestanden: PDF, foto of Word.",
+      "Sleep de bestanden in het vak, of tik op Bestand kiezen. PDF, foto of Word mag.",
       "Pas de bestandsnaam aan als dat duidelijker is. Tik Verwijderen als het het verkeerde bestand is.",
       "Tik op Opslaan. Pas dan is het bestand gekoppeld aan de opdracht.",
       "Tik op Bekijken: foto’s blijven in de app. PDF’s openen in Chrome.",
