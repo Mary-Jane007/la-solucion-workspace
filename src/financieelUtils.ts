@@ -20,7 +20,8 @@ export const BETALINGSWIJZE_LABELS: Record<FinancieelBetalingswijze, string> = {
   OPGEHAALD: "Opgehaald door medewerker (kas)",
   PINPAS: "Pinpas (bank, niet in kas)",
   OVERGEMAAKT: "Overmaking / deposit (bank)",
-  GESTORT: "Gestort op bank"
+  GESTORT: "Gestort op bank",
+  MEDEWERKER: "Betaald door medewerker (eigen zak, terugbetalen)"
 };
 
 export type FinancieelKasEffect = "NEE" | "ERBIJ" | "AF";
@@ -33,6 +34,11 @@ export const KAS_EFFECT_LABELS: Record<FinancieelKasEffect, string> = {
 
 export function isPinpasBetaling(wijze?: string | null): boolean {
   return String(wijze || "").toUpperCase() === "PINPAS";
+}
+
+/** Uitgave uit eigen zak van de medewerker, niet van de kas; moet terugbetaald worden. */
+export function isMedewerkerZakBetaling(wijze?: string | null): boolean {
+  return String(wijze || "").toUpperCase() === "MEDEWERKER";
 }
 
 export function isBankBetaling(wijze?: string | null): boolean {
@@ -48,6 +54,10 @@ export function gaatViaBankrekening(wijze?: string | null): boolean {
 export function isContantBetaling(wijze?: string | null): boolean {
   const v = String(wijze || "").toUpperCase();
   return v === "" || v === "OPGEHAALD";
+}
+
+export function vraagtMedewerkerNaam(wijze?: string | null): boolean {
+  return isContantBetaling(wijze) || isMedewerkerZakBetaling(wijze);
 }
 
 export function normalizeKasEffect(waarde?: string | null): FinancieelKasEffect | "" {
@@ -66,12 +76,12 @@ export function bankKasRichting(p: {
   return effect === "ERBIJ" || effect === "AF" ? effect : null;
 }
 
-/** Pinpas nooit in kas. Overmaking/storting alleen als je zelf Erbij of Af kiest. */
+/** Pinpas en eigen zak nooit in kas. Overmaking/storting alleen als je zelf Erbij of Af kiest. */
 export function teltMeeInMedewerkerKas(p: {
   betalingswijze?: string | null;
   kasEffect?: string | null;
 }): boolean {
-  if (isPinpasBetaling(p.betalingswijze)) return false;
+  if (isPinpasBetaling(p.betalingswijze) || isMedewerkerZakBetaling(p.betalingswijze)) return false;
   if (isBankBetaling(p.betalingswijze)) return bankKasRichting(p) != null;
   return true;
 }
@@ -1119,6 +1129,9 @@ export function berekenDossierSaldi(
 export function postStatusLabel(p: FinancieelPost): string {
   if (p.type === "KASGELD") return "In kas";
   if (p.type === "OVERDRACHT") return "Overgedragen";
+  if (isMedewerkerZakBetaling(p.betalingswijze)) {
+    return p.status === "BETAALD" ? "Terugbetaald aan medewerker" : "Nog terug te betalen aan medewerker";
+  }
   if (p.status === "BETAALD") {
     return p.type === "INKOMST" ? "Betaald door klant" : "Uitbetaald";
   }
@@ -1134,6 +1147,12 @@ export function betalingsLabel(p: FinancieelPost): string {
     return p.afgehandeldDoorNaam
       ? `Opgehaald · ${p.afgehandeldDoorNaam}`
       : BETALINGSWIJZE_LABELS.OPGEHAALD;
+  }
+  if (wijze === "MEDEWERKER") {
+    const terug = p.status === "BETAALD" ? "terugbetaald" : "nog terug te betalen";
+    return p.afgehandeldDoorNaam
+      ? `Eigen zak · ${p.afgehandeldDoorNaam} · ${terug}`
+      : `Betaald door medewerker · ${terug}`;
   }
   const bank = (p.bank || "").trim();
   const kas = bankKasRichting(p);

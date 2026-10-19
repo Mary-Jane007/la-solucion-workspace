@@ -266,7 +266,7 @@ export async function downloadBestand(bestandId: string, bestandsnaam: string): 
 export type FinancieelType = "INKOMST" | "UITGAVE" | "KASGELD" | "OVERDRACHT";
 export type FinancieelStatus = "OPEN" | "BETAALD";
 export type FinancieelValuta = "EUR" | "USD" | "SRD" | "XCG";
-export type FinancieelBetalingswijze = "OPGEHAALD" | "PINPAS" | "OVERGEMAAKT" | "GESTORT";
+export type FinancieelBetalingswijze = "OPGEHAALD" | "PINPAS" | "OVERGEMAAKT" | "GESTORT" | "MEDEWERKER";
 export type FinancieelKasEffect = "NEE" | "ERBIJ" | "AF";
 export type FinancieelGebruikSoort = "AF" | "ERBIJ";
 

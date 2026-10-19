@@ -66,8 +66,9 @@ import {
   echteMedewerkerUserId,
   voegVasteMedewerkersToe,
   isBankBetaling,
-  isContantBetaling,
+  isMedewerkerZakBetaling,
   isPinpasBetaling,
+  vraagtMedewerkerNaam,
   KAS_EFFECT_LABELS,
   normalizeKasEffect,
   SaldoCijfers,
@@ -595,16 +596,18 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
     [alleKlantSaldi, form.klantNaam, form.valuta]
   );
 
-  const toontMedewerker = isContantBetaling(form.betalingswijze);
+  const toontMedewerker = vraagtMedewerkerNaam(form.betalingswijze);
   const toontBank = isBankBetaling(form.betalingswijze);
   const pinpas = isPinpasBetaling(form.betalingswijze);
+  const eigenZak = isMedewerkerZakBetaling(form.betalingswijze);
+  const nietInKas = pinpas || eigenZak;
   const kasEffect = toontBank ? normalizeKasEffect(form.kasEffect) || "NEE" : "";
   const toontKasErbij =
     form.type === "OVERDRACHT" ||
-    (!isMuntenbakPost(form) && !pinpas && (toontBank ? kasEffect === "ERBIJ" : form.type !== "UITGAVE"));
+    (!isMuntenbakPost(form) && !nietInKas && (toontBank ? kasEffect === "ERBIJ" : form.type !== "UITGAVE"));
   const toontKasAf =
     form.type === "OVERDRACHT" ||
-    (!pinpas && (toontBank ? kasEffect === "AF" : form.type === "UITGAVE"));
+    (!nietInKas && (toontBank ? kasEffect === "AF" : form.type === "UITGAVE"));
   const resetForm = () => {
     setForm(leegFormulier(form.valuta));
     setBewerkId(null);
@@ -810,7 +813,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       : undefined;
     const wijze = form.betalingswijze || null;
     const medewerkerNaam =
-      isContantBetaling(wijze)
+      vraagtMedewerkerNaam(wijze)
         ? medewerker?.name || form.afgehandeldDoorNaam.trim()
         : "";
     const geldBijPersoon = form.geldBijUserId
@@ -839,6 +842,10 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
     }
     if (toontBank && kasEffect === "AF" && !geldVanNaam) {
       setFout("Kies uit wiens kas dit bedrag af gaat.");
+      return;
+    }
+    if (eigenZak && !medewerkerNaam) {
+      setFout("Kies welke medewerker uit eigen zak heeft betaald. Dat bedrag moet terugbetaald worden.");
       return;
     }
     const omschrijving =
@@ -1001,7 +1008,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       klantNaam: (gekozen?.klantNaam || form.klantNaam).trim(),
       opdrachtId: form.opdrachtId || null,
       afgehandeldDoorUserId:
-        isContantBetaling(wijze) ? echteMedewerkerUserId(form.afgehandeldDoorUserId) : null,
+        vraagtMedewerkerNaam(wijze) ? echteMedewerkerUserId(form.afgehandeldDoorUserId) : null,
       afgehandeldDoorNaam: medewerkerNaam,
       betalingswijze: wijze,
       kasEffect: toontBank ? kasEffect || "NEE" : null,
@@ -1418,11 +1425,13 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                       return;
                     }
                     const type = gekozen as FinancieelType;
+                    const blijftEigenZak = type === "UITGAVE" && isMedewerkerZakBetaling(form.betalingswijze);
                     setForm({
                       ...form,
                       type,
                       status: type === "KASGELD" || type === "OVERDRACHT" ? "BETAALD" : form.status,
-                      categorie: isOpeningsKas(form) || isMuntenbakPost(form) ? "" : form.categorie
+                      categorie: isOpeningsKas(form) || isMuntenbakPost(form) ? "" : form.categorie,
+                      betalingswijze: blijftEigenZak ? form.betalingswijze : isMedewerkerZakBetaling(form.betalingswijze) ? "" : form.betalingswijze
                     });
                   }}>
                     <option value="INKOMST">Inkomst</option>
@@ -1454,7 +1463,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                 <label className="form-label">
                   Status
                   <select className="form-input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as FinancieelStatus })} disabled={form.type === "KASGELD" || form.type === "OVERDRACHT"}>
-                    {form.type === "KASGELD" ? <option value="BETAALD">{isMuntenbakPost(form) ? "In muntenbak" : "In kas"}</option> : form.type === "OVERDRACHT" ? <option value="BETAALD">Overgedragen</option> : form.type === "INKOMST" ? <><option value="OPEN">Nog te betalen door klant</option><option value="BETAALD">Betaald door klant</option></> : <><option value="OPEN">Nog te betalen door ons</option><option value="BETAALD">Uitbetaald</option></>}
+                    {form.type === "KASGELD" ? <option value="BETAALD">{isMuntenbakPost(form) ? "In muntenbak" : "In kas"}</option> : form.type === "OVERDRACHT" ? <option value="BETAALD">Overgedragen</option> : eigenZak ? <><option value="OPEN">Nog terug te betalen aan medewerker</option><option value="BETAALD">Terugbetaald aan medewerker</option></> : form.type === "INKOMST" ? <><option value="OPEN">Nog te betalen door klant</option><option value="BETAALD">Betaald door klant</option></> : <><option value="OPEN">Nog te betalen door ons</option><option value="BETAALD">Uitbetaald</option></>}
                   </select>
                 </label>
                 <label className="form-label financieel-span-2">
@@ -1470,30 +1479,38 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                     const betalingswijze = e.target.value as "" | FinancieelBetalingswijze;
                     const bank = isBankBetaling(betalingswijze);
                     const pin = isPinpasBetaling(betalingswijze);
+                    const zak = isMedewerkerZakBetaling(betalingswijze);
+                    const nietKas = pin || zak;
                     setForm({
                       ...form,
                       betalingswijze,
                       kasEffect: bank ? form.kasEffect || "NEE" : "",
                       bank: bank ? form.bank : "",
-                      afgehandeldDoorUserId: isContantBetaling(betalingswijze) ? form.afgehandeldDoorUserId : "",
-                      afgehandeldDoorNaam: isContantBetaling(betalingswijze) ? form.afgehandeldDoorNaam : "",
-                      geldVanUserId: pin ? "" : form.geldVanUserId,
-                      geldVanNaam: pin ? "" : form.geldVanNaam,
-                      geldBijUserId: pin && form.type !== "OVERDRACHT" ? "" : form.geldBijUserId,
-                      geldBijNaam: pin && form.type !== "OVERDRACHT" ? "" : form.geldBijNaam
+                      status: zak ? "OPEN" : form.status,
+                      afgehandeldDoorUserId: vraagtMedewerkerNaam(betalingswijze) ? form.afgehandeldDoorUserId : "",
+                      afgehandeldDoorNaam: vraagtMedewerkerNaam(betalingswijze) ? form.afgehandeldDoorNaam : "",
+                      geldVanUserId: nietKas ? "" : form.geldVanUserId,
+                      geldVanNaam: nietKas ? "" : form.geldVanNaam,
+                      geldBijUserId: nietKas && form.type !== "OVERDRACHT" ? "" : form.geldBijUserId,
+                      geldBijNaam: nietKas && form.type !== "OVERDRACHT" ? "" : form.geldBijNaam
                     });
                   }}>
                     <option value="">— Niet gekozen —</option>
-                    {(Object.keys(BETALINGSWIJZE_LABELS) as FinancieelBetalingswijze[]).map((wijze) => <option key={wijze} value={wijze}>{BETALINGSWIJZE_LABELS[wijze]}</option>)}
+                    {(Object.keys(BETALINGSWIJZE_LABELS) as FinancieelBetalingswijze[])
+                      .filter((wijze) => wijze !== "MEDEWERKER" || form.type === "UITGAVE")
+                      .map((wijze) => <option key={wijze} value={wijze}>{BETALINGSWIJZE_LABELS[wijze]}</option>)}
                   </select>
                   {pinpas && (
                     <span className="help-text">Pinpas gaat naar de bank, niet in kas bij een medewerker.</span>
+                  )}
+                  {eigenZak && (
+                    <span className="help-text">Niet van de kas: de medewerker betaalde uit eigen zak. Zet de status op Nog terug te betalen tot jullie het hebben vergoed.</span>
                   )}
                 </label>
                 {toontBank ? (
                   <label className="form-label">Bank (Suriname)<select className="form-input" value={form.bank} onChange={(e) => setForm({ ...form, bank: e.target.value })}><option value="">— Kies bank —</option>{SURINAAME_BANKEN.map((bank) => <option key={bank} value={bank}>{bank}</option>)}</select></label>
                 ) : (
-                  <label className="form-label">Medewerker<select className="form-input" value={form.afgehandeldDoorUserId} onChange={(e) => {
+                  <label className="form-label">{eigenZak ? "Medewerker die heeft voorgeschoten" : "Medewerker"}<select className="form-input" value={form.afgehandeldDoorUserId} onChange={(e) => {
                     const id = e.target.value;
                     const medewerker = medewerkerOpties.find((m) => m.id === id);
                     setForm({ ...form, afgehandeldDoorUserId: id, afgehandeldDoorNaam: medewerker?.name || "", betalingswijze: form.betalingswijze || "OPGEHAALD" });

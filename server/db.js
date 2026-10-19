@@ -217,7 +217,7 @@ async function migrate() {
         add constraint financiele_posten_betalingswijze_check
         check (
           betalingswijze is null
-          or betalingswijze in ('OPGEHAALD', 'OVERGEMAAKT', 'GESTORT', 'PINPAS')
+          or betalingswijze in ('OPGEHAALD', 'OVERGEMAAKT', 'GESTORT', 'PINPAS', 'MEDEWERKER')
         );
     exception
       when duplicate_object then null;
