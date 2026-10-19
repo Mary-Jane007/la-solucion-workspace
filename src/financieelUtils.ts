@@ -105,6 +105,21 @@ export function echteMedewerkerUserId(id?: string | null): string | null {
   return id;
 }
 
+/**
+ * Eén persoon, één vak: groepeer op naam.
+ * Anders splitsen posten met login-id en posten met alleen “Vanessa” in twee vakken.
+ */
+export function persoonGroepSleutel(naam?: string | null, userId?: string | null): string {
+  const n = String(naam || "").trim().toLowerCase();
+  if (n && n !== "onbekend") return n;
+  const raw = String(userId || "").trim();
+  if (isVasteMedewerkerSelectId(raw)) {
+    const fromId = raw.slice(VASTE_MEDEWERKER_ID_PREFIX.length).trim().toLowerCase();
+    if (fromId) return fromId;
+  }
+  return raw || "onbekend";
+}
+
 export type FinancieelMedewerkerOptie = {
   id: string;
   name: string;
@@ -766,9 +781,15 @@ type GeldPersoon = { naam: string; userId: string | null };
 
 function geldPersoon(naam?: string | null, userId?: string | null): GeldPersoon | null {
   const n = (naam || "").trim();
-  const id = (userId || "").trim() || null;
-  if (!n && !id) return null;
-  return { naam: n || "Onbekend", userId: id };
+  const rawId = (userId || "").trim() || null;
+  const id = echteMedewerkerUserId(rawId);
+  const naamUitId =
+    !n && rawId && isVasteMedewerkerSelectId(rawId)
+      ? rawId.slice(VASTE_MEDEWERKER_ID_PREFIX.length).trim()
+      : "";
+  const weergave = n || naamUitId;
+  if (!weergave && !id) return null;
+  return { naam: weergave || "Onbekend", userId: id };
 }
 
 export function geldVanPersoon(p: FinancieelPost): GeldPersoon | null {
@@ -794,7 +815,7 @@ function geldBijIdentiteit(p: FinancieelPost): GeldPersoon | null {
 }
 
 function persoonSleutel(wie: GeldPersoon, valuta: FinancieelValuta): string {
-  return `${wie.userId || wie.naam.toLowerCase()}||${valuta}`;
+  return `${persoonGroepSleutel(wie.naam, wie.userId)}||${valuta}`;
 }
 
 function bumpPersoon(

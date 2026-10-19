@@ -32,6 +32,7 @@ import {
   normalizeValuta,
   omzettingDoelBedrag,
   openstaandSaldoBedrag,
+  persoonGroepSleutel,
   postStatusLabel,
   teltMeeInMedewerkerKas,
   totaalKlantBetalingViaRegels,
@@ -1647,7 +1648,7 @@ export type FollowMoneyDag = {
 };
 
 function followSleutel(naam: string, userId: string | null): string {
-  return (userId || naam.trim().toLowerCase() || "onbekend").toString();
+  return persoonGroepSleutel(naam, userId);
 }
 
 function isCashBeweging(p: FinancieelPost): boolean {
@@ -1697,7 +1698,7 @@ function followKasSaldo(saldo: number): number {
 function bumpFollowSaldo(saldi: Map<string, FollowSaldo>, wie: { naam: string; userId: string | null }, delta: number) {
   const key = followSleutel(wie.naam, wie.userId);
   const cur = saldi.get(key) || { naam: wie.naam, saldo: 0 };
-  if (!cur.naam || cur.naam === "Onbekend") cur.naam = wie.naam;
+  if (!cur.naam || cur.naam === "Onbekend" || cur.naam === wie.userId) cur.naam = wie.naam;
   cur.saldo = geldRond(cur.saldo + delta);
   saldi.set(key, cur);
 }
