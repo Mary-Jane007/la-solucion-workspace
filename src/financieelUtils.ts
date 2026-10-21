@@ -78,9 +78,12 @@ export function bankKasRichting(p: {
 
 /** Pinpas en eigen zak nooit in kas. Overmaking/storting alleen als je zelf Erbij of Af kiest. */
 export function teltMeeInMedewerkerKas(p: {
+  type?: string;
+  categorie?: string | null;
   betalingswijze?: string | null;
   kasEffect?: string | null;
 }): boolean {
+  if (isGepindPost(p)) return true;
   if (isPinpasBetaling(p.betalingswijze) || isMedewerkerZakBetaling(p.betalingswijze)) return false;
   if (isBankBetaling(p.betalingswijze)) return bankKasRichting(p) != null;
   return true;
@@ -325,6 +328,7 @@ export const GEBRUIK_VALUTA_OMZETTING = "Valuta omzetten";
 export const GEBRUIK_MUNTENBAK = "Muntenbak";
 export const CATEGORIE_OPENINGSKAS = "Beginsaldo dag";
 export const CATEGORIE_MUNTENBAK = "Muntenbak";
+export const CATEGORIE_GEPIND = "Gepind";
 export const MUNTENBAK_NAAM = "Muntenbak";
 
 export function isBankstorting(waaraan?: string | null): boolean {
@@ -353,6 +357,22 @@ export function isMuntenbakGebruik(waaraan?: string | null): boolean {
 
 export function isMuntenbakPost(p: { type?: string; categorie?: string | null }): boolean {
   return p.type === "KASGELD" && (p.categorie || "").trim().toLowerCase().startsWith("muntenbak");
+}
+
+export function isGepindPost(p: { type?: string; categorie?: string | null }): boolean {
+  return p.type === "KASGELD" && (p.categorie || "").trim().toLowerCase().startsWith("gepind");
+}
+
+/** Openingskas, muntenbak of gepind: kasbeweging, geen omzet van een klant. */
+export function isKasZonderOmzet(p: { type?: string; categorie?: string | null }): boolean {
+  return isOpeningsKas(p) || isMuntenbakPost(p) || isGepindPost(p);
+}
+
+export function financieelFormTypeWaarde(form: { type?: string; categorie?: string | null }): string {
+  if (isOpeningsKas(form)) return "OPENINGSKAS";
+  if (isMuntenbakPost(form)) return "MUNTENBAK";
+  if (isGepindPost(form)) return "GEPIND";
+  return form.type || "";
 }
 
 export function isMuntenbakNaam(naam?: string | null): boolean {
@@ -751,6 +771,9 @@ export function typeLabel(type: FinancieelPost["type"] | string, post?: Pick<Fin
   }
   if (type === "KASGELD" && post && isMuntenbakPost({ type, categorie: post.categorie })) {
     return "Muntenbak";
+  }
+  if (type === "KASGELD" && post && isGepindPost({ type, categorie: post.categorie })) {
+    return "Gepind";
   }
   if (type === "INKOMST") return "Inkomst";
   if (type === "UITGAVE") return "Uitgave";

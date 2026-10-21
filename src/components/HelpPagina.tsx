@@ -144,7 +144,7 @@ const HELP_ONDERWERPEN: HelpStap[] = [
       "Ga naar Financiën in het menu (alleen zichtbaar voor de eigenaar).",
       "Kies bovenaan Periode en Valuta (SRD, USD, EUR, …).",
       "Overzicht: dagcijfers en KPI’s. Follow the money: kas per dag, per medewerker, totaal in kas.",
-      "Nieuwe post: registreer inkomst, uitgave, kasgeld, overdracht of openingskas. Openingskas is de telling van vanochtend en vervangt het restant van gisteren.",
+      "Nieuwe post: registreer inkomst, uitgave, kasgeld, gepind, overdracht of openingskas. Gepind is contant geld uit de pinautomaat en telt mee in de kas. Openingskas is de telling van vanochtend en vervangt het restant van gisteren.",
       "Bij Inzendingen: open meldingen van medewerkers en neem ze over in het dagboek."
     ],
     tip: "Totaal in kas is het contante geld bij medewerkers, zonder muntenbak. Geld dat naar de muntenbak is verhuisd, zie je alleen bij Muntenbak."

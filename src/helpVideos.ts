@@ -363,7 +363,7 @@ export const HELP_VIDEOS: Record<string, HelpVideoGids> = {
       {
         id: "post",
         titel: "Nieuwe post",
-        ondertitel: "Registreer inkomst, uitgave, kasgeld, overdracht of openingskas. Openingskas is de telling van vanochtend en vervangt het restant van gisteren.",
+        ondertitel: "Registreer inkomst, uitgave, kasgeld, gepind, overdracht of openingskas. Gepind is contant uit de pin en telt mee in de kas. Openingskas is de telling van vanochtend en vervangt het restant van gisteren.",
         actie: "Nieuwe post"
       },
       {

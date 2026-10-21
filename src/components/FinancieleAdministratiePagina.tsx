@@ -43,12 +43,15 @@ import {
   GEBRUIK_VALUTA_OMZETTING,
   CATEGORIE_OPENINGSKAS,
   CATEGORIE_MUNTENBAK,
+  CATEGORIE_GEPIND,
   isBankstorting,
   isInkomstKas,
   isMuntenbakGebruik,
   isMuntenbakPost,
+  isGepindPost,
   isValutaOmzetting,
   isOpeningsKas,
+  financieelFormTypeWaarde,
   isOverdrachtMedewerker,
   bankUitWaaraan,
   medewerkerUitWaaraan,
@@ -605,7 +608,8 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
   const toontBank = isBankBetaling(form.betalingswijze);
   const pinpas = isPinpasBetaling(form.betalingswijze);
   const eigenZak = isMedewerkerZakBetaling(form.betalingswijze);
-  const nietInKas = pinpas || eigenZak;
+  const gepind = isGepindPost(form);
+  const nietInKas = !gepind && (pinpas || eigenZak);
   const kasEffect = toontBank ? normalizeKasEffect(form.kasEffect) || "NEE" : "";
   const toontKasErbij =
     form.type === "OVERDRACHT" ||
@@ -832,6 +836,10 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
       setFout("Bij openingskas vul je in bij wie het geld vanochtend lag.");
       return;
     }
+    if (isGepindPost(form) && !geldBijNaam) {
+      setFout("Bij gepind vul je in bij wie het contante geld in kas ligt.");
+      return;
+    }
     if (toontBank && kasEffect === "ERBIJ" && !geldBijNaam) {
       setFout("Kies bij wie dit bedrag in kas erbij komt.");
       return;
@@ -852,7 +860,9 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
           ? "Beginsaldo kas"
           : isMuntenbakPost(form)
             ? "Muntenbak"
-            : "");
+            : isGepindPost(form)
+              ? "Gepind"
+              : "");
     if (!omschrijving || bedrag === null || bedrag < 0) {
       setFout("Vul een omschrijving en een geldig bedrag in. 0,- mag.");
       return;
@@ -1001,7 +1011,9 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
           ? CATEGORIE_OPENINGSKAS
           : isMuntenbakPost(form)
             ? CATEGORIE_MUNTENBAK
-            : form.categorie.trim(),
+            : isGepindPost(form)
+              ? CATEGORIE_GEPIND
+              : form.categorie.trim(),
       referentie: form.referentie.trim(),
       klantNaam: (gekozen?.klantNaam || form.klantNaam).trim(),
       opdrachtId: form.opdrachtId || null,
@@ -1405,7 +1417,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                 <label className="form-label">Datum & tijd<input type="datetime-local" className="form-input" value={form.datum} onChange={(e) => setForm({ ...form, datum: e.target.value })} required /></label>
                 <label className="form-label">
                   Type
-                  <select className="form-input" value={isOpeningsKas(form) ? "OPENINGSKAS" : isMuntenbakPost(form) ? "MUNTENBAK" : form.type} onChange={(e) => {
+                  <select className="form-input" value={financieelFormTypeWaarde(form)} onChange={(e) => {
                     const gekozen = e.target.value;
                     if (gekozen === "OPENINGSKAS") {
                       setForm({
@@ -1429,13 +1441,29 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                       });
                       return;
                     }
+                    if (gekozen === "GEPIND") {
+                      const pinOfZak =
+                        isPinpasBetaling(form.betalingswijze) || isMedewerkerZakBetaling(form.betalingswijze);
+                      setForm({
+                        ...form,
+                        type: "KASGELD",
+                        status: "BETAALD",
+                        categorie: CATEGORIE_GEPIND,
+                        omschrijving: form.omschrijving.trim() || "Gepind",
+                        betalingswijze: pinOfZak ? "" : form.betalingswijze,
+                        kasEffect: "",
+                        bank: pinOfZak ? "" : form.bank
+                      });
+                      return;
+                    }
                     const type = gekozen as FinancieelType;
                     const blijftEigenZak = type === "UITGAVE" && isMedewerkerZakBetaling(form.betalingswijze);
                     setForm({
                       ...form,
                       type,
                       status: type === "KASGELD" || type === "OVERDRACHT" ? "BETAALD" : form.status,
-                      categorie: isOpeningsKas(form) || isMuntenbakPost(form) ? "" : form.categorie,
+                      categorie:
+                        isOpeningsKas(form) || isMuntenbakPost(form) || isGepindPost(form) ? "" : form.categorie,
                       betalingswijze: blijftEigenZak ? form.betalingswijze : isMedewerkerZakBetaling(form.betalingswijze) ? "" : form.betalingswijze
                     });
                   }}>
@@ -1443,6 +1471,7 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                     <option value="UITGAVE">Uitgave</option>
                     <option value="OPENINGSKAS">Openingskas (beginsaldo van de dag)</option>
                     <option value="KASGELD">Kasgeld (al in kas)</option>
+                    <option value="GEPIND">Gepind (contant uit de pin, in kas)</option>
                     <option value="MUNTENBAK">Muntenbak (beschikbaar, niet in kas)</option>
                     <option value="OVERDRACHT">Overdracht (van A naar B)</option>
                   </select>
@@ -1456,6 +1485,11 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                 {isMuntenbakPost(form) && (
                   <p className="muted financieel-span-2">
                     Muntenbak is beschikbaar contant, maar ligt niet bij een medewerker. Het telt niet mee in de kas.
+                  </p>
+                )}
+                {isGepindPost(form) && (
+                  <p className="muted financieel-span-2">
+                    Gepind is contant geld uit de pinautomaat. Het telt mee in de kas van de medewerker, niet als inkomst van een klant.
                   </p>
                 )}
                 <label className="form-label">
@@ -1510,9 +1544,10 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                     <option value="">— Niet gekozen —</option>
                     {(Object.keys(BETALINGSWIJZE_LABELS) as FinancieelBetalingswijze[])
                       .filter((wijze) => wijze !== "MEDEWERKER" || form.type === "UITGAVE")
+                      .filter((wijze) => !gepind || (wijze !== "PINPAS" && wijze !== "MEDEWERKER"))
                       .map((wijze) => <option key={wijze} value={wijze}>{BETALINGSWIJZE_LABELS[wijze]}</option>)}
                   </select>
-                  {pinpas && (
+                  {pinpas && !gepind && (
                     <span className="help-text">Pinpas gaat naar de bank, niet in kas bij een medewerker.</span>
                   )}
                   {eigenZak && (
@@ -1597,7 +1632,9 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                     ? "Bij wie is het geld nu?"
                     : toontBank
                       ? "Bij wie komt dit in kas?"
-                      : "Bij wie is het geld?"}
+                      : isGepindPost(form)
+                        ? "Bij wie ligt dit gepinde geld in kas?"
+                        : "Bij wie is het geld?"}
                   <select className="form-input" value={form.geldBijUserId} onChange={(e) => {
                     const id = e.target.value;
                     const medewerker = medewerkerOpties.find((m) => m.id === id);
@@ -1635,10 +1672,10 @@ export function FinancieleAdministratiePagina({ opdrachten }: Props) {
                   <datalist id="financieel-klanten">{klantOpties.map((naam) => <option key={naam} value={naam} />)}</datalist>
                   {form.klantNaam.trim() && <p className={`financieel-klant-saldo-hint${actueelKlantSaldo && (actueelKlantSaldo.teOntvangen > 0 || actueelKlantSaldo.teBetalen > 0) ? " heeft-saldo" : ""}`}>{klantSaldoSamenvatting(actueelKlantSaldo, form.valuta)}</p>}
                 </label>
-                <label className="form-label financieel-span-2">Omschrijving<input className="form-input" value={form.omschrijving} onChange={(e) => setForm({ ...form, omschrijving: e.target.value })} required={form.type !== "OVERDRACHT"} placeholder={form.type === "OVERDRACHT" ? "Optioneel — anders: Overdracht A → B" : isOpeningsKas(form) ? "Beginsaldo kas" : isMuntenbakPost(form) ? "Muntenbak" : ""} /></label>
+                <label className="form-label financieel-span-2">Omschrijving<input className="form-input" value={form.omschrijving} onChange={(e) => setForm({ ...form, omschrijving: e.target.value })} required={form.type !== "OVERDRACHT"} placeholder={form.type === "OVERDRACHT" ? "Optioneel — anders: Overdracht A → B" : isOpeningsKas(form) ? "Beginsaldo kas" : isMuntenbakPost(form) ? "Muntenbak" : isGepindPost(form) ? "Gepind" : ""} /></label>
                 <label className="form-label">
                   Categorie
-                  <input className="form-input" list="financieel-categorieen" placeholder={form.type === "UITGAVE" ? "Kantoor, personeel..." : isOpeningsKas(form) ? "Beginsaldo dag" : isMuntenbakPost(form) ? "Muntenbak" : "Visa, advies..."} value={form.categorie} onChange={(e) => setForm({ ...form, categorie: e.target.value })} disabled={isOpeningsKas(form) || isMuntenbakPost(form)} />
+                  <input className="form-input" list="financieel-categorieen" placeholder={form.type === "UITGAVE" ? "Kantoor, personeel..." : isOpeningsKas(form) ? "Beginsaldo dag" : isMuntenbakPost(form) ? "Muntenbak" : isGepindPost(form) ? "Gepind" : "Visa, advies..."} value={form.categorie} onChange={(e) => setForm({ ...form, categorie: e.target.value })} disabled={isOpeningsKas(form) || isMuntenbakPost(form) || isGepindPost(form)} />
                   <datalist id="financieel-categorieen">{categorieOpties.map((categorie) => <option key={categorie} value={categorie} />)}</datalist>
                 </label>
                 <label className="form-label">Referentie<input className="form-input" placeholder="Factuurnummer" value={form.referentie} onChange={(e) => setForm({ ...form, referentie: e.target.value })} /></label>

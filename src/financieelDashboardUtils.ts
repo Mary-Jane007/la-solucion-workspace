@@ -22,6 +22,8 @@ import {
   isMuntenbakGebruik,
   isMuntenbakNaam,
   isMuntenbakPost,
+  isGepindPost,
+  isKasZonderOmzet,
   isValutaOmzetting,
   isOpeningsKas,
   isMedewerkerZakBetaling,
@@ -619,7 +621,13 @@ export function berekenDagVerslag(
       id: p.id,
       tijd,
       tekst: `${typeLabel(p.type, p)} · ${
-        openingskas ? "beginsaldo van de dag" : isMuntenbakPost(p) ? "muntenbak" : p.omschrijving
+        openingskas
+          ? "beginsaldo van de dag"
+          : isMuntenbakPost(p)
+            ? "muntenbak"
+            : isGepindPost(p)
+              ? "contant uit de pin, in kas"
+              : p.omschrijving
       }${p.klantNaam ? ` · ${p.klantNaam}` : ""}`,
       bedragLabel: `${teken}${formatGeld(p.bedrag, p.valuta)}`,
       positief,
@@ -700,7 +708,7 @@ export function berekenDagVerslag(
     muntenbak,
     transacties: h.transacties,
     grootsteInkomst:
-      sorted.filter((p) => (p.type === "INKOMST" || p.type === "KASGELD") && !isOpeningsKas(p) && !isMuntenbakPost(p)).sort((a, b) => b.bedrag - a.bedrag)[0] ||
+      sorted.filter((p) => (p.type === "INKOMST" || p.type === "KASGELD") && !isKasZonderOmzet(p)).sort((a, b) => b.bedrag - a.bedrag)[0] ||
       null,
     grootsteUitgave:
       sorted
@@ -926,7 +934,7 @@ export function berekenWinstVerlies(
 
   for (const p of inScope) {
     const cat = (p.categorie || "").trim();
-    if (p.type === "INKOMST" || (p.type === "KASGELD" && !isOpeningsKas(p) && !isMuntenbakPost(p))) {
+    if (p.type === "INKOMST" || (p.type === "KASGELD" && !isKasZonderOmzet(p))) {
       const extra = extraInkomstUitGebruik(p);
       const som = geldRond((isOpeningsKas(p) ? 0 : p.bedrag) + extra);
       if (catMatch(cat, ["visa", "vergunning", "legalisatie", "advies", "vertaling", "dienst"])) {
@@ -957,7 +965,7 @@ export function berekenWinstVerlies(
       const extra = extraInkomstUitGebruik(p);
       if (extra) overigeInkomsten = geldRond(overigeInkomsten + extra);
     }
-    if (isOpeningsKas(p) || isMuntenbakPost(p)) {
+    if (isKasZonderOmzet(p)) {
       const extra = extraInkomstUitGebruik(p);
       if (extra) overigeInkomsten = geldRond(overigeInkomsten + extra);
     }
@@ -1095,7 +1103,7 @@ export function berekenTijdreeks(
     }
     const punt = map.get(key) || { label, key, inkomsten: 0, uitgaven: 0, netto: 0 };
     if (p.type === "UITGAVE") punt.uitgaven = geldRond(punt.uitgaven + p.bedrag);
-    else if (!isOpeningsKas(p) && !isMuntenbakPost(p)) punt.inkomsten = geldRond(punt.inkomsten + p.bedrag);
+    else if (!isKasZonderOmzet(p)) punt.inkomsten = geldRond(punt.inkomsten + p.bedrag);
     const extra = extraInkomstUitGebruik(p);
     if (extra) punt.inkomsten = geldRond(punt.inkomsten + extra);
     const extraUit = extraUitgaveUitGebruik(p);
@@ -1870,9 +1878,13 @@ function followOpsVanPost(p: FinancieelPost, valuta: FinancieelValuta): FollowOp
           bedrag: p.bedrag,
           id: p.id,
           soort: "binnen",
-          titel: p.type === "KASGELD" ? "Kasgeld erbij" : "Geld ontvangen",
+          titel: isGepindPost(p) ? "Gepind" : p.type === "KASGELD" ? "Kasgeld erbij" : "Geld ontvangen",
           uitleg: [
-            p.klantNaam ? `Van klant ${p.klantNaam}` : "Bron onbekend",
+            isGepindPost(p)
+              ? "Contant uit de pin, in kas"
+              : p.klantNaam
+                ? `Van klant ${p.klantNaam}`
+                : "Bron onbekend",
             naar ? `nu bij ${naar.naam}` : null,
             p.omschrijving
           ]
