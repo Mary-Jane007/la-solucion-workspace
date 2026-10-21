@@ -19,6 +19,7 @@ const STATUS_LABELS: Record<string, string> = {
   NIEUW: "Nieuw",
   AFWACHTING: "Afwachting",
   IN_BEHANDELING: "In behandeling",
+  INGEDIEND: "Ingediend",
   AFGEROND: "Afgerond"
 };
 

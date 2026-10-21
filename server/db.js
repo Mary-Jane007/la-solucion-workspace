@@ -90,7 +90,7 @@ async function migrate() {
       omschrijving text not null,
       datum_aangemaakt date not null,
       datum_deadline date,
-      status text not null check (status in ('NIEUW','AFWACHTING','IN_BEHANDELING','AFGEROND')),
+      status text not null check (status in ('NIEUW','AFWACHTING','IN_BEHANDELING','INGEDIEND','AFGEROND')),
       prioriteit int not null check (prioriteit in (1,2,3)),
       behandelaar_user_id text,
       notities text,
@@ -135,7 +135,7 @@ async function migrate() {
     []
   );
 
-  // Bestaande databases: status-check uitbreiden met AFWACHTING
+  // Bestaande databases: status-check uitbreiden met AFWACHTING en INGEDIEND
   await query(
     `
     do $$
@@ -149,13 +149,14 @@ async function migrate() {
       where rel.relname = 'opdrachten'
         and nsp.nspname = 'public'
         and con.contype = 'c'
-        and pg_get_constraintdef(con.oid) ilike '%status%';
+        and pg_get_constraintdef(con.oid) ilike '%status%'
+        and pg_get_constraintdef(con.oid) not ilike '%financiele%';
       if cname is not null then
         execute format('alter table opdrachten drop constraint %I', cname);
       end if;
       alter table opdrachten
         add constraint opdrachten_status_check
-        check (status in ('NIEUW','AFWACHTING','IN_BEHANDELING','AFGEROND'));
+        check (status in ('NIEUW','AFWACHTING','IN_BEHANDELING','INGEDIEND','AFGEROND'));
     end $$;
     `,
     []

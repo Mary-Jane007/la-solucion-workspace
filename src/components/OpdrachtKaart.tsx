@@ -1,4 +1,5 @@
 import { Opdracht, OpdrachtStatus } from "../types";
+import { isOpdrachtGroen, OPDRACHT_STATUS_OPTIES, statusLabel } from "../opdrachtenUtils";
 
 interface Props {
   opdracht: Opdracht;
@@ -19,14 +20,24 @@ export function OpdrachtKaart({
 }: Props) {
   const created = new Date(opdracht.datumAangemaakt).toLocaleDateString("nl-NL");
   const isOpgeslagen = Boolean(opdracht.id);
+  const groen = isOpdrachtGroen(opdracht.status);
 
   return (
-    <div className={`card opdracht-card${isOngelezen ? " opdracht-card-ongelezen" : ""}`}>
+    <div
+      className={`card opdracht-card${groen ? " opdracht-card-groen" : ""}${
+        isOngelezen && !groen ? " opdracht-card-ongelezen" : ""
+      }`}
+    >
       <button className="opdracht-main" onClick={onKlik} type="button">
         <div className="opdracht-header">
           <span className="opdracht-client">{opdracht.klantNaam || "Nieuwe klant"}</span>
-          <span className={`pill pill-prio-${opdracht.prioriteit}`}>
-            P{opdracht.prioriteit}
+          <span className="opdracht-header-pills">
+            <span className={`pill${groen ? " pill-status-groen" : " pill-status"}`}>
+              {statusLabel(opdracht.status)}
+            </span>
+            <span className={`pill pill-prio-${opdracht.prioriteit}`}>
+              P{opdracht.prioriteit}
+            </span>
           </span>
         </div>
         <p className="opdracht-body">{opdracht.omschrijving || "Nog geen omschrijving"}</p>
@@ -64,15 +75,41 @@ export function OpdrachtKaart({
             Verwijderen
           </button>
         )}
+        {isEigenaar && isOpgeslagen && (
+          <div className="opdracht-klaar-acties">
+            <button
+              type="button"
+              className={`btn-klaar${opdracht.status === OpdrachtStatus.Ingediend ? " actief" : ""}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onStatusWijzig(OpdrachtStatus.Ingediend);
+              }}
+            >
+              Ingediend
+            </button>
+            <button
+              type="button"
+              className={`btn-klaar${opdracht.status === OpdrachtStatus.Afgerond ? " actief" : ""}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onStatusWijzig(OpdrachtStatus.Afgerond);
+              }}
+            >
+              Afgerond
+            </button>
+          </div>
+        )}
         <select
           className="form-input small"
           value={opdracht.status}
+          aria-label="Status"
           onChange={(e) => onStatusWijzig(e.target.value as OpdrachtStatus)}
         >
-          <option value={OpdrachtStatus.Nieuw}>Nieuw</option>
-          <option value={OpdrachtStatus.Afwachting}>Afwachting</option>
-          <option value={OpdrachtStatus.InBehandeling}>In behandeling</option>
-          <option value={OpdrachtStatus.Afgerond}>Afgerond</option>
+          {OPDRACHT_STATUS_OPTIES.map((optie) => (
+            <option key={optie.value} value={optie.value}>
+              {optie.label}
+            </option>
+          ))}
         </select>
         <span className="opdracht-handler">
           {opdracht.behandelaarNaam
@@ -83,4 +120,3 @@ export function OpdrachtKaart({
     </div>
   );
 }
-

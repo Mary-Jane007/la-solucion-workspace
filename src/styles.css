@@ -683,8 +683,14 @@ body {
 
 .board-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
+}
+
+@media (max-width: 1280px) {
+  .board-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 1100px) {
@@ -777,6 +783,72 @@ body {
   border: 1px solid var(--color-border);
 }
 
+.opdracht-card-groen {
+  border-color: var(--color-success);
+  box-shadow: inset 4px 0 0 var(--color-success);
+}
+
+.opdracht-header-pills {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.pill-status,
+.pill-status-groen {
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.pill-status-groen {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  border: 1px solid color-mix(in srgb, var(--color-success) 40%, transparent);
+}
+
+.opdracht-klaar-acties {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.opdracht-klaar-acties-dialoog {
+  margin-bottom: 6px;
+}
+
+.btn-klaar {
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-muted);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-klaar.actief {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  border-color: color-mix(in srgb, var(--color-success) 45%, var(--color-border));
+}
+
+.modal.modal-opdracht-groen {
+  border-color: color-mix(in srgb, var(--color-success) 40%, var(--color-border-strong));
+}
+
+.opdracht-groen-hint {
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-success);
+}
+
+.form-input-groen {
+  border-color: color-mix(in srgb, var(--color-success) 50%, var(--color-border));
+}
+
 .opdracht-main {
   border: none;
   background: none;
@@ -817,6 +889,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
@@ -2037,6 +2110,10 @@ a.btn-secondary {
 
 .page-list-item:hover {
   border-color: var(--color-border-strong);
+}
+
+.page-list-item-groen {
+  border-color: color-mix(in srgb, var(--color-success) 40%, var(--color-border));
 }
 
 .page-list-item.melding-ongelezen {

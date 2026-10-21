@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { OpdrachtStatus } from "../types";
+import { isOpdrachtGroen, statusLabel } from "../opdrachtenUtils";
 import { OpdrachtenWerkruimte } from "../hooks/useOpdrachtenWerkruimte";
 import { useLijstGezienStatus } from "../hooks/useLijstGezienStatus";
 import { mijnOpdrachtenItemIds } from "../badgeItems";
@@ -37,7 +38,7 @@ export function MijnOpdrachtenPagina({ werkruimte, userId, onGezien }: Props) {
               <li key={o.id}>
                 <button
                   type="button"
-                  className={`page-list-item${ongelezen ? " melding-ongelezen" : ""}`}
+                  className={`page-list-item${isOpdrachtGroen(o.status) ? " page-list-item-groen" : ""}${ongelezen && !isOpdrachtGroen(o.status) ? " melding-ongelezen" : ""}`}
                   onClick={() => {
                     markeerGeopend(o.id);
                     openOpdracht(o);
@@ -51,7 +52,7 @@ export function MijnOpdrachtenPagina({ werkruimte, userId, onGezien }: Props) {
                     {o.omschrijving}
                   </span>
                   <span className={`page-list-meta${ongelezen ? " melding-ongelezen-sub" : ""}`}>
-                    {o.status.replace(/_/g, " ").toLowerCase()}
+                    {statusLabel(o.status)}
                     {o.datumDeadline &&
                       ` · Deadline ${new Date(o.datumDeadline).toLocaleDateString("nl-NL")}`}
                   </span>

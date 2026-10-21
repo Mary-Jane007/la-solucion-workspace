@@ -142,6 +142,7 @@ export function StatistiekenPagina({ werkruimte, onNavigeer }: Props) {
           <StatKaart label="Nieuw" waarde={stats.nieuw} accent="#3b82f6" />
           <StatKaart label="Afwachting" waarde={stats.afwachting} accent="#a78bfa" />
           <StatKaart label="In behandeling" waarde={stats.lopend} accent="#f59e0b" />
+          <StatKaart label="Ingediend" waarde={stats.ingediend} accent="#34d399" />
           <StatKaart label="Afgerond" waarde={stats.afgerond} accent="#22c55e" />
           <StatKaart label="P1 open" waarde={stats.p1} accent="#ef4444" />
           <StatKaart label="Te laat" waarde={stats.teLaat} accent="#dc2626" />

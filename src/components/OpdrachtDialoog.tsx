@@ -18,7 +18,12 @@ import {
 } from "../bestandUtils";
 import { maakZipBlob, startBestandDownload, veiligeDownloadNaam } from "../zipUtils";
 import { opdrachtVerwijderBevestiging } from "../opdrachtVerwijderen";
-import { statusLabel, vindOvereenkomstigeOpdrachten } from "../opdrachtenUtils";
+import {
+  isOpdrachtGroen,
+  OPDRACHT_STATUS_OPTIES,
+  statusLabel,
+  vindOvereenkomstigeOpdrachten
+} from "../opdrachtenUtils";
 import { BestandBekijkLink, BestandMiniatuur, BestandViewer, BestandViewerItem } from "./BestandViewer";
 import { DocumentenToevoegen } from "./DocumentenToevoegen";
 
@@ -424,7 +429,10 @@ export function OpdrachtDialoog({
   return (
     <>
     <div className="modal-backdrop" onClick={onSluit}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        className={`modal${isOpdrachtGroen(bewerkt.status) ? " modal-opdracht-groen" : ""}`}
+        onClick={(e) => e.stopPropagation()}
+      >
         <header className="modal-header">
           <div>
             <h2>{titel}</h2>
@@ -435,6 +443,11 @@ export function OpdrachtDialoog({
               {isBekijken &&
                 "Je kunt documenten toevoegen. Klik op Opslaan om ze te koppelen."}
             </p>
+            {isOpdrachtGroen(bewerkt.status) && (
+              <p className="opdracht-groen-hint">
+                Deze opdracht is {statusLabel(bewerkt.status).toLowerCase()}. Het vak blijft groen tot je de status wijzigt.
+              </p>
+            )}
           </div>
           <button type="button" className="btn-ghost" onClick={onSluit}>
             Sluiten
@@ -523,18 +536,37 @@ export function OpdrachtDialoog({
 
             <div className="modal-col">
               <label className="form-label">Status</label>
+              {isEigenaar && !alleenLezen && (
+                <div className="opdracht-klaar-acties opdracht-klaar-acties-dialoog">
+                  <button
+                    type="button"
+                    className={`btn-klaar${bewerkt.status === OpdrachtStatus.Ingediend ? " actief" : ""}`}
+                    onClick={() => setBewerkt({ ...bewerkt, status: OpdrachtStatus.Ingediend })}
+                  >
+                    Ingediend
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn-klaar${bewerkt.status === OpdrachtStatus.Afgerond ? " actief" : ""}`}
+                    onClick={() => setBewerkt({ ...bewerkt, status: OpdrachtStatus.Afgerond })}
+                  >
+                    Afgerond
+                  </button>
+                </div>
+              )}
               <select
-                className="form-input"
+                className={`form-input${isOpdrachtGroen(bewerkt.status) ? " form-input-groen" : ""}`}
                 value={bewerkt.status}
                 onChange={(e) =>
                   setBewerkt({ ...bewerkt, status: e.target.value as OpdrachtStatus })
                 }
                 disabled={alleenLezen}
               >
-                <option value={OpdrachtStatus.Nieuw}>Nieuw</option>
-                <option value={OpdrachtStatus.Afwachting}>Afwachting</option>
-                <option value={OpdrachtStatus.InBehandeling}>In behandeling</option>
-                <option value={OpdrachtStatus.Afgerond}>Afgerond</option>
+                {OPDRACHT_STATUS_OPTIES.map((optie) => (
+                  <option key={optie.value} value={optie.value}>
+                    {optie.label}
+                  </option>
+                ))}
               </select>
               <label className="form-label">Prioriteit</label>
               <select

@@ -123,6 +123,7 @@ export interface StatistiekenData {
   nieuw: number;
   afwachting: number;
   lopend: number;
+  ingediend: number;
   afgerond: number;
   p1: number;
   p2: number;
@@ -168,6 +169,7 @@ export function berekenStatistieken(opdrachten: Opdracht[]): StatistiekenData {
   const nieuw = opdrachten.filter((o) => o.status === OpdrachtStatus.Nieuw).length;
   const afwachting = opdrachten.filter((o) => o.status === OpdrachtStatus.Afwachting).length;
   const lopend = opdrachten.filter((o) => o.status === OpdrachtStatus.InBehandeling).length;
+  const ingediend = opdrachten.filter((o) => o.status === OpdrachtStatus.Ingediend).length;
   const afgerond = opdrachten.filter((o) => o.status === OpdrachtStatus.Afgerond).length;
 
   return {
@@ -175,6 +177,7 @@ export function berekenStatistieken(opdrachten: Opdracht[]): StatistiekenData {
     nieuw,
     afwachting,
     lopend,
+    ingediend,
     afgerond,
     p1: open.filter((o) => o.prioriteit === 1).length,
     p2: open.filter((o) => o.prioriteit === 2).length,
@@ -194,6 +197,7 @@ export function berekenStatistieken(opdrachten: Opdracht[]): StatistiekenData {
       { label: "Nieuw", waarde: nieuw, kleur: "#3b82f6" },
       { label: "Afwachting", waarde: afwachting, kleur: "#a78bfa" },
       { label: "In behandeling", waarde: lopend, kleur: "#f59e0b" },
+      { label: "Ingediend", waarde: ingediend, kleur: "#34d399" },
       { label: "Afgerond", waarde: afgerond, kleur: "#22c55e" }
     ]
   };
@@ -389,11 +393,26 @@ export function namenHerkenbaarGelijk(a: string, b: string): boolean {
   );
 }
 
-export function statusLabel(status: OpdrachtStatus): string {
+export const OPDRACHT_STATUS_OPTIES: { value: OpdrachtStatus; label: string }[] = [
+  { value: OpdrachtStatus.Nieuw, label: "Nieuw" },
+  { value: OpdrachtStatus.Afwachting, label: "Afwachting" },
+  { value: OpdrachtStatus.InBehandeling, label: "In behandeling" },
+  { value: OpdrachtStatus.Ingediend, label: "Ingediend" },
+  { value: OpdrachtStatus.Afgerond, label: "Afgerond" }
+];
+
+export function statusLabel(status: OpdrachtStatus | string): string {
   if (status === OpdrachtStatus.Nieuw) return "Nieuw";
   if (status === OpdrachtStatus.Afwachting) return "Afwachting";
   if (status === OpdrachtStatus.InBehandeling) return "In behandeling";
-  return "Afgerond";
+  if (status === OpdrachtStatus.Ingediend) return "Ingediend";
+  if (status === OpdrachtStatus.Afgerond) return "Afgerond";
+  return String(status || "");
+}
+
+/** Groen vak zolang de opdracht ingediend of afgerond is. */
+export function isOpdrachtGroen(status?: OpdrachtStatus | string | null): boolean {
+  return status === OpdrachtStatus.Ingediend || status === OpdrachtStatus.Afgerond;
 }
 
 /** Bestaande opdrachten met herkenbaar dezelfde klantnaam (volledig of deel). */

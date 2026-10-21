@@ -14,6 +14,7 @@ export enum OpdrachtStatus {
   Nieuw = "NIEUW",
   Afwachting = "AFWACHTING",
   InBehandeling = "IN_BEHANDELING",
+  Ingediend = "INGEDIEND",
   Afgerond = "AFGEROND"
 }
 

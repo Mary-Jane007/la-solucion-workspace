@@ -37,6 +37,7 @@ export function OpdrachtenBord({
     { key: OpdrachtStatus.Nieuw, titel: "Nieuw" },
     { key: OpdrachtStatus.Afwachting, titel: "Afwachting" },
     { key: OpdrachtStatus.InBehandeling, titel: "In behandeling" },
+    { key: OpdrachtStatus.Ingediend, titel: "Ingediend" },
     { key: OpdrachtStatus.Afgerond, titel: "Afgerond" }
   ];
 

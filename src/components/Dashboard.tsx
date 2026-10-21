@@ -40,6 +40,7 @@ export function Dashboard({
     nieuw: zichtbareOpdrachten.filter((o) => o.status === OpdrachtStatus.Nieuw).length,
     afwachting: zichtbareOpdrachten.filter((o) => o.status === OpdrachtStatus.Afwachting).length,
     lopend: zichtbareOpdrachten.filter((o) => o.status === OpdrachtStatus.InBehandeling).length,
+    ingediend: zichtbareOpdrachten.filter((o) => o.status === OpdrachtStatus.Ingediend).length,
     afgerond: zichtbareOpdrachten.filter((o) => o.status === OpdrachtStatus.Afgerond).length
   };
 
@@ -119,6 +120,10 @@ export function Dashboard({
             <div className="metric-badge">
               <span className="metric-label">Lopend</span>
               <span className="metric-value">{aantallen.lopend}</span>
+            </div>
+            <div className="metric-badge">
+              <span className="metric-label">Ingediend</span>
+              <span className="metric-value">{aantallen.ingediend}</span>
             </div>
             <div className="metric-badge">
               <span className="metric-label">Afgerond</span>
