@@ -171,7 +171,7 @@ function herstelJpegPdfVoorWeergave(origineleNaam, mimeType, buffer, opties = {}
   if (isJpeg(buffer) && looksLikePdfNaam(origineleNaam, mimeType)) {
     return { buffer, naam: fotoNaamUitPdfNaam(origineleNaam), mime: "image/jpeg" };
   }
-  if (opties.preview && isEnkelJpegPdf(buffer)) {
+  if ((opties.preview || opties.inline) && isEnkelJpegPdf(buffer)) {
     const jpeg = extractJpegFromPdf(buffer);
     if (jpeg) {
       return { buffer: jpeg, naam: fotoNaamUitPdfNaam(origineleNaam), mime: "image/jpeg" };

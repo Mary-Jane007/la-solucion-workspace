@@ -1050,7 +1050,8 @@ function setBestandDownloadHeaders(res, bestand, inline = false, buffer) {
 
 function stuurBestandBuffer(res, bestand, inline, buffer, preview = false) {
   const herstel = herstelJpegPdfVoorWeergave(bestand.origineleNaam, bestand.mimeType, buffer, {
-    preview
+    preview,
+    inline
   });
   const body = herstel?.buffer || buffer;
   const naam = herstel?.naam || bestand.origineleNaam;

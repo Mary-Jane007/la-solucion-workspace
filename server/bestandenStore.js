@@ -82,7 +82,10 @@ async function getBestandInhoudById(id) {
 
 async function saveBestandInhoud(id, inhoud) {
   if (!hasDb() || !inhoud) return;
-  await query(`update bestanden set inhoud = $2 where id = $1 and inhoud is null`, [id, inhoud]);
+  await query(
+    `update bestanden set inhoud = $2 where id = $1 and (inhoud is null or octet_length(inhoud) = 0)`,
+    [id, inhoud]
+  );
 }
 
 async function listBestandenForOpdrachtIds(opdrachtIds) {
