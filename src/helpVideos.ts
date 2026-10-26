@@ -149,8 +149,8 @@ export const HELP_VIDEOS: Record<string, HelpVideoGids> = {
       {
         id: "status",
         titel: "Status wijzigen",
-        ondertitel: "De eigenaar zet een opdracht op Ingediend of Afgerond. Dat vak blijft groen zolang die status geldt, ook bij bewerken.",
-        stappen: ["Nieuw", "In behandeling", "Ingediend", "Afgerond"]
+        ondertitel: "Zet een opdracht op Ingediend, On hold, Oud of Afgerond. P1 blijft rood tot Ingediend, Afgerond of tot je de prioriteit wijzigt.",
+        stappen: ["Nieuw", "In behandeling", "Ingediend", "On hold", "Oud", "Afgerond"]
       },
       {
         id: "opslaan",

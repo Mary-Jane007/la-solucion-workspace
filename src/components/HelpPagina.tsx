@@ -57,7 +57,7 @@ const HELP_ONDERWERPEN: HelpStap[] = [
     stappen: [
       "Klik op een kaart op het opdrachtenbord om het detailvenster te openen.",
       "Pas klant, omschrijving, notities, behandelaar of deadline aan. Bij Taak toegewezen aan kies je iedereen met een login, inclusief de eigenaar.",
-      "Wijzig status: Nieuw → In behandeling → Ingediend of Afgerond. Ingediend en Afgerond maken het opdrachtvak groen, ook in het bewerkvenster.",
+      "Wijzig status: Nieuw, Afwachting, In behandeling, Ingediend, On hold, Oud of Afgerond. P1 blijft rood tot Ingediend, Afgerond of tot je de prioriteit wijzigt; daarna wordt het vak groen.",
       "Sla wijzigingen op met Opslaan of Sluiten (wijzigingen worden bewaard)."
     ]
   },

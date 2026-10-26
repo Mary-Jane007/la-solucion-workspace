@@ -1,5 +1,11 @@
-import { Opdracht, OpdrachtStatus } from "./types";
-import { berekenActiviteit, berekenMeldingen, deadlineBadgeIds, flattenDocumenten } from "./opdrachtenUtils";
+import { Opdracht } from "./types";
+import {
+  berekenActiviteit,
+  berekenMeldingen,
+  deadlineBadgeIds,
+  flattenDocumenten,
+  isOpdrachtOpen
+} from "./opdrachtenUtils";
 import { BadgeLijst } from "./meldingenStatus";
 
 function uniqueIds(ids: string[]): string[] {
@@ -10,7 +16,7 @@ export function homeItemIds(opdrachten: Opdracht[]): string[] {
   const vandaag = new Date().toISOString().slice(0, 10);
   return uniqueIds([
     ...opdrachten
-      .filter((o) => o.status !== OpdrachtStatus.Afgerond && o.prioriteit === 1)
+      .filter((o) => isOpdrachtOpen(o.status) && o.prioriteit === 1)
       .map((o) => o.id),
     ...opdrachten.filter((o) => o.datumDeadline === vandaag).map((o) => o.id)
   ]);
@@ -18,21 +24,21 @@ export function homeItemIds(opdrachten: Opdracht[]): string[] {
 
 export function bordItemIds(opdrachten: Opdracht[]): string[] {
   return uniqueIds(
-    opdrachten.filter((o) => o.status !== OpdrachtStatus.Afgerond).map((o) => o.id)
+    opdrachten.filter((o) => isOpdrachtOpen(o.status)).map((o) => o.id)
   );
 }
 
 export function kalenderItemIds(opdrachten: Opdracht[]): string[] {
   return uniqueIds(
     opdrachten
-      .filter((o) => o.status !== OpdrachtStatus.Afgerond && o.datumDeadline)
+      .filter((o) => isOpdrachtOpen(o.status) && o.datumDeadline)
       .map((o) => o.id)
   );
 }
 
 export function mijnOpdrachtenItemIds(opdrachten: Opdracht[]): string[] {
   return uniqueIds(
-    opdrachten.filter((o) => o.status !== OpdrachtStatus.Afgerond).map((o) => o.id)
+    opdrachten.filter((o) => isOpdrachtOpen(o.status)).map((o) => o.id)
   );
 }
 

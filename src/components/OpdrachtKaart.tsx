@@ -1,5 +1,11 @@
 import { Opdracht, OpdrachtStatus } from "../types";
-import { isOpdrachtGroen, OPDRACHT_STATUS_OPTIES, statusLabel } from "../opdrachtenUtils";
+import {
+  opdrachtKaartClassNaam,
+  OPDRACHT_SNEL_STATUS_ACTIES,
+  OPDRACHT_STATUS_OPTIES,
+  statusLabel,
+  statusPillClass
+} from "../opdrachtenUtils";
 
 interface Props {
   opdracht: Opdracht;
@@ -20,19 +26,15 @@ export function OpdrachtKaart({
 }: Props) {
   const created = new Date(opdracht.datumAangemaakt).toLocaleDateString("nl-NL");
   const isOpgeslagen = Boolean(opdracht.id);
-  const groen = isOpdrachtGroen(opdracht.status);
+  const kaartKleur = opdrachtKaartClassNaam(opdracht.status, opdracht.prioriteit, isOngelezen);
 
   return (
-    <div
-      className={`card opdracht-card${groen ? " opdracht-card-groen" : ""}${
-        isOngelezen && !groen ? " opdracht-card-ongelezen" : ""
-      }`}
-    >
+    <div className={`card opdracht-card${kaartKleur ? ` ${kaartKleur}` : ""}`}>
       <button className="opdracht-main" onClick={onKlik} type="button">
         <div className="opdracht-header">
           <span className="opdracht-client">{opdracht.klantNaam || "Nieuwe klant"}</span>
           <span className="opdracht-header-pills">
-            <span className={`pill${groen ? " pill-status-groen" : " pill-status"}`}>
+            <span className={statusPillClass(opdracht.status)}>
               {statusLabel(opdracht.status)}
             </span>
             <span className={`pill pill-prio-${opdracht.prioriteit}`}>
@@ -77,26 +79,19 @@ export function OpdrachtKaart({
         )}
         {isEigenaar && isOpgeslagen && (
           <div className="opdracht-klaar-acties">
-            <button
-              type="button"
-              className={`btn-klaar${opdracht.status === OpdrachtStatus.Ingediend ? " actief" : ""}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                onStatusWijzig(OpdrachtStatus.Ingediend);
-              }}
-            >
-              Ingediend
-            </button>
-            <button
-              type="button"
-              className={`btn-klaar${opdracht.status === OpdrachtStatus.Afgerond ? " actief" : ""}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                onStatusWijzig(OpdrachtStatus.Afgerond);
-              }}
-            >
-              Afgerond
-            </button>
+            {OPDRACHT_SNEL_STATUS_ACTIES.map((actie) => (
+              <button
+                key={actie.value}
+                type="button"
+                className={`btn-klaar${opdracht.status === actie.value ? ` ${actie.actiefClass}` : ""}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onStatusWijzig(actie.value);
+                }}
+              >
+                {actie.label}
+              </button>
+            ))}
           </div>
         )}
         <select

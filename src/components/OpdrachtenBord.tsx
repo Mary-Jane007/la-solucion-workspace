@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Opdracht, OpdrachtStatus } from "../types";
+import { OPDRACHT_STATUS_OPTIES } from "../opdrachtenUtils";
 import { OpdrachtKaart } from "./OpdrachtKaart";
 
 export interface OpdrachtenBordProps {
@@ -33,13 +34,7 @@ export function OpdrachtenBord({
 }: OpdrachtenBordProps) {
   const [zoekterm, setZoekterm] = useState("");
 
-  const kolommen: { key: OpdrachtStatus; titel: string }[] = [
-    { key: OpdrachtStatus.Nieuw, titel: "Nieuw" },
-    { key: OpdrachtStatus.Afwachting, titel: "Afwachting" },
-    { key: OpdrachtStatus.InBehandeling, titel: "In behandeling" },
-    { key: OpdrachtStatus.Ingediend, titel: "Ingediend" },
-    { key: OpdrachtStatus.Afgerond, titel: "Afgerond" }
-  ];
+  const kolommen = OPDRACHT_STATUS_OPTIES;
 
   const gefilterdeOpdrachten = useMemo(() => {
     const query = zoekterm.trim().toLowerCase();
@@ -78,11 +73,11 @@ export function OpdrachtenBord({
       </div>
       <div className="board-grid">
         {kolommen.map((kolom) => {
-          const items = gefilterdeOpdrachten.filter((o) => o.status === kolom.key);
+          const items = gefilterdeOpdrachten.filter((o) => o.status === kolom.value);
           return (
-            <div key={kolom.key} className="board-column">
+            <div key={kolom.value} className="board-column">
               <div className="board-column-header">
-                <h3>{kolom.titel}</h3>
+                <h3>{kolom.label}</h3>
                 <span className="badge-count">{items.length}</span>
               </div>
               <div className="board-column-body">

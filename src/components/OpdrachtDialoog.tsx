@@ -20,6 +20,8 @@ import { maakZipBlob, startBestandDownload, veiligeDownloadNaam } from "../zipUt
 import { opdrachtVerwijderBevestiging } from "../opdrachtVerwijderen";
 import {
   isOpdrachtGroen,
+  isP1Rood,
+  OPDRACHT_SNEL_STATUS_ACTIES,
   OPDRACHT_STATUS_OPTIES,
   statusLabel,
   vindOvereenkomstigeOpdrachten
@@ -425,12 +427,24 @@ export function OpdrachtDialoog({
       : mode === "bewerken"
         ? "Opdracht bewerken"
         : "Opdracht bekijken";
+  const prioRood = isP1Rood(bewerkt.status, bewerkt.prioriteit);
+  const groen = isOpdrachtGroen(bewerkt.status);
 
   return (
     <>
     <div className="modal-backdrop" onClick={onSluit}>
       <div
-        className={`modal${isOpdrachtGroen(bewerkt.status) ? " modal-opdracht-groen" : ""}`}
+        className={`modal${
+          prioRood
+            ? " modal-opdracht-prio-1"
+            : groen
+              ? " modal-opdracht-groen"
+              : bewerkt.status === OpdrachtStatus.OnHold
+                ? " modal-opdracht-onhold"
+                : bewerkt.status === OpdrachtStatus.Oud
+                  ? " modal-opdracht-oud"
+                  : ""
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         <header className="modal-header">
@@ -443,10 +457,21 @@ export function OpdrachtDialoog({
               {isBekijken &&
                 "Je kunt documenten toevoegen. Klik op Opslaan om ze te koppelen."}
             </p>
-            {isOpdrachtGroen(bewerkt.status) && (
+            {prioRood && (
+              <p className="opdracht-prio-hint">
+                Hoge prioriteit. Dit vak blijft rood tot de opdracht is ingediend of afgerond.
+              </p>
+            )}
+            {groen && (
               <p className="opdracht-groen-hint">
                 Deze opdracht is {statusLabel(bewerkt.status).toLowerCase()}. Het vak blijft groen tot je de status wijzigt.
               </p>
+            )}
+            {!prioRood && !groen && bewerkt.status === OpdrachtStatus.OnHold && (
+              <p className="opdracht-onhold-hint">Deze opdracht staat on hold.</p>
+            )}
+            {!prioRood && !groen && bewerkt.status === OpdrachtStatus.Oud && (
+              <p className="opdracht-oud-hint">Deze opdracht is oud.</p>
             )}
           </div>
           <button type="button" className="btn-ghost" onClick={onSluit}>
@@ -538,24 +563,30 @@ export function OpdrachtDialoog({
               <label className="form-label">Status</label>
               {isEigenaar && !alleenLezen && (
                 <div className="opdracht-klaar-acties opdracht-klaar-acties-dialoog">
-                  <button
-                    type="button"
-                    className={`btn-klaar${bewerkt.status === OpdrachtStatus.Ingediend ? " actief" : ""}`}
-                    onClick={() => setBewerkt({ ...bewerkt, status: OpdrachtStatus.Ingediend })}
-                  >
-                    Ingediend
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn-klaar${bewerkt.status === OpdrachtStatus.Afgerond ? " actief" : ""}`}
-                    onClick={() => setBewerkt({ ...bewerkt, status: OpdrachtStatus.Afgerond })}
-                  >
-                    Afgerond
-                  </button>
+                  {OPDRACHT_SNEL_STATUS_ACTIES.map((actie) => (
+                    <button
+                      key={actie.value}
+                      type="button"
+                      className={`btn-klaar${bewerkt.status === actie.value ? ` ${actie.actiefClass}` : ""}`}
+                      onClick={() => setBewerkt({ ...bewerkt, status: actie.value })}
+                    >
+                      {actie.label}
+                    </button>
+                  ))}
                 </div>
               )}
               <select
-                className={`form-input${isOpdrachtGroen(bewerkt.status) ? " form-input-groen" : ""}`}
+                className={`form-input${
+                  prioRood
+                    ? " form-input-prio-1"
+                    : groen
+                      ? " form-input-groen"
+                      : bewerkt.status === OpdrachtStatus.OnHold
+                        ? " form-input-onhold"
+                        : bewerkt.status === OpdrachtStatus.Oud
+                          ? " form-input-oud"
+                          : ""
+                }`}
                 value={bewerkt.status}
                 onChange={(e) =>
                   setBewerkt({ ...bewerkt, status: e.target.value as OpdrachtStatus })

@@ -20,6 +20,8 @@ const STATUS_LABELS: Record<string, string> = {
   AFWACHTING: "Afwachting",
   IN_BEHANDELING: "In behandeling",
   INGEDIEND: "Ingediend",
+  ON_HOLD: "On hold",
+  OUD: "Oud",
   AFGEROND: "Afgerond"
 };
 

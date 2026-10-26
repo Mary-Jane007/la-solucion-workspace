@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { Opdracht, OpdrachtStatus } from "../types";
+import { isOpdrachtOpen } from "../opdrachtenUtils";
 import { OpdrachtenWerkruimte } from "../hooks/useOpdrachtenWerkruimte";
 import { useLijstGezienStatus } from "../hooks/useLijstGezienStatus";
 import { homeItemIds } from "../badgeItems";
@@ -27,7 +28,7 @@ export function Dashboard({
   const { zichtbareOpdrachten, openOpdracht, opdrachtFout } = werkruimte;
 
   const belangrijksteOpdrachten = [...zichtbareOpdrachten]
-    .filter((o) => o.status !== OpdrachtStatus.Afgerond && o.prioriteit === 1)
+    .filter((o) => isOpdrachtOpen(o.status) && o.prioriteit === 1)
     .sort((a, b) => {
       if (a.datumDeadline && b.datumDeadline) return a.datumDeadline.localeCompare(b.datumDeadline);
       if (a.datumDeadline) return -1;
@@ -41,6 +42,8 @@ export function Dashboard({
     afwachting: zichtbareOpdrachten.filter((o) => o.status === OpdrachtStatus.Afwachting).length,
     lopend: zichtbareOpdrachten.filter((o) => o.status === OpdrachtStatus.InBehandeling).length,
     ingediend: zichtbareOpdrachten.filter((o) => o.status === OpdrachtStatus.Ingediend).length,
+    onHold: zichtbareOpdrachten.filter((o) => o.status === OpdrachtStatus.OnHold).length,
+    oud: zichtbareOpdrachten.filter((o) => o.status === OpdrachtStatus.Oud).length,
     afgerond: zichtbareOpdrachten.filter((o) => o.status === OpdrachtStatus.Afgerond).length
   };
 
@@ -124,6 +127,14 @@ export function Dashboard({
             <div className="metric-badge">
               <span className="metric-label">Ingediend</span>
               <span className="metric-value">{aantallen.ingediend}</span>
+            </div>
+            <div className="metric-badge">
+              <span className="metric-label">On hold</span>
+              <span className="metric-value">{aantallen.onHold}</span>
+            </div>
+            <div className="metric-badge">
+              <span className="metric-label">Oud</span>
+              <span className="metric-value">{aantallen.oud}</span>
             </div>
             <div className="metric-badge">
               <span className="metric-label">Afgerond</span>

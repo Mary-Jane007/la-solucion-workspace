@@ -1,6 +1,5 @@
 import { useMemo } from "react";
-import { OpdrachtStatus } from "../types";
-import { isOpdrachtGroen, statusLabel } from "../opdrachtenUtils";
+import { isOpdrachtOpen, opdrachtLijstItemClassNaam, statusLabel } from "../opdrachtenUtils";
 import { OpdrachtenWerkruimte } from "../hooks/useOpdrachtenWerkruimte";
 import { useLijstGezienStatus } from "../hooks/useLijstGezienStatus";
 import { mijnOpdrachtenItemIds } from "../badgeItems";
@@ -13,7 +12,7 @@ interface Props {
 
 export function MijnOpdrachtenPagina({ werkruimte, userId, onGezien }: Props) {
   const { mijnOpdrachten, openOpdracht } = werkruimte;
-  const openstaand = mijnOpdrachten.filter((o) => o.status !== OpdrachtStatus.Afgerond);
+  const openstaand = mijnOpdrachten.filter((o) => isOpdrachtOpen(o.status));
   const itemIds = useMemo(() => mijnOpdrachtenItemIds(mijnOpdrachten), [mijnOpdrachten]);
   const { isOngelezen, markeerGeopend } = useLijstGezienStatus(
     "mijn-opdrachten",
@@ -38,7 +37,7 @@ export function MijnOpdrachtenPagina({ werkruimte, userId, onGezien }: Props) {
               <li key={o.id}>
                 <button
                   type="button"
-                  className={`page-list-item${isOpdrachtGroen(o.status) ? " page-list-item-groen" : ""}${ongelezen && !isOpdrachtGroen(o.status) ? " melding-ongelezen" : ""}`}
+                  className={opdrachtLijstItemClassNaam(o.status, o.prioriteit, ongelezen)}
                   onClick={() => {
                     markeerGeopend(o.id);
                     openOpdracht(o);

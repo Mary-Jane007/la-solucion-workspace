@@ -15,6 +15,8 @@ export enum OpdrachtStatus {
   Afwachting = "AFWACHTING",
   InBehandeling = "IN_BEHANDELING",
   Ingediend = "INGEDIEND",
+  OnHold = "ON_HOLD",
+  Oud = "OUD",
   Afgerond = "AFGEROND"
 }
 

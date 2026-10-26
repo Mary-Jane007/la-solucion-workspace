@@ -90,7 +90,7 @@ async function migrate() {
       omschrijving text not null,
       datum_aangemaakt date not null,
       datum_deadline date,
-      status text not null check (status in ('NIEUW','AFWACHTING','IN_BEHANDELING','INGEDIEND','AFGEROND')),
+      status text not null check (status in ('NIEUW','AFWACHTING','IN_BEHANDELING','INGEDIEND','ON_HOLD','OUD','AFGEROND')),
       prioriteit int not null check (prioriteit in (1,2,3)),
       behandelaar_user_id text,
       notities text,
@@ -135,7 +135,7 @@ async function migrate() {
     []
   );
 
-  // Bestaande databases: status-check uitbreiden met AFWACHTING en INGEDIEND
+  // Bestaande databases: status-check uitbreiden met ON_HOLD en OUD
   await query(
     `
     do $$
@@ -156,7 +156,7 @@ async function migrate() {
       end if;
       alter table opdrachten
         add constraint opdrachten_status_check
-        check (status in ('NIEUW','AFWACHTING','IN_BEHANDELING','INGEDIEND','AFGEROND'));
+        check (status in ('NIEUW','AFWACHTING','IN_BEHANDELING','INGEDIEND','ON_HOLD','OUD','AFGEROND'));
     end $$;
     `,
     []

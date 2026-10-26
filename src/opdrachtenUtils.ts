@@ -37,7 +37,7 @@ function eindeWeekIso(): string {
 }
 
 export function isTeLaat(opdracht: Opdracht): boolean {
-  if (!opdracht.datumDeadline || opdracht.status === OpdrachtStatus.Afgerond) return false;
+  if (!opdracht.datumDeadline || !isOpdrachtOpen(opdracht.status)) return false;
   return opdracht.datumDeadline < vandaagIso();
 }
 
@@ -54,7 +54,7 @@ export function berekenMeldingen(opdrachten: Opdracht[]): MeldingItem[] {
   const items: MeldingItem[] = [];
 
   for (const o of opdrachten) {
-    if (o.status === OpdrachtStatus.Afgerond) continue;
+    if (!isOpdrachtOpen(o.status)) continue;
     if (o.prioriteit === 1) {
       items.push({
         id: `p1-${o.id}`,
@@ -99,7 +99,7 @@ export function groepeerDeadlines(opdrachten: Opdracht[]): DeadlineGroep[] {
   const vandaag = vandaagIso();
   const morgen = morgenIso();
   const week = eindeWeekIso();
-  const open = opdrachten.filter((o) => o.status !== OpdrachtStatus.Afgerond && o.datumDeadline);
+  const open = opdrachten.filter((o) => isOpdrachtOpen(o.status) && o.datumDeadline);
 
   const teLaat = open.filter((o) => o.datumDeadline! < vandaag);
   const vandaagLijst = open.filter((o) => o.datumDeadline === vandaag);
@@ -124,6 +124,8 @@ export interface StatistiekenData {
   afwachting: number;
   lopend: number;
   ingediend: number;
+  onHold: number;
+  oud: number;
   afgerond: number;
   p1: number;
   p2: number;
@@ -141,15 +143,15 @@ export interface StatistiekenData {
 export function berekenStatistieken(opdrachten: Opdracht[]): StatistiekenData {
   const vandaag = vandaagIso();
   const week = eindeWeekIso();
-  const open = opdrachten.filter((o) => o.status !== OpdrachtStatus.Afgerond);
+  const open = opdrachten.filter((o) => isOpdrachtOpen(o.status));
 
   const medewerkerMap = new Map<string, { totaal: number; open: number; afgerond: number }>();
   for (const o of opdrachten) {
     const naam = o.behandelaarNaam || "Niet toegewezen";
     const entry = medewerkerMap.get(naam) || { totaal: 0, open: 0, afgerond: 0 };
     entry.totaal += 1;
-    if (o.status === OpdrachtStatus.Afgerond) entry.afgerond += 1;
-    else entry.open += 1;
+    if (isOpdrachtOpen(o.status)) entry.open += 1;
+    else entry.afgerond += 1;
     medewerkerMap.set(naam, entry);
   }
 
@@ -170,6 +172,8 @@ export function berekenStatistieken(opdrachten: Opdracht[]): StatistiekenData {
   const afwachting = opdrachten.filter((o) => o.status === OpdrachtStatus.Afwachting).length;
   const lopend = opdrachten.filter((o) => o.status === OpdrachtStatus.InBehandeling).length;
   const ingediend = opdrachten.filter((o) => o.status === OpdrachtStatus.Ingediend).length;
+  const onHold = opdrachten.filter((o) => o.status === OpdrachtStatus.OnHold).length;
+  const oud = opdrachten.filter((o) => o.status === OpdrachtStatus.Oud).length;
   const afgerond = opdrachten.filter((o) => o.status === OpdrachtStatus.Afgerond).length;
 
   return {
@@ -178,6 +182,8 @@ export function berekenStatistieken(opdrachten: Opdracht[]): StatistiekenData {
     afwachting,
     lopend,
     ingediend,
+    onHold,
+    oud,
     afgerond,
     p1: open.filter((o) => o.prioriteit === 1).length,
     p2: open.filter((o) => o.prioriteit === 2).length,
@@ -198,6 +204,8 @@ export function berekenStatistieken(opdrachten: Opdracht[]): StatistiekenData {
       { label: "Afwachting", waarde: afwachting, kleur: "#a78bfa" },
       { label: "In behandeling", waarde: lopend, kleur: "#f59e0b" },
       { label: "Ingediend", waarde: ingediend, kleur: "#34d399" },
+      { label: "On hold", waarde: onHold, kleur: "#fbbf24" },
+      { label: "Oud", waarde: oud, kleur: "#94a3b8" },
       { label: "Afgerond", waarde: afgerond, kleur: "#22c55e" }
     ]
   };
@@ -222,7 +230,7 @@ export function groepeerPerKlant(opdrachten: Opdracht[]): KlantGroep[] {
     .map(([klantNaam, lijst]) => ({
       klantNaam,
       opdrachten: lijst,
-      open: lijst.filter((o) => o.status !== OpdrachtStatus.Afgerond).length,
+      open: lijst.filter((o) => isOpdrachtOpen(o.status)).length,
       afgerond: lijst.filter((o) => o.status === OpdrachtStatus.Afgerond).length
     }))
     .sort((a, b) => a.klantNaam.localeCompare(b.klantNaam));
@@ -328,7 +336,7 @@ export function deadlineBadgeOpdrachten(opdrachten: Opdracht[]): Opdracht[] {
   const week = eindeWeekIso();
   return opdrachten.filter(
     (o) =>
-      o.status !== OpdrachtStatus.Afgerond &&
+      isOpdrachtOpen(o.status) &&
       o.datumDeadline &&
       (o.datumDeadline < vandaag || (o.datumDeadline >= vandaag && o.datumDeadline <= week))
   );
@@ -398,21 +406,82 @@ export const OPDRACHT_STATUS_OPTIES: { value: OpdrachtStatus; label: string }[] 
   { value: OpdrachtStatus.Afwachting, label: "Afwachting" },
   { value: OpdrachtStatus.InBehandeling, label: "In behandeling" },
   { value: OpdrachtStatus.Ingediend, label: "Ingediend" },
+  { value: OpdrachtStatus.OnHold, label: "On hold" },
+  { value: OpdrachtStatus.Oud, label: "Oud" },
   { value: OpdrachtStatus.Afgerond, label: "Afgerond" }
 ];
 
+export const OPDRACHT_SNEL_STATUS_ACTIES: {
+  value: OpdrachtStatus;
+  label: string;
+  actiefClass: string;
+}[] = [
+  { value: OpdrachtStatus.OnHold, label: "On hold", actiefClass: "actief-onhold" },
+  { value: OpdrachtStatus.Ingediend, label: "Ingediend", actiefClass: "actief" },
+  { value: OpdrachtStatus.Oud, label: "Oud", actiefClass: "actief-oud" },
+  { value: OpdrachtStatus.Afgerond, label: "Afgerond", actiefClass: "actief" }
+];
+
 export function statusLabel(status: OpdrachtStatus | string): string {
-  if (status === OpdrachtStatus.Nieuw) return "Nieuw";
-  if (status === OpdrachtStatus.Afwachting) return "Afwachting";
-  if (status === OpdrachtStatus.InBehandeling) return "In behandeling";
-  if (status === OpdrachtStatus.Ingediend) return "Ingediend";
-  if (status === OpdrachtStatus.Afgerond) return "Afgerond";
-  return String(status || "");
+  return OPDRACHT_STATUS_OPTIES.find((optie) => optie.value === status)?.label ?? String(status || "");
 }
 
 /** Groen vak zolang de opdracht ingediend of afgerond is. */
 export function isOpdrachtGroen(status?: OpdrachtStatus | string | null): boolean {
   return status === OpdrachtStatus.Ingediend || status === OpdrachtStatus.Afgerond;
+}
+
+/** Oud en afgerond tellen niet mee als open werk. On hold blijft open. */
+export function isOpdrachtOpen(status?: OpdrachtStatus | string | null): boolean {
+  return status !== OpdrachtStatus.Afgerond && status !== OpdrachtStatus.Oud;
+}
+
+export function isHogePrioriteit(prioriteit?: number | null): boolean {
+  return prioriteit === 1;
+}
+
+/** P1 blijft rood tot Ingediend, Afgerond of tot de prioriteit wijzigt. */
+export function isP1Rood(
+  status?: OpdrachtStatus | string | null,
+  prioriteit?: number | null
+): boolean {
+  return isHogePrioriteit(prioriteit) && !isOpdrachtGroen(status);
+}
+
+export function statusPillClass(status?: OpdrachtStatus | string | null): string {
+  if (isOpdrachtGroen(status)) return "pill pill-status-groen";
+  if (status === OpdrachtStatus.OnHold) return "pill pill-status-onhold";
+  if (status === OpdrachtStatus.Oud) return "pill pill-status-oud";
+  return "pill pill-status";
+}
+
+export function opdrachtKaartClassNaam(
+  status: OpdrachtStatus | string | null | undefined,
+  prioriteit: number | null | undefined,
+  ongelezen = false
+): string {
+  if (isP1Rood(status, prioriteit)) return "opdracht-card-prio-1";
+  if (isOpdrachtGroen(status)) return "opdracht-card-groen";
+  if (status === OpdrachtStatus.OnHold) return "opdracht-card-onhold";
+  if (status === OpdrachtStatus.Oud) return "opdracht-card-oud";
+  if (ongelezen) return "opdracht-card-ongelezen";
+  return "";
+}
+
+export function opdrachtLijstItemClassNaam(
+  status: OpdrachtStatus | string | null | undefined,
+  prioriteit: number | null | undefined,
+  ongelezen = false
+): string {
+  const klassen = ["page-list-item"];
+  if (isP1Rood(status, prioriteit)) klassen.push("page-list-item-prio-1");
+  else if (isOpdrachtGroen(status)) klassen.push("page-list-item-groen");
+  else if (status === OpdrachtStatus.OnHold) klassen.push("page-list-item-onhold");
+  else if (status === OpdrachtStatus.Oud) klassen.push("page-list-item-oud");
+  if (ongelezen && !isP1Rood(status, prioriteit) && !isOpdrachtGroen(status)) {
+    klassen.push("melding-ongelezen");
+  }
+  return klassen.join(" ");
 }
 
 /** Bestaande opdrachten met herkenbaar dezelfde klantnaam (volledig of deel). */
@@ -439,8 +508,8 @@ export function vindOvereenkomstigeOpdrachten(
     const aExact = normTekst(a.klantNaam) === klant ? 0 : 1;
     const bExact = normTekst(b.klantNaam) === klant ? 0 : 1;
     if (aExact !== bExact) return aExact - bExact;
-    const aOpen = a.status === OpdrachtStatus.Afgerond ? 1 : 0;
-    const bOpen = b.status === OpdrachtStatus.Afgerond ? 1 : 0;
+    const aOpen = isOpdrachtOpen(a.status) ? 0 : 1;
+    const bOpen = isOpdrachtOpen(b.status) ? 0 : 1;
     if (aOpen !== bOpen) return aOpen - bOpen;
     return (b.datumAangemaakt || "").localeCompare(a.datumAangemaakt || "");
   });

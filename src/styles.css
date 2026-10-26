@@ -683,14 +683,8 @@ body {
 
 .board-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 8px;
-}
-
-@media (max-width: 1280px) {
-  .board-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 1100px) {
@@ -788,6 +782,23 @@ body {
   box-shadow: inset 4px 0 0 var(--color-success);
 }
 
+.opdracht-card-onhold {
+  border-color: color-mix(in srgb, var(--color-warning) 55%, var(--color-border));
+  box-shadow: inset 4px 0 0 var(--color-warning);
+}
+
+.opdracht-card-oud {
+  border-color: var(--color-border-strong);
+  box-shadow: inset 4px 0 0 var(--color-text-muted);
+}
+
+.opdracht-card-prio-1 {
+  border-color: var(--color-unread-border);
+  background: var(--color-unread-bg);
+  color: var(--color-unread-text);
+  box-shadow: inset 4px 0 0 var(--color-danger);
+}
+
 .opdracht-header-pills {
   display: flex;
   align-items: center;
@@ -796,7 +807,9 @@ body {
 }
 
 .pill-status,
-.pill-status-groen {
+.pill-status-groen,
+.pill-status-onhold,
+.pill-status-oud {
   font-size: 10px;
   font-weight: 600;
 }
@@ -805,6 +818,18 @@ body {
   background: var(--color-success-bg);
   color: var(--color-success);
   border: 1px solid color-mix(in srgb, var(--color-success) 40%, transparent);
+}
+
+.pill-status-onhold {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  border: 1px solid color-mix(in srgb, var(--color-warning) 40%, transparent);
+}
+
+.pill-status-oud {
+  background: var(--color-neutral-tag);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border-strong);
 }
 
 .opdracht-klaar-acties {
@@ -834,19 +859,73 @@ body {
   border-color: color-mix(in srgb, var(--color-success) 45%, var(--color-border));
 }
 
+.btn-klaar.actief-onhold {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  border-color: color-mix(in srgb, var(--color-warning) 45%, var(--color-border));
+}
+
+.btn-klaar.actief-oud {
+  background: var(--color-neutral-tag);
+  color: var(--color-text-muted);
+  border-color: var(--color-border-strong);
+}
+
 .modal.modal-opdracht-groen {
   border-color: color-mix(in srgb, var(--color-success) 40%, var(--color-border-strong));
 }
 
-.opdracht-groen-hint {
+.modal.modal-opdracht-onhold {
+  border-color: color-mix(in srgb, var(--color-warning) 40%, var(--color-border-strong));
+}
+
+.modal.modal-opdracht-oud {
+  border-color: var(--color-border-strong);
+}
+
+.modal.modal-opdracht-prio-1 {
+  border-color: var(--color-unread-border);
+}
+
+.opdracht-groen-hint,
+.opdracht-onhold-hint,
+.opdracht-oud-hint,
+.opdracht-prio-hint {
   margin: 6px 0 0;
   font-size: 13px;
   font-weight: 600;
+}
+
+.opdracht-groen-hint {
   color: var(--color-success);
+}
+
+.opdracht-onhold-hint {
+  color: var(--color-warning);
+}
+
+.opdracht-oud-hint {
+  color: var(--color-text-muted);
+}
+
+.opdracht-prio-hint {
+  color: var(--color-danger-strong);
 }
 
 .form-input-groen {
   border-color: color-mix(in srgb, var(--color-success) 50%, var(--color-border));
+}
+
+.form-input-onhold {
+  border-color: color-mix(in srgb, var(--color-warning) 50%, var(--color-border));
+}
+
+.form-input-oud {
+  border-color: var(--color-border-strong);
+}
+
+.form-input-prio-1 {
+  border-color: var(--color-unread-border);
 }
 
 .opdracht-main {
@@ -2116,6 +2195,24 @@ a.btn-secondary {
   border-color: color-mix(in srgb, var(--color-success) 40%, var(--color-border));
 }
 
+.page-list-item-onhold {
+  border-color: color-mix(in srgb, var(--color-warning) 40%, var(--color-border));
+}
+
+.page-list-item-oud {
+  border-color: var(--color-border-strong);
+}
+
+.page-list-item-prio-1 {
+  border-color: var(--color-unread-border);
+  background: var(--color-unread-bg);
+  color: var(--color-unread-text);
+}
+
+.page-list-item-prio-1 strong {
+  color: var(--color-unread-text);
+}
+
 .page-list-item.melding-ongelezen {
   border-color: var(--color-unread-border);
   background: var(--color-unread-bg);
@@ -2150,6 +2247,13 @@ a.btn-secondary {
   background: var(--color-unread-bg);
   color: var(--color-unread-text);
   box-shadow: 0 0 0 1px var(--color-unread-border);
+}
+
+.opdracht-card.opdracht-card-prio-1 {
+  border-color: var(--color-unread-border) !important;
+  background: var(--color-unread-bg);
+  color: var(--color-unread-text);
+  box-shadow: inset 4px 0 0 var(--color-danger);
 }
 
 .important-item.melding-ongelezen {
