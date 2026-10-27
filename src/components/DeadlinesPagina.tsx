@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { groepeerDeadlines } from "../opdrachtenUtils";
+import { groepeerDeadlines, klantWeergave } from "../opdrachtenUtils";
 import { OpdrachtenWerkruimte } from "../hooks/useOpdrachtenWerkruimte";
 import { useLijstGezienStatus } from "../hooks/useLijstGezienStatus";
 import { deadlineBadgeIds } from "../opdrachtenUtils";
@@ -45,7 +45,7 @@ export function DeadlinesPagina({ werkruimte, userId, onGezien }: Props) {
                       }}
                     >
                       <div className="page-list-main">
-                        <strong>{o.klantNaam}</strong>
+                        <strong>{klantWeergave(o.klantNaam, o.klantNummer)}</strong>
                         <span className={`pill pill-prio-${o.prioriteit}`}>P{o.prioriteit}</span>
                       </div>
                       <span className={ongelezen ? "melding-ongelezen-sub" : "muted"}>

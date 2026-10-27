@@ -344,6 +344,78 @@ async function migrate() {
 
   await query(`alter table bestanden add column if not exists inhoud bytea;`, []);
 
+  await query(
+    `
+    create table if not exists klanten (
+      nummer int primary key,
+      naam text not null,
+      naam_norm text not null unique,
+      created_at timestamptz not null default now()
+    );
+    `,
+    []
+  );
+  await query(`create sequence if not exists klanten_nummer_seq;`, []);
+  await query(`alter table opdrachten add column if not exists klant_nummer int;`, []);
+  await query(
+    `create index if not exists idx_opdrachten_klant_nummer on opdrachten(klant_nummer);`,
+    []
+  );
+
+  await query(
+    `
+    insert into klanten (nummer, naam, naam_norm)
+    select
+      coalesce((select max(nummer) from klanten), 0)
+        + row_number() over (order by e.datum_aangemaakt asc nulls last, e.naam_norm asc),
+      e.naam,
+      e.naam_norm
+    from (
+      select distinct on (lower(regexp_replace(btrim(klant_naam), '\\s+', ' ', 'g')))
+        lower(regexp_replace(btrim(klant_naam), '\\s+', ' ', 'g')) as naam_norm,
+        klant_naam as naam,
+        datum_aangemaakt
+      from opdrachten
+      where btrim(klant_naam) <> ''
+      order by
+        lower(regexp_replace(btrim(klant_naam), '\\s+', ' ', 'g')),
+        datum_aangemaakt asc nulls last,
+        created_at asc nulls last
+    ) e
+    where e.naam_norm <> ''
+      and not exists (select 1 from klanten k where k.naam_norm = e.naam_norm);
+    `,
+    []
+  );
+
+  await query(
+    `
+    update opdrachten o
+    set klant_nummer = k.nummer
+    from klanten k
+    where o.klant_nummer is null
+      and lower(regexp_replace(btrim(o.klant_naam), '\\s+', ' ', 'g')) = k.naam_norm;
+    `,
+    []
+  );
+
+  await query(
+    `
+    do $$
+    declare
+      m int;
+    begin
+      select max(nummer) into m from klanten;
+      if m is null then
+        perform setval('klanten_nummer_seq', 1, false);
+      else
+        perform setval('klanten_nummer_seq', m, true);
+      end if;
+    end $$;
+    `,
+    []
+  );
+
   await koppelLoginAccountsAanFinancieleNamen();
 }
 

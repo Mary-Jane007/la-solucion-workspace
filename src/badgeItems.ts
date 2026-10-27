@@ -48,7 +48,9 @@ export function activiteitItemIds(opdrachten: Opdracht[]): string[] {
 
 export function klantenItemIds(opdrachten: Opdracht[]): string[] {
   return uniqueIds(
-    [...new Set(opdrachten.map((o) => o.klantNaam.trim().toLowerCase()))].filter(Boolean)
+    opdrachten.map((o) =>
+      o.klantNummer ? `n:${o.klantNummer}` : o.klantNaam.trim().toLowerCase()
+    )
   );
 }
 

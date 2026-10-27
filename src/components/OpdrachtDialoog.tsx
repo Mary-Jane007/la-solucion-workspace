@@ -21,8 +21,12 @@ import { opdrachtVerwijderBevestiging } from "../opdrachtVerwijderen";
 import {
   isOpdrachtGroen,
   isP1Rood,
+  klantNummerLabel,
+  klantWeergave,
+  normKlantNaam,
   OPDRACHT_SNEL_STATUS_ACTIES,
   OPDRACHT_STATUS_OPTIES,
+  previewKlantNummer,
   statusLabel,
   vindOvereenkomstigeOpdrachten
 } from "../opdrachtenUtils";
@@ -206,6 +210,15 @@ export function OpdrachtDialoog({
     return `Bestaande opdracht(en) voor “${naam}”`;
   }, [bewerkt.klantNaam]);
 
+  const getoondKlantNummer = useMemo(() => {
+    const naamOngewijzigd = normKlantNaam(bewerkt.klantNaam) === normKlantNaam(opdracht.klantNaam);
+    return previewKlantNummer(
+      bestaandeOpdrachten,
+      bewerkt.klantNaam,
+      naamOngewijzigd ? bewerkt.klantNummer : undefined
+    );
+  }, [bestaandeOpdrachten, bewerkt.klantNaam, bewerkt.klantNummer, opdracht.klantNaam]);
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     try {
@@ -224,7 +237,7 @@ export function OpdrachtDialoog({
       if (matchesBijOpslaan.length > 0) {
         const voorbeelden = matchesBijOpslaan
           .slice(0, 3)
-          .map((o) => `• ${o.klantNaam} – ${o.omschrijving} (${statusLabel(o.status)})`)
+          .map((o) => `• ${klantWeergave(o.klantNaam, o.klantNummer)} – ${o.omschrijving} (${statusLabel(o.status)})`)
           .join("\n");
         const bevestigd = window.confirm(
           `Let op: er bestaan al ${matchesBijOpslaan.length} opdracht(en) met een herkenbaar gelijke klantnaam:\n\n${voorbeelden}${
@@ -481,25 +494,45 @@ export function OpdrachtDialoog({
         <form className="modal-body form" onSubmit={handleSubmit}>
           <div className="modal-columns">
             <div className="modal-col">
-              <label className="form-label" htmlFor="opdracht-klantnaam">
-                Naam klant
-              </label>
-              <input
-                id="opdracht-klantnaam"
-                className={`form-input${
-                  isToevoegen && overeenkomstigeOpdrachten.length > 0 ? " form-input-waarschuwing" : ""
-                }`}
-                value={bewerkt.klantNaam}
-                onChange={(e) => setBewerkt({ ...bewerkt, klantNaam: e.target.value })}
-                readOnly={alleenLezen}
-                disabled={alleenLezen}
-                autoComplete="off"
-                aria-describedby={
-                  isToevoegen && overeenkomstigeOpdrachten.length > 0
-                    ? "opdracht-klant-waarschuwing"
-                    : undefined
-                }
-              />
+              <div className="klant-naam-rij">
+                <div>
+                  <label className="form-label" htmlFor="opdracht-klantnummer">
+                    Klantnr.
+                  </label>
+                  <input
+                    id="opdracht-klantnummer"
+                    className="form-input klant-nummer-input"
+                    value={klantNummerLabel(getoondKlantNummer)}
+                    readOnly
+                    tabIndex={-1}
+                    aria-live="polite"
+                  />
+                </div>
+                <div className="klant-naam-veld">
+                  <label className="form-label" htmlFor="opdracht-klantnaam">
+                    Naam klant
+                  </label>
+                  <input
+                    id="opdracht-klantnaam"
+                    className={`form-input${
+                      isToevoegen && overeenkomstigeOpdrachten.length > 0 ? " form-input-waarschuwing" : ""
+                    }`}
+                    value={bewerkt.klantNaam}
+                    onChange={(e) => setBewerkt({ ...bewerkt, klantNaam: e.target.value })}
+                    readOnly={alleenLezen}
+                    disabled={alleenLezen}
+                    autoComplete="off"
+                    aria-describedby={
+                      isToevoegen && overeenkomstigeOpdrachten.length > 0
+                        ? "opdracht-klant-waarschuwing"
+                        : "opdracht-klantnummer-hint"
+                    }
+                  />
+                </div>
+              </div>
+              <p id="opdracht-klantnummer-hint" className="muted klant-nummer-hint">
+                Nieuwe klanten krijgen automatisch het volgende nummer. Bestaande namen houden hun nummer.
+              </p>
               {isToevoegen && overeenkomstigeOpdrachten.length > 0 && (
                 <div
                   id="opdracht-klant-waarschuwing"
@@ -517,7 +550,7 @@ export function OpdrachtDialoog({
                     {overeenkomstigeOpdrachten.slice(0, 4).map((o) => (
                       <li key={o.id}>
                         <span>
-                          {o.klantNaam} – {o.omschrijving || "Geen omschrijving"}
+                          {klantWeergave(o.klantNaam, o.klantNummer)} – {o.omschrijving || "Geen omschrijving"}
                         </span>
                         <span className="muted"> · {statusLabel(o.status)}</span>
                       </li>
@@ -847,7 +880,7 @@ export function OpdrachtDialoog({
                 disabled={isBezig}
                 onClick={async () => {
                   const bevestigd = window.confirm(
-                    opdrachtVerwijderBevestiging(bewerkt.klantNaam)
+                    opdrachtVerwijderBevestiging(klantWeergave(bewerkt.klantNaam, getoondKlantNummer))
                   );
                   if (!bevestigd) return;
                   try {

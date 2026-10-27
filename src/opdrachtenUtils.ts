@@ -36,6 +36,74 @@ function eindeWeekIso(): string {
   return d.toISOString().slice(0, 10);
 }
 
+export function normKlantNaam(naam: string): string {
+  return naam.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+export function klantNummerWaarde(waarde?: number | string | null): number | undefined {
+  const n = typeof waarde === "number" ? waarde : Number(waarde);
+  return Number.isInteger(n) && n > 0 ? n : undefined;
+}
+
+export function klantNummerLabel(nummer?: number | string | null): string {
+  const n = klantNummerWaarde(nummer);
+  return n ? `K${n}` : "";
+}
+
+export function klantWeergave(naam: string, nummer?: number | string | null): string {
+  const label = klantNummerLabel(nummer);
+  const n = naam.trim() || "Naam klant";
+  return label ? `${label}  ${n}` : n;
+}
+
+export function parseKlantZoekNummer(q: string): number | null {
+  const t = q.trim().toLowerCase().replace(/\s+/g, "");
+  const m = t.match(/^k[-.]?(\d+)$/) || t.match(/^(\d+)$/);
+  if (!m) return null;
+  return klantNummerWaarde(m[1]) ?? null;
+}
+
+export function klantNummerVoorNaam(opdrachten: Opdracht[], naam: string): number | undefined {
+  const norm = normKlantNaam(naam);
+  if (!norm) return undefined;
+  const match = opdrachten.find(
+    (o) => klantNummerWaarde(o.klantNummer) && normKlantNaam(o.klantNaam) === norm
+  );
+  return klantNummerWaarde(match?.klantNummer);
+}
+
+export function volgendeKlantNummer(opdrachten: Opdracht[]): number {
+  return opdrachten.reduce((max, o) => Math.max(max, klantNummerWaarde(o.klantNummer) || 0), 0) + 1;
+}
+
+export function previewKlantNummer(
+  opdrachten: Opdracht[],
+  naam: string,
+  huidigNummer?: number | string | null
+): number {
+  const bestaand = klantNummerVoorNaam(opdrachten, naam);
+  if (bestaand) return bestaand;
+  const huidig = klantNummerWaarde(huidigNummer);
+  if (huidig && naam.trim()) return huidig;
+  return volgendeKlantNummer(opdrachten);
+}
+
+export function klantMatchtZoekterm(
+  naam: string,
+  nummer: number | string | null | undefined,
+  zoekterm: string
+): boolean {
+  const q = zoekterm.trim().toLowerCase();
+  if (!q) return true;
+  if (naam.toLowerCase().includes(q)) return true;
+  const n = klantNummerWaarde(nummer);
+  if (!n) return false;
+  const gezocht = parseKlantZoekNummer(q);
+  if (gezocht) return gezocht === n;
+  const label = klantNummerLabel(n).toLowerCase();
+  return label.includes(q) || String(n).includes(q);
+}
+
 export function isTeLaat(opdracht: Opdracht): boolean {
   if (!opdracht.datumDeadline || !isOpdrachtOpen(opdracht.status)) return false;
   return opdracht.datumDeadline < vandaagIso();
@@ -59,7 +127,7 @@ export function berekenMeldingen(opdrachten: Opdracht[]): MeldingItem[] {
       items.push({
         id: `p1-${o.id}`,
         type: "p1",
-        titel: `Hoge prioriteit: ${o.klantNaam}`,
+        titel: `Hoge prioriteit: ${klantWeergave(o.klantNaam, o.klantNummer)}`,
         opdracht: o
       });
     }
@@ -67,21 +135,21 @@ export function berekenMeldingen(opdrachten: Opdracht[]): MeldingItem[] {
       items.push({
         id: `vandaag-${o.id}`,
         type: "deadline-vandaag",
-        titel: `Deadline vandaag: ${o.klantNaam}`,
+        titel: `Deadline vandaag: ${klantWeergave(o.klantNaam, o.klantNummer)}`,
         opdracht: o
       });
     } else if (o.datumDeadline === morgen) {
       items.push({
         id: `morgen-${o.id}`,
         type: "deadline-morgen",
-        titel: `Deadline morgen: ${o.klantNaam}`,
+        titel: `Deadline morgen: ${klantWeergave(o.klantNaam, o.klantNummer)}`,
         opdracht: o
       });
     } else if (isTeLaat(o)) {
       items.push({
         id: `laat-${o.id}`,
         type: "te-laat",
-        titel: `Te laat: ${o.klantNaam}`,
+        titel: `Te laat: ${klantWeergave(o.klantNaam, o.klantNummer)}`,
         opdracht: o
       });
     }
@@ -213,6 +281,7 @@ export function berekenStatistieken(opdrachten: Opdracht[]): StatistiekenData {
 
 export interface KlantGroep {
   klantNaam: string;
+  klantNummer?: number;
   opdrachten: Opdracht[];
   open: number;
   afgerond: number;
@@ -221,19 +290,31 @@ export interface KlantGroep {
 export function groepeerPerKlant(opdrachten: Opdracht[]): KlantGroep[] {
   const map = new Map<string, Opdracht[]>();
   for (const o of opdrachten) {
-    const key = o.klantNaam.trim() || "Onbekend";
+    const nummer = klantNummerWaarde(o.klantNummer);
+    const key = nummer
+      ? `n:${nummer}`
+      : `naam:${normKlantNaam(o.klantNaam) || "onbekend"}`;
     const lijst = map.get(key) || [];
     lijst.push(o);
     map.set(key, lijst);
   }
-  return [...map.entries()]
-    .map(([klantNaam, lijst]) => ({
-      klantNaam,
-      opdrachten: lijst,
-      open: lijst.filter((o) => isOpdrachtOpen(o.status)).length,
-      afgerond: lijst.filter((o) => o.status === OpdrachtStatus.Afgerond).length
-    }))
-    .sort((a, b) => a.klantNaam.localeCompare(b.klantNaam));
+  return [...map.values()]
+    .map((lijst) => {
+      const eerste = lijst[0];
+      return {
+        klantNaam: eerste.klantNaam.trim() || "Onbekend",
+        klantNummer: klantNummerWaarde(eerste.klantNummer),
+        opdrachten: lijst,
+        open: lijst.filter((o) => isOpdrachtOpen(o.status)).length,
+        afgerond: lijst.filter((o) => o.status === OpdrachtStatus.Afgerond).length
+      };
+    })
+    .sort((a, b) => {
+      const an = a.klantNummer ?? Number.MAX_SAFE_INTEGER;
+      const bn = b.klantNummer ?? Number.MAX_SAFE_INTEGER;
+      if (an !== bn) return an - bn;
+      return a.klantNaam.localeCompare(b.klantNaam, "nl");
+    });
 }
 
 export interface DocumentItem {
@@ -242,6 +323,7 @@ export interface DocumentItem {
   mimeType?: string;
   grootte: number;
   klantNaam: string;
+  klantNummer?: number;
   opdrachtId: string;
   omschrijving: string;
 }
@@ -256,6 +338,7 @@ export function flattenDocumenten(opdrachten: Opdracht[]): DocumentItem[] {
         mimeType: b.mimeType,
         grootte: b.grootte,
         klantNaam: o.klantNaam,
+        klantNummer: klantNummerWaarde(o.klantNummer),
         opdrachtId: o.id,
         omschrijving: o.omschrijving
       });
@@ -296,6 +379,7 @@ export function berekenActiviteit(opdrachten: Opdracht[]): ActiviteitItem[] {
 
 export function exportOpdrachtenCsv(opdrachten: Opdracht[]) {
   const headers = [
+    "Klantnr",
     "Klant",
     "Omschrijving",
     "Status",
@@ -306,6 +390,7 @@ export function exportOpdrachtenCsv(opdrachten: Opdracht[]) {
     "Categorie"
   ];
   const rows = opdrachten.map((o) => [
+    klantNummerLabel(o.klantNummer),
     o.klantNaam,
     o.omschrijving,
     o.status,

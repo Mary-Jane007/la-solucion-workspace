@@ -7,7 +7,7 @@ import {
   openBestandInNieuwTab
 } from "../api";
 import { isBekijkbaarBestand, isPdfBestand, openAlsAfbeeldingInApp } from "../bestandUtils";
-import { flattenDocumenten } from "../opdrachtenUtils";
+import { flattenDocumenten, klantMatchtZoekterm, klantWeergave } from "../opdrachtenUtils";
 import { OpdrachtenWerkruimte } from "../hooks/useOpdrachtenWerkruimte";
 import { useLijstGezienStatus } from "../hooks/useLijstGezienStatus";
 import { documentenItemIds } from "../badgeItems";
@@ -38,7 +38,7 @@ export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
     return lijst.filter(
       (d) =>
         d.origineleNaam.toLowerCase().includes(q) ||
-        d.klantNaam.toLowerCase().includes(q) ||
+        klantMatchtZoekterm(d.klantNaam, d.klantNummer, q) ||
         d.omschrijving.toLowerCase().includes(q)
     );
   }, [alleOpdrachten, zoekterm]);
@@ -108,7 +108,7 @@ export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
       <input
         type="search"
         className="form-input board-search-input"
-        placeholder="Zoek op bestandsnaam, klant of omschrijving..."
+        placeholder="Zoek op bestandsnaam, klantnummer, klant of omschrijving..."
         value={zoekterm}
         onChange={(e) => setZoekterm(e.target.value)}
       />
@@ -146,7 +146,7 @@ export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
                       />
                     </td>
                     <td>{d.origineleNaam}</td>
-                    <td>{d.klantNaam}</td>
+                    <td>{klantWeergave(d.klantNaam, d.klantNummer)}</td>
                     <td>{formatGrootte(d.grootte)}</td>
                     <td>
                       {isPdfBestand(d.origineleNaam, d.mimeType) ? (

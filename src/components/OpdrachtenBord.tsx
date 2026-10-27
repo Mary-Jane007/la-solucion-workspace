@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Opdracht, OpdrachtStatus } from "../types";
-import { OPDRACHT_STATUS_OPTIES } from "../opdrachtenUtils";
+import { klantMatchtZoekterm, OPDRACHT_STATUS_OPTIES } from "../opdrachtenUtils";
 import { OpdrachtKaart } from "./OpdrachtKaart";
 
 export interface OpdrachtenBordProps {
@@ -13,14 +13,8 @@ export interface OpdrachtenBordProps {
 }
 
 function opdrachtMatchtZoekterm(opdracht: Opdracht, zoekterm: string): boolean {
-  const velden = [
-    opdracht.klantNaam,
-    opdracht.omschrijving,
-    opdracht.categorie,
-    opdracht.behandelaarNaam,
-    opdracht.notities
-  ];
-
+  if (klantMatchtZoekterm(opdracht.klantNaam, opdracht.klantNummer, zoekterm)) return true;
+  const velden = [opdracht.omschrijving, opdracht.categorie, opdracht.behandelaarNaam, opdracht.notities];
   return velden.some((veld) => veld?.toLowerCase().includes(zoekterm));
 }
 
@@ -59,7 +53,7 @@ export function OpdrachtenBord({
           id="opdrachten-zoeken"
           type="search"
           className="form-input board-search-input"
-          placeholder="Zoek op klant, omschrijving, categorie of behandelaar..."
+          placeholder="Zoek op nummer, klant, omschrijving, categorie of behandelaar..."
           value={zoekterm}
           onChange={(e) => setZoekterm(e.target.value)}
         />

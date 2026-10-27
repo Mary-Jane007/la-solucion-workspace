@@ -948,6 +948,48 @@ body {
 
 .opdracht-client {
   font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.klant-nummer-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.1rem;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #e8eef7;
+  color: #1e3a5f;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+.klant-naam-rij {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.klant-nummer-input {
+  width: 5.6rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-align: center;
+}
+
+.klant-naam-veld {
+  flex: 1;
+  min-width: 0;
+}
+
+.klant-nummer-hint {
+  margin: 4px 0 0;
+  font-size: 12px;
 }
 
 .opdracht-body {
@@ -3209,6 +3251,10 @@ a.btn-secondary {
 .klant-kaart h3 {
   margin: 0 0 6px;
   font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .klant-opdrachten {

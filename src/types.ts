@@ -33,6 +33,7 @@ export interface BestandsKoppeling {
 export interface Opdracht {
   id: string;
   klantNaam: string;
+  klantNummer?: number;
   omschrijving: string;
   datumAangemaakt: string;
   datumDeadline?: string;

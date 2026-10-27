@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { berekenActiviteit } from "../opdrachtenUtils";
+import { berekenActiviteit, klantWeergave } from "../opdrachtenUtils";
 import { OpdrachtenWerkruimte } from "../hooks/useOpdrachtenWerkruimte";
 import { useLijstGezienStatus } from "../hooks/useLijstGezienStatus";
 import { activiteitItemIds } from "../badgeItems";
@@ -44,7 +44,7 @@ export function ActiviteitPagina({ werkruimte, userId, onGezien }: Props) {
                   }}
                 >
                   <div className="page-list-main">
-                    <strong>{a.opdracht.klantNaam}</strong>
+                    <strong>{klantWeergave(a.opdracht.klantNaam, a.opdracht.klantNummer)}</strong>
                     <span className="activiteit-tag">
                       {a.type === "aangemaakt" ? "Nieuw" : "Bijgewerkt"}
                     </span>

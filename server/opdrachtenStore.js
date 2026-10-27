@@ -6,9 +6,19 @@ function hasDb() {
   return Boolean(process.env.DATABASE_URL);
 }
 
+function mapOpdracht(row) {
+  if (!row) return row;
+  const n = row.klantNummer == null ? NaN : Number(row.klantNummer);
+  return {
+    ...row,
+    klantNummer: Number.isInteger(n) && n > 0 ? n : undefined
+  };
+}
+
 const OPORDER_SELECT = `
   o.id,
   o.klant_naam as "klantNaam",
+  o.klant_nummer as "klantNummer",
   o.omschrijving,
   o.datum_aangemaakt as "datumAangemaakt",
   o.datum_deadline as "datumDeadline",
@@ -35,7 +45,7 @@ async function listOpdrachtenForUser(user) {
       `,
       []
     );
-    return res.rows;
+    return res.rows.map(mapOpdracht);
   }
 
   const res = await query(
@@ -49,7 +59,7 @@ async function listOpdrachtenForUser(user) {
     `,
     [user.id]
   );
-  return res.rows;
+  return res.rows.map(mapOpdracht);
 }
 
 async function listPrullenbakForUser(user) {
@@ -67,7 +77,7 @@ async function listPrullenbakForUser(user) {
     `,
     []
   );
-  return res.rows;
+  return res.rows.map(mapOpdracht);
 }
 
 async function getOpdrachtById(id, { includeDeleted = false } = {}) {
@@ -84,7 +94,7 @@ async function getOpdrachtById(id, { includeDeleted = false } = {}) {
     `,
     [id]
   );
-  return res.rows[0] || null;
+  return mapOpdracht(res.rows[0]) || null;
 }
 
 async function getOpdrachtInPrullenbakById(id) {
@@ -101,7 +111,7 @@ async function getOpdrachtInPrullenbakById(id) {
     `,
     [id]
   );
-  return res.rows[0] || null;
+  return mapOpdracht(res.rows[0]) || null;
 }
 
 async function createOpdracht(opdracht) {
@@ -109,13 +119,14 @@ async function createOpdracht(opdracht) {
   await query(
     `
     insert into opdrachten
-      (id, klant_naam, omschrijving, datum_aangemaakt, datum_deadline, status, prioriteit, behandelaar_user_id, notities, categorie)
+      (id, klant_naam, klant_nummer, omschrijving, datum_aangemaakt, datum_deadline, status, prioriteit, behandelaar_user_id, notities, categorie)
     values
-      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
     `,
     [
       opdracht.id,
       opdracht.klantNaam,
+      opdracht.klantNummer || null,
       opdracht.omschrijving,
       opdracht.datumAangemaakt,
       opdracht.datumDeadline || null,
@@ -180,14 +191,15 @@ async function updateOpdracht(opdracht) {
     `
     update opdrachten set
       klant_naam=$2,
-      omschrijving=$3,
-      datum_aangemaakt=$4,
-      datum_deadline=$5,
-      status=$6,
-      prioriteit=$7,
-      behandelaar_user_id=$8,
-      notities=$9,
-      categorie=$10,
+      klant_nummer=$3,
+      omschrijving=$4,
+      datum_aangemaakt=$5,
+      datum_deadline=$6,
+      status=$7,
+      prioriteit=$8,
+      behandelaar_user_id=$9,
+      notities=$10,
+      categorie=$11,
       updated_at=now()
     where id=$1
       and deleted_at is null
@@ -195,6 +207,7 @@ async function updateOpdracht(opdracht) {
     [
       opdracht.id,
       opdracht.klantNaam,
+      opdracht.klantNummer || null,
       opdracht.omschrijving,
       opdracht.datumAangemaakt,
       opdracht.datumDeadline || null,

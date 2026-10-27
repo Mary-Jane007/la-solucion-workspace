@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Opdracht, OpdrachtStatus } from "../types";
-import { isOpdrachtOpen } from "../opdrachtenUtils";
+import { isOpdrachtOpen, klantWeergave } from "../opdrachtenUtils";
 import { OpdrachtenWerkruimte } from "../hooks/useOpdrachtenWerkruimte";
 import { useLijstGezienStatus } from "../hooks/useLijstGezienStatus";
 import { homeItemIds } from "../badgeItems";
@@ -89,7 +89,7 @@ export function Dashboard({
                   onClick={() => openMetGezien(o)}
                 >
                   <div className="important-main">
-                    <span className="important-client">{o.klantNaam}</span>
+                    <span className="important-client">{klantWeergave(o.klantNaam, o.klantNummer)}</span>
                     <span className={`pill pill-prio-${o.prioriteit}`}>Prioriteit {o.prioriteit}</span>
                   </div>
                   <div className="important-sub">
@@ -156,7 +156,7 @@ export function Dashboard({
                     className={`link-btn${isOngelezen(o.id) ? " link-btn-ongelezen" : ""}`}
                     onClick={() => openMetGezien(o)}
                   >
-                    {o.klantNaam} – {o.omschrijving}
+                    {klantWeergave(o.klantNaam, o.klantNummer)} – {o.omschrijving}
                   </button>
                 </li>
               ))}

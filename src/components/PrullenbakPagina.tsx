@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Opdracht } from "../types";
 import { fetchPrullenbak, herstelOpdracht } from "../api";
 import { permanentVerwijderDatum, PRULLENBAK_BEWAAR_DAGEN } from "../opdrachtVerwijderen";
+import { klantWeergave } from "../opdrachtenUtils";
 import { useLijstGezienStatus } from "../hooks/useLijstGezienStatus";
 
 interface Props {
@@ -102,7 +103,7 @@ export function PrullenbakPagina({
                     className={ongelezen ? "prullenbak-rij-ongelezen" : undefined}
                     onClick={() => markeerGeopend(o.id)}
                   >
-                    <td>{o.klantNaam}</td>
+                    <td>{klantWeergave(o.klantNaam, o.klantNummer)}</td>
                     <td>{o.omschrijving}</td>
                     <td>
                       {o.verwijderdOp

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { groepeerPerKlant } from "../opdrachtenUtils";
+import { groepeerPerKlant, klantMatchtZoekterm, klantNummerLabel } from "../opdrachtenUtils";
 import { OpdrachtenWerkruimte } from "../hooks/useOpdrachtenWerkruimte";
 import { useLijstGezienStatus } from "../hooks/useLijstGezienStatus";
 import { klantenItemIds } from "../badgeItems";
@@ -16,9 +16,9 @@ export function KlantenPagina({ werkruimte, userId, onGezien }: Props) {
 
   const klanten = useMemo(() => {
     const groepen = groepeerPerKlant(alleOpdrachten);
-    const q = zoekterm.trim().toLowerCase();
+    const q = zoekterm.trim();
     if (!q) return groepen;
-    return groepen.filter((k) => k.klantNaam.toLowerCase().includes(q));
+    return groepen.filter((k) => klantMatchtZoekterm(k.klantNaam, k.klantNummer, q));
   }, [alleOpdrachten, zoekterm]);
 
   const itemIds = useMemo(() => klantenItemIds(alleOpdrachten), [alleOpdrachten]);
@@ -28,26 +28,33 @@ export function KlantenPagina({ werkruimte, userId, onGezien }: Props) {
     <section className="card page-card">
       <div className="section-header">
         <h2>Klantenoverzicht</h2>
-        <p className="muted">{klanten.length} klant{klanten.length === 1 ? "" : "en"}.</p>
+        <p className="muted">{klanten.length} klant{klanten.length === 1 ? "" : "en"} · oud naar nieuw.</p>
       </div>
       <input
         type="search"
         className="form-input board-search-input"
-        placeholder="Zoek op klantnaam..."
+        placeholder="Zoek op nummer of naam, bijv. 12, K12 of Rodríguez..."
         value={zoekterm}
         onChange={(e) => setZoekterm(e.target.value)}
       />
       <div className="klanten-grid">
         {klanten.map((k) => {
-          const klantId = k.klantNaam.trim().toLowerCase();
+          const klantId = k.klantNummer
+            ? `n:${k.klantNummer}`
+            : k.klantNaam.trim().toLowerCase();
           const ongelezen = isOngelezen(klantId);
           return (
             <article
-              key={k.klantNaam}
+              key={klantId}
               className={`klant-kaart${ongelezen ? " klant-kaart-ongelezen" : ""}`}
               onClick={() => markeerGeopend(klantId)}
             >
-              <h3>{k.klantNaam}</h3>
+              <h3>
+                {k.klantNummer ? (
+                  <span className="klant-nummer-pill">{klantNummerLabel(k.klantNummer)}</span>
+                ) : null}
+                {k.klantNaam}
+              </h3>
               <p className="muted">
                 {k.open} open · {k.afgerond} afgerond · {k.opdrachten.length} totaal
               </p>

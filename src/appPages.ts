@@ -60,7 +60,7 @@ export const PAGINA_INFO: Record<AppPagina, { titel: string; ondertitel: string 
   },
   klanten: {
     titel: "Klanten",
-    ondertitel: "Alle klanten met hun opdrachten op één plek."
+    ondertitel: "Alle klanten met kort nummer (K1, K2, …), van oud naar nieuw."
   },
   documenten: {
     titel: "Documenten",

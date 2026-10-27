@@ -1,5 +1,6 @@
 import { Opdracht, OpdrachtStatus } from "../types";
 import {
+  klantNummerLabel,
   opdrachtKaartClassNaam,
   OPDRACHT_SNEL_STATUS_ACTIES,
   OPDRACHT_STATUS_OPTIES,
@@ -32,7 +33,12 @@ export function OpdrachtKaart({
     <div className={`card opdracht-card${kaartKleur ? ` ${kaartKleur}` : ""}`}>
       <button className="opdracht-main" onClick={onKlik} type="button">
         <div className="opdracht-header">
-          <span className="opdracht-client">{opdracht.klantNaam || "Nieuwe klant"}</span>
+          <span className="opdracht-client">
+            {opdracht.klantNummer ? (
+              <span className="klant-nummer-pill">{klantNummerLabel(opdracht.klantNummer)}</span>
+            ) : null}
+            {opdracht.klantNaam || "Nieuwe klant"}
+          </span>
           <span className="opdracht-header-pills">
             <span className={statusPillClass(opdracht.status)}>
               {statusLabel(opdracht.status)}

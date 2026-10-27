@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { isOpdrachtOpen, opdrachtLijstItemClassNaam, statusLabel } from "../opdrachtenUtils";
+import { isOpdrachtOpen, klantWeergave, opdrachtLijstItemClassNaam, statusLabel } from "../opdrachtenUtils";
 import { OpdrachtenWerkruimte } from "../hooks/useOpdrachtenWerkruimte";
 import { useLijstGezienStatus } from "../hooks/useLijstGezienStatus";
 import { mijnOpdrachtenItemIds } from "../badgeItems";
@@ -44,7 +44,7 @@ export function MijnOpdrachtenPagina({ werkruimte, userId, onGezien }: Props) {
                   }}
                 >
                   <div className="page-list-main">
-                    <strong>{o.klantNaam}</strong>
+                    <strong>{klantWeergave(o.klantNaam, o.klantNummer)}</strong>
                     <span className={`pill pill-prio-${o.prioriteit}`}>P{o.prioriteit}</span>
                   </div>
                   <span className={ongelezen ? "melding-ongelezen-sub" : "muted"}>

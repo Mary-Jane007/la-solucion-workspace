@@ -39,6 +39,7 @@ const {
   ensureOwnerAccount
 } = require("./store");
 const { herstelJpegPdfVoorWeergave } = require("./jpegToPdf");
+const { ensureKlantNummer } = require("./klantenStore");
 const {
   listOpdrachtenForUser,
   listPrullenbakForUser,
@@ -809,10 +810,12 @@ app.post("/api/opdrachten", authRequired, async (req, res) => {
       behandelaarUserId = req.user.id;
     }
 
+    const klantNummer = await ensureKlantNummer(parsed.data.klantNaam);
     await createOpdracht({
       ...parsed.data,
       id,
-      behandelaarUserId
+      behandelaarUserId,
+      klantNummer
     });
 
     const created = await getOpdrachtById(id);
@@ -842,10 +845,12 @@ app.put("/api/opdrachten/:id", authRequired, async (req, res) => {
       behandelaarUserId = req.user.id;
     }
 
+    const klantNummer = await ensureKlantNummer(parsed.data.klantNaam);
     await updateOpdracht({
       ...parsed.data,
       id: opdrachtId,
-      behandelaarUserId
+      behandelaarUserId,
+      klantNummer
     });
 
     const updated = await getOpdrachtById(opdrachtId);

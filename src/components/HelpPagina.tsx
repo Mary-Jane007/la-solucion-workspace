@@ -31,7 +31,7 @@ const HELP_ONDERWERPEN: HelpStap[] = [
     stappen: [
       "Ga als eigenaar naar Beheer → Nieuwe opdracht, of klik op het dashboard op Nieuwe opdracht.",
       "Alternatief: op het opdrachtenbord kies je Voeg nieuwe opdracht toe.",
-      "Vul klantnaam en omschrijving in (verplicht).",
+      "Vul klantnaam en omschrijving in (verplicht). Een nieuwe klant krijgt automatisch een kort nummer, zoals K12.",
       "Kies categorie (bijv. Visa, Vergunning) en prioriteit P1, P2 of P3.",
       "Wijs optioneel een medewerker toe en stel een deadline in.",
       "Klik op Opslaan. De opdracht verschijnt in de kolom Nieuw op het opdrachtenbord."
@@ -56,7 +56,7 @@ const HELP_ONDERWERPEN: HelpStap[] = [
     titel: "Opdracht bewerken & status",
     stappen: [
       "Klik op een kaart op het opdrachtenbord om het detailvenster te openen.",
-      "Pas klant, omschrijving, notities, behandelaar of deadline aan. Bij Taak toegewezen aan kies je iedereen met een login, inclusief de eigenaar.",
+      "Pas klant, omschrijving, notities, behandelaar of deadline aan. Bij Taak toegewezen aan kies je iedereen met een login, inclusief de eigenaar. Het klantnummer blijft bij dezelfde naam; een nieuwe naam krijgt een nieuw nummer.",
       "Wijzig status: Nieuw, Afwachting, In behandeling, Ingediend, On hold, Oud of Afgerond. P1 blijft rood tot Ingediend, Afgerond of tot je de prioriteit wijzigt; daarna wordt het vak groen.",
       "Sla wijzigingen op met Opslaan of Sluiten (wijzigingen worden bewaard)."
     ]
@@ -87,6 +87,16 @@ const HELP_ONDERWERPEN: HelpStap[] = [
       "Na 30 dagen worden opdrachten en bijlagen permanent verwijderd."
     ],
     tip: "Twijfel je? Herstel liever eerst uit de prullenbak in plaats van opnieuw alles in te voeren."
+  },
+  {
+    id: "klanten",
+    titel: "Klantnummers",
+    stappen: [
+      "Elke klant krijgt een kort nummer: K1, K2, K3… De oudste klant is K1.",
+      "De naam blijft staan; het nummer staat ernaast op het bord, bij Klanten en in de opdracht.",
+      "Nieuwe klanten krijgen automatisch het volgende vrije nummer. Dezelfde naam houdt hetzelfde nummer.",
+      "Zoek op nummer of naam: 12, K12 of de klantnaam werkt bij Klanten, op het bord en bij Documenten."
+    ]
   },
   {
     id: "statistieken",

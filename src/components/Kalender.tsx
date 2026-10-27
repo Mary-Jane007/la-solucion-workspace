@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Opdracht, Prioriteit } from "../types";
+import { klantWeergave } from "../opdrachtenUtils";
 
 interface Props {
   opdrachten: Opdracht[];
@@ -173,7 +174,7 @@ export function Kalender({ opdrachten, isOngelezen, onSelectOpdracht }: Props) {
                       <span
                         key={o.id}
                         className={`calendar-prio-dot prio-${o.prioriteit}`}
-                        title={`${o.klantNaam} – ${dagRedenLabel({
+                        title={`${klantWeergave(o.klantNaam, o.klantNummer)} – ${dagRedenLabel({
                           opdracht: o,
                           isAangemaakt,
                           isDeadline
@@ -232,7 +233,7 @@ export function Kalender({ opdrachten, isOngelezen, onSelectOpdracht }: Props) {
                         onClick={() => openOpdracht(o)}
                       >
                         <span className="calendar-day-opdracht-top">
-                          <span className="calendar-day-opdracht-client">{o.klantNaam}</span>
+                          <span className="calendar-day-opdracht-client">{klantWeergave(o.klantNaam, o.klantNummer)}</span>
                           <span className={`calendar-item-prio prio-${o.prioriteit}`}>
                             P{o.prioriteit} · {PRIO_LABELS[o.prioriteit]}
                           </span>

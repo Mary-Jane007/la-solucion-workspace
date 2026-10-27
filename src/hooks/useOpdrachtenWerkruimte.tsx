@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Gebruiker, Opdracht, OpdrachtStatus } from "../types";
 import { createOpdracht, deleteOpdracht, updateOpdracht } from "../api";
 import { opdrachtVerwijderBevestiging } from "../opdrachtVerwijderen";
-import { filterMijnOpdrachten, filterZichtbareOpdrachten } from "../opdrachtenUtils";
+import { filterMijnOpdrachten, filterZichtbareOpdrachten, klantWeergave } from "../opdrachtenUtils";
 import { OpdrachtDialoog } from "../components/OpdrachtDialoog";
 
 interface BeheerGebruiker {
@@ -141,7 +141,9 @@ export function useOpdrachtenWerkruimte({
   };
 
   const handleVerwijderMetBevestiging = async (opdracht: Opdracht) => {
-    const bevestigd = window.confirm(opdrachtVerwijderBevestiging(opdracht.klantNaam));
+    const bevestigd = window.confirm(
+      opdrachtVerwijderBevestiging(klantWeergave(opdracht.klantNaam, opdracht.klantNummer))
+    );
     if (!bevestigd) return;
     await handleDeleteOpdracht(opdracht.id);
   };
