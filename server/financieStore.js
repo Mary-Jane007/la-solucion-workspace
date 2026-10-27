@@ -1,3 +1,4 @@
+const path = require("path");
 const { v4: uuidv4 } = require("uuid");
 const { query } = require("./db");
 
@@ -322,22 +323,30 @@ async function withOne(post) {
 }
 
 async function createFinancielePostBijlagen(postId, files) {
+  const { leesMulterBuffer, leesVanSchijf, bewaarUpload } = require("./uploadPersist");
   for (const file of files || []) {
+    const opslagNaam = file.filename || null;
+    const buffer = leesMulterBuffer(file) || (opslagNaam ? leesVanSchijf(opslagNaam) : null);
+    if (!opslagNaam && !buffer) continue;
+    const id = uuidv4();
+    const naam = opslagNaam || `${id}${path.extname(file.originalname || "").slice(0, 10)}`;
     await query(
       `
       insert into financiele_post_bestanden
-        (id, post_id, originele_naam, opslag_naam, mime_type, grootte)
-      values ($1,$2,$3,$4,$5,$6)
+        (id, post_id, originele_naam, opslag_naam, mime_type, grootte, inhoud)
+      values ($1,$2,$3,$4,$5,$6,$7)
       `,
       [
-        uuidv4(),
+        id,
         postId,
         file.originalname || "foto",
-        file.filename,
+        naam,
         file.mimetype || "image/jpeg",
-        file.size || 0
+        buffer ? buffer.length : file.size || 0,
+        buffer
       ]
     );
+    if (buffer) await bewaarUpload({ tabel: "financiele_post_bestanden", id, opslagNaam: naam, buffer });
   }
   const post = await getFinancielePostById(postId);
   return withOne(post);

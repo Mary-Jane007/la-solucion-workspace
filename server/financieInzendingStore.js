@@ -184,22 +184,37 @@ async function getInzendingBijlageById(id) {
 }
 
 async function createInzendingBijlagen(inzendingId, files) {
+  const { leesMulterBuffer, leesVanSchijf, bewaarUpload } = require("./uploadPersist");
+  const path = require("path");
   for (const file of files || []) {
+    const id = uuidv4();
+    const naam =
+      file.filename || `${id}${path.extname(file.originalname || "").slice(0, 10)}`;
+    const buffer = leesMulterBuffer(file) || leesVanSchijf(naam);
     await query(
       `
       insert into financiele_inzending_bestanden
-        (id, inzending_id, originele_naam, opslag_naam, mime_type, grootte)
-      values ($1,$2,$3,$4,$5,$6)
+        (id, inzending_id, originele_naam, opslag_naam, mime_type, grootte, inhoud)
+      values ($1,$2,$3,$4,$5,$6,$7)
       `,
       [
-        uuidv4(),
+        id,
         inzendingId,
         file.originalname || "foto",
-        file.filename,
+        naam,
         file.mimetype || "image/jpeg",
-        file.size || 0
+        buffer ? buffer.length : file.size || 0,
+        buffer
       ]
     );
+    if (buffer) {
+      await bewaarUpload({
+        tabel: "financiele_inzending_bestanden",
+        id,
+        opslagNaam: naam,
+        buffer
+      });
+    }
   }
 }
 

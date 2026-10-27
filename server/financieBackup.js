@@ -219,7 +219,8 @@ async function encodeTabelBijlagen(tabel, parentKey, uploadDir) {
       originele_naam as "origineleNaam",
       mime_type as "mimeType",
       grootte,
-      opslag_naam as "opslagNaam"
+      opslag_naam as "opslagNaam",
+      inhoud
     from ${tabel}
     order by created_at asc
     `,
@@ -229,14 +230,23 @@ async function encodeTabelBijlagen(tabel, parentKey, uploadDir) {
     const filePath = path.join(uploadDir, row.opslagNaam);
     let inhoudBase64 = "";
     let ontbreekt = false;
-    try {
-      if (fs.existsSync(filePath)) {
-        inhoudBase64 = fs.readFileSync(filePath).toString("base64");
-      } else {
+    const dbBuf = row.inhoud
+      ? Buffer.isBuffer(row.inhoud)
+        ? row.inhoud
+        : Buffer.from(row.inhoud)
+      : null;
+    if (dbBuf && dbBuf.length) {
+      inhoudBase64 = dbBuf.toString("base64");
+    } else {
+      try {
+        if (fs.existsSync(filePath)) {
+          inhoudBase64 = fs.readFileSync(filePath).toString("base64");
+        } else {
+          ontbreekt = true;
+        }
+      } catch {
         ontbreekt = true;
       }
-    } catch {
-      ontbreekt = true;
     }
     const item = {
       id: row.id,
@@ -301,7 +311,8 @@ function schrijfNieuweBestanden(bijlagen, parentKey, bekendeIds, uploadDir) {
       mimeType: bijlage.mimeType || "application/octet-stream",
       grootte: buf.length,
       opslagNaam,
-      filePath
+      filePath,
+      buffer: buf
     });
   }
   return geschreven;
@@ -435,8 +446,8 @@ async function restoreBackup(payload, uploadDir) {
       await client.query(
         `
         insert into financiele_post_bestanden
-          (id, post_id, originele_naam, opslag_naam, mime_type, grootte)
-        values ($1,$2,$3,$4,$5,$6)
+          (id, post_id, originele_naam, opslag_naam, mime_type, grootte, inhoud)
+        values ($1,$2,$3,$4,$5,$6,$7)
         `,
         [
           bestand.id,
@@ -444,7 +455,8 @@ async function restoreBackup(payload, uploadDir) {
           bestand.origineleNaam,
           bestand.opslagNaam,
           bestand.mimeType,
-          bestand.grootte
+          bestand.grootte,
+          bestand.buffer || null
         ]
       );
     }
@@ -452,8 +464,8 @@ async function restoreBackup(payload, uploadDir) {
       await client.query(
         `
         insert into financiele_inzending_bestanden
-          (id, inzending_id, originele_naam, opslag_naam, mime_type, grootte)
-        values ($1,$2,$3,$4,$5,$6)
+          (id, inzending_id, originele_naam, opslag_naam, mime_type, grootte, inhoud)
+        values ($1,$2,$3,$4,$5,$6,$7)
         `,
         [
           bestand.id,
@@ -461,7 +473,8 @@ async function restoreBackup(payload, uploadDir) {
           bestand.origineleNaam,
           bestand.opslagNaam,
           bestand.mimeType,
-          bestand.grootte
+          bestand.grootte,
+          bestand.buffer || null
         ]
       );
     }

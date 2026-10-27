@@ -67,7 +67,7 @@ async function createBestand(bestand) {
       bestand.mimeType,
       bestand.grootte,
       bestand.uploadedByUserId || null,
-      bestand.inhoud || null
+      bestand.inhoud && bestand.inhoud.length ? bestand.inhoud : null
     ]
   );
 }

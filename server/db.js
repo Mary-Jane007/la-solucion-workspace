@@ -343,6 +343,8 @@ async function migrate() {
   );
 
   await query(`alter table bestanden add column if not exists inhoud bytea;`, []);
+  await query(`alter table financiele_post_bestanden add column if not exists inhoud bytea;`, []);
+  await query(`alter table financiele_inzending_bestanden add column if not exists inhoud bytea;`, []);
 
   await query(
     `

@@ -9,7 +9,6 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const path = require("path");
 const fs = require("fs");
-const os = require("os");
 const crypto = require("crypto");
 const multer = require("multer");
 const { v4: uuidv4 } = require("uuid");
@@ -57,8 +56,6 @@ const {
   listBestandenForOpdracht,
   listBestandenForOpdrachtIds,
   getBestandById,
-  getBestandInhoudById,
-  saveBestandInhoud,
   createBestand,
   updateBestandNaam,
   deleteBestandById,
@@ -84,6 +81,15 @@ const {
 } = require("./financieInzendingStore");
 const { buildBackup, restoreBackup, parseBackupError } = require("./financieBackup");
 const { listKasSuggestieTegels } = require("./kasSuggesties");
+const {
+  uploadDir,
+  ensureUploadDir,
+  schijfPadenVoor,
+  schrijfNaarSchijf,
+  leesMulterBuffer,
+  laadBestandBuffer,
+  syncUploadsNaarDatabase
+} = require("./uploadPersist");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -183,17 +189,7 @@ if (process.env.VERCEL) {
   app.use(express.json({ limit: "50mb" }));
 }
 
-const legacyUploadDir = path.join(__dirname, "uploads");
-const uploadDir = process.env.VERCEL
-  ? path.join(os.tmpdir(), "la-solucion-uploads")
-  : path.join(process.env.LOCALAPPDATA || os.homedir(), "la-solucion", "uploads");
-try {
-  if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-  }
-} catch (err) {
-  console.warn("Kon uploadmap niet aanmaken:", err.message);
-}
+ensureUploadDir();
 
 const uploadStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadDir),
@@ -734,7 +730,7 @@ async function purgeExpiredTrash() {
 
   const bestanden = await listBestandenForOpdrachtIds(ids);
   for (const bestand of bestanden) {
-    for (const filePath of bestandSchijfPaden(bestand.opslagNaam)) {
+    for (const filePath of schijfPadenVoor(bestand.opslagNaam)) {
       try {
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
       } catch (unlinkErr) {
@@ -920,21 +916,12 @@ app.post(
       }
       if (!req.file) return res.status(400).json({ error: "Geen bestand ontvangen." });
 
-      const buffer = naarBuffer(req.file.buffer);
+      const buffer = leesMulterBuffer(req.file) || naarBuffer(req.file.buffer);
       if (!buffer) return res.status(400).json({ error: "Geen bestand ontvangen." });
 
       const ext = path.extname(req.file.originalname || "").slice(0, 10);
       const opslagNaam = `${uuidv4()}${ext}`;
       const origineleNaam = sanitizeOrigineleNaam(req.file.originalname) || "document";
-      const filePath = bestandSchijfPad(opslagNaam);
-      if (filePath) {
-        try {
-          fs.writeFileSync(filePath, buffer);
-        } catch (writeErr) {
-          console.warn("Kon opdrachtbestand niet op schijf zetten:", writeErr.message);
-        }
-      }
-
       const bestandId = uuidv4();
       await createBestand({
         id: bestandId,
@@ -946,6 +933,7 @@ app.post(
         uploadedByUserId: req.user.id,
         inhoud: buffer
       });
+      schrijfNaarSchijf(opslagNaam, buffer);
 
       return res.status(201).json({ ok: true, bestandId });
     } catch (err) {
@@ -963,29 +951,6 @@ function sanitizeOrigineleNaam(naam) {
     .trim()
     .slice(0, 200);
   return cleaned || null;
-}
-
-function bestandSchijfPaden(opslagNaam) {
-  const safe = path.basename(String(opslagNaam || ""));
-  if (!safe || safe === "." || safe === "..") return [];
-  return [...new Set([uploadDir, legacyUploadDir])].map((dir) => path.join(dir, safe));
-}
-
-function bestandSchijfPad(opslagNaam) {
-  return bestandSchijfPaden(opslagNaam)[0] || null;
-}
-
-function leesBestandVanSchijf(opslagNaam) {
-  for (const filePath of bestandSchijfPaden(opslagNaam)) {
-    if (!fs.existsSync(filePath)) continue;
-    try {
-      const buffer = fs.readFileSync(filePath);
-      if (buffer.length) return { filePath, buffer };
-    } catch (err) {
-      console.warn("Kon bestand niet van schijf lezen:", filePath, err.message);
-    }
-  }
-  return null;
 }
 
 function contentDispositionAttachment(filename) {
@@ -1126,7 +1091,7 @@ app.delete("/api/bestanden/:id", authRequired, async (req, res) => {
     }
 
     await deleteBestandById(bestand.id);
-    for (const filePath of bestandSchijfPaden(bestand.opslagNaam)) {
+    for (const filePath of schijfPadenVoor(bestand.opslagNaam)) {
       try {
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
       } catch (unlinkErr) {
@@ -1154,24 +1119,8 @@ app.get(["/api/bestanden/:id/download", "/api/bestanden/:id/download/:naam"], au
 
     const inline = String(req.query.inline || "") === "1";
     const preview = String(req.query.preview || "") === "1";
-    const vanSchijf = leesBestandVanSchijf(bestand.opslagNaam);
-    if (vanSchijf) {
-      void saveBestandInhoud(bestand.id, vanSchijf.buffer).catch((err) => {
-        console.warn("Kon bestandinhoud niet bijwerken:", err.message);
-      });
-      return stuurBestandBuffer(res, bestand, inline, vanSchijf.buffer, preview);
-    }
-
-    const inhoud = naarBuffer(await getBestandInhoudById(bestand.id));
+    const inhoud = await laadBestandBuffer("bestanden", bestand.id, bestand.opslagNaam);
     if (inhoud) {
-      const cachePad = bestandSchijfPad(bestand.opslagNaam);
-      if (cachePad) {
-        try {
-          fs.writeFileSync(cachePad, inhoud);
-        } catch {
-          /* cache is optioneel */
-        }
-      }
       return stuurBestandBuffer(res, bestand, inline, inhoud, preview);
     }
 
@@ -1329,11 +1278,16 @@ app.get(
     if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
     const bijlage = await getFinancielePostBijlageById(req.params.id);
     if (!bijlage) return res.status(404).json({ error: "Afbeelding niet gevonden." });
-    const filePath = path.join(uploadDir, bijlage.opslagNaam);
-    if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Bestand ontbreekt." });
-    res.setHeader("Content-Type", bestandContentType(bijlage));
+    const inhoud = await laadBestandBuffer(
+      "financiele_post_bestanden",
+      bijlage.id,
+      bijlage.opslagNaam
+    );
+    if (!inhoud) return res.status(404).json({ error: "Bestand ontbreekt." });
+    res.setHeader("Content-Type", bestandContentType(bijlage, inhoud));
     res.setHeader("Content-Disposition", contentDispositionValue(bijlage.origineleNaam, true));
-    return res.sendFile(filePath);
+    res.setHeader("Content-Length", inhoud.length);
+    return res.end(inhoud);
   } catch (err) {
     console.error("Fout bij download post-afbeelding:", err);
     return res.status(500).json({ error: "Interne serverfout." });
@@ -1345,11 +1299,12 @@ app.delete("/api/admin/financieel/bestanden/:id", authRequired, requireOwner, as
     if (!hasDb()) return res.status(501).json({ error: "Database niet geconfigureerd." });
     const bijlage = await deleteFinancielePostBijlage(req.params.id);
     if (!bijlage) return res.status(404).json({ error: "Afbeelding niet gevonden." });
-    const filePath = path.join(uploadDir, bijlage.opslagNaam);
-    try {
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    } catch (unlinkErr) {
-      console.warn("Kon post-afbeelding niet van schijf verwijderen:", filePath, unlinkErr);
+    for (const filePath of schijfPadenVoor(bijlage.opslagNaam)) {
+      try {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      } catch (unlinkErr) {
+        console.warn("Kon post-afbeelding niet van schijf verwijderen:", filePath, unlinkErr);
+      }
     }
     return res.json({ ok: true });
   } catch (err) {
@@ -1490,11 +1445,16 @@ app.get(
     if (!isOwner && !isSender) {
       return res.status(403).json({ error: "Geen toegang tot deze afbeelding." });
     }
-    const filePath = path.join(uploadDir, bijlage.opslagNaam);
-    if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Bestand ontbreekt." });
-    res.setHeader("Content-Type", bestandContentType(bijlage));
+    const inhoud = await laadBestandBuffer(
+      "financiele_inzending_bestanden",
+      bijlage.id,
+      bijlage.opslagNaam
+    );
+    if (!inhoud) return res.status(404).json({ error: "Bestand ontbreekt." });
+    res.setHeader("Content-Type", bestandContentType(bijlage, inhoud));
     res.setHeader("Content-Disposition", contentDispositionValue(bijlage.origineleNaam, true));
-    return res.sendFile(filePath);
+    res.setHeader("Content-Length", inhoud.length);
+    return res.end(inhoud);
   } catch (err) {
     console.error("Fout bij download inzending-afbeelding:", err);
     return res.status(500).json({ error: "Interne serverfout." });
@@ -1688,6 +1648,11 @@ app.use((err, req, res, next) => {
 
 async function startServer() {
   await migrate();
+  try {
+    await syncUploadsNaarDatabase();
+  } catch (err) {
+    console.warn("Uploads konden niet volledig in de database worden gezet:", err.message);
+  }
   await ensureOwnerAccount();
 
   if (NODE_ENV === "production") {
