@@ -39,27 +39,28 @@ export function BestandBekijkLink({
   href?: string | null;
   className?: string;
   children?: ReactNode;
-  onClick?: (event: MouseEvent<HTMLAnchorElement>) => void;
+  onClick?: (event: MouseEvent<HTMLAnchorElement | HTMLButtonElement>) => void;
   onFallback?: () => void;
 }) {
-  if (href) {
+  if (onClick || onFallback) {
     return (
-      <a
+      <button
+        type="button"
         className={className}
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        onClick={onClick}
+        onClick={(event) => {
+          if (onClick) onClick(event);
+          else onFallback?.();
+        }}
       >
         {children}
-      </a>
+      </button>
     );
   }
-  if (onFallback) {
+  if (href) {
     return (
-      <button type="button" className={className} onClick={onFallback}>
+      <a className={className} href={href} target="_blank" rel="noopener noreferrer">
         {children}
-      </button>
+      </a>
     );
   }
   return null;
@@ -73,6 +74,7 @@ export function BestandViewer({ items, startId, onClose, onDownload }: Props) {
   );
   const [index, setIndex] = useState(startIndex);
   const [geladenUrl, setGeladenUrl] = useState<string | null>(null);
+  const [pdfBytes, setPdfBytes] = useState<ArrayBuffer | null>(null);
   const [soort, setSoort] = useState<"foto" | "pdf">("foto");
   const [laden, setLaden] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
@@ -103,11 +105,18 @@ export function BestandViewer({ items, startId, onClose, onDownload }: Props) {
       setFout(null);
     };
 
-    const toonBlob = (blob: Blob) => {
+    const toonBlob = async (blob: Blob) => {
       const pdf = isPdfBestand(item.naam, blob.type) || normaliseerMime(blob.type) === "application/pdf";
       const typed = pdf && blob.type !== "application/pdf"
         ? new Blob([blob], { type: "application/pdf" })
         : blob;
+      if (pdf) {
+        const copy = await blob.arrayBuffer();
+        if (stop) return;
+        setPdfBytes(copy.slice(0));
+      } else {
+        setPdfBytes(null);
+      }
       const next = URL.createObjectURL(typed);
       if (stop) {
         URL.revokeObjectURL(next);
@@ -130,12 +139,13 @@ export function BestandViewer({ items, startId, onClose, onDownload }: Props) {
       setLaden(true);
       setFout(null);
       setGeladenUrl(null);
+      setPdfBytes(null);
 
       const ladenBlob = fetchRef.current;
       if (ladenBlob) {
         try {
           const blob = await normaliseerBestandBlob(await ladenBlob(), item.naam, item.mimeType);
-          toonBlob(blob);
+          await toonBlob(blob);
           return;
         } catch (err) {
           if (stop) return;
@@ -175,7 +185,8 @@ export function BestandViewer({ items, startId, onClose, onDownload }: Props) {
     void run();
     return () => {
       stop = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      const oudeUrl = objectUrl;
+      if (oudeUrl) window.setTimeout(() => URL.revokeObjectURL(oudeUrl), 10000);
     };
   }, [item?.id, item?.url, item?.previewUrl, item?.bekijkUrl, item?.naam, item?.mimeType]);
 
@@ -300,7 +311,9 @@ export function BestandViewer({ items, startId, onClose, onDownload }: Props) {
           )}
           {laden && <p className="bestand-viewer-status">Laden…</p>}
           {fout && <p className="bestand-viewer-status">{fout}</p>}
-          {!laden && !fout && geladenUrl && soort === "pdf" && <PdfPaginas src={geladenUrl} />}
+          {!laden && !fout && soort === "pdf" && (item.bekijkUrl || geladenUrl) && (
+            <PdfPaginas src={item.bekijkUrl || geladenUrl || ""} data={pdfBytes} />
+          )}
           {!laden && !fout && geladenUrl && soort !== "pdf" && (
             <img
               src={geladenUrl}

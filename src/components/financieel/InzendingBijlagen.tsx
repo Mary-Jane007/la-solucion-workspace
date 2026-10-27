@@ -100,20 +100,15 @@ function FinancieelFoto({
   return (
     <figure className="inzending-foto">
       {isPdf ? (
-        <a
+        <button
+          type="button"
           className="inzending-foto-btn inzending-foto-pdf"
-          href={bekijkUrl || undefined}
-          target="_blank"
-          rel="noopener noreferrer"
-          title={`Open ${bijlage.origineleNaam} in Chrome`}
-          onClick={(event) => {
-            event.preventDefault();
-            onOpen();
-          }}
+          title={`Bekijk ${bijlage.origineleNaam}`}
+          onClick={onOpen}
         >
           <span aria-hidden>📄</span>
           <span>PDF</span>
-        </a>
+        </button>
       ) : fotoSrc && !imgFout ? (
         <button
           type="button"

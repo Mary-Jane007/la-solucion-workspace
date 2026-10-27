@@ -152,6 +152,8 @@ app.use(
       directives: {
         "img-src": ["'self'", "data:", "blob:"],
         "media-src": ["'self'", "blob:"],
+        "script-src": ["'self'", "'wasm-unsafe-eval'", "blob:"],
+        "connect-src": ["'self'", "blob:", "data:"],
         "frame-src": ["'self'", "blob:"],
         "object-src": ["'self'", "blob:"],
         "child-src": ["'self'", "blob:"],
@@ -1710,6 +1712,9 @@ async function startServer() {
         etag: true,
         setHeaders(res, filePath) {
           const name = path.basename(filePath);
+          if (/\.mjs$/i.test(name)) {
+            res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+          }
           if (
             name === "index.html" ||
             name === "version.json" ||
