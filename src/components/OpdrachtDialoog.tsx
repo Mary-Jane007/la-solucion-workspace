@@ -6,15 +6,13 @@ import {
   downloadBestand,
   fetchBestandBlob,
   hernoemBestand,
-  openBestandInNieuwTab,
   uploadBestand,
   verwijderBestand
 } from "../api";
 import {
   isAfbeeldingBestand,
   isBekijkbaarBestand,
-  isPdfBestand,
-  openAlsAfbeeldingInApp
+  isPdfBestand
 } from "../bestandUtils";
 import { maakZipBlob, startBestandDownload, veiligeDownloadNaam } from "../zipUtils";
 import { opdrachtVerwijderBevestiging } from "../opdrachtVerwijderen";
@@ -141,7 +139,7 @@ export function OpdrachtDialoog({
         id: b.id,
         naam: b.origineleNaam,
         mimeType: b.mimeType,
-        fetchBlob: () => fetchBestandBlob(b.id, b.origineleNaam),
+        fetchBlob: () => fetchBestandBlob(b.id, b.origineleNaam, false),
         bekijkUrl: bestandBekijkUrl(b.id, "opdracht", b.origineleNaam),
         previewUrl: bestandPreviewUrl(b.id, "opdracht", b.origineleNaam)
       }));
@@ -149,30 +147,6 @@ export function OpdrachtDialoog({
   }, [wachtendeBestanden, bewerkt.bestanden]);
 
   const openBestand = async (id: string) => {
-    const wachtend = wachtendeBestanden.find((item) => item.id === id);
-    if (wachtend) {
-      if (await openAlsAfbeeldingInApp(wachtend.file.name, wachtend.file.type, undefined, wachtend.url)) {
-        setViewerId(id);
-        return;
-      }
-      if (isPdfBestand(wachtend.file.name, wachtend.file.type)) {
-        if (openBestandInNieuwTab(wachtend.url)) return;
-      }
-      setViewerId(id);
-      return;
-    }
-    const gekoppeld = (bewerkt.bestanden || []).find((item) => item.id === id);
-    if (gekoppeld) {
-      const preview = bestandPreviewUrl(gekoppeld.id, "opdracht", gekoppeld.origineleNaam);
-      if (await openAlsAfbeeldingInApp(gekoppeld.origineleNaam, gekoppeld.mimeType, undefined, preview)) {
-        setViewerId(id);
-        return;
-      }
-      if (isPdfBestand(gekoppeld.origineleNaam, gekoppeld.mimeType)) {
-        const url = bestandBekijkUrl(id, "opdracht", gekoppeld.origineleNaam);
-        if (url && openBestandInNieuwTab(url)) return;
-      }
-    }
     setViewerId(id);
   };
 

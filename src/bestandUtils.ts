@@ -118,6 +118,7 @@ export async function openAlsAfbeeldingInApp(
   laadBlob?: () => Promise<Blob>,
   previewUrl?: string | null
 ): Promise<boolean> {
+  if (isPdfBestand(naam, mime)) return false;
   if (previewUrl && (await probeerAfbeeldingUrl(previewUrl))) return true;
   if (isAfbeeldingBestand(naam, mime) || isHeicBestand(naam, mime)) return true;
   if (!laadBlob) return false;

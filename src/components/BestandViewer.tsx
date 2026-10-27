@@ -7,8 +7,10 @@ import {
   isHeicBestand,
   isPdfBestand,
   normaliseerBestandBlob,
+  normaliseerMime,
   probeerAfbeeldingUrl
 } from "../bestandUtils";
+import { PdfPaginas } from "./PdfPaginas";
 
 export interface BestandViewerItem {
   id: string;
@@ -102,17 +104,21 @@ export function BestandViewer({ items, startId, onClose, onDownload }: Props) {
     };
 
     const toonBlob = (blob: Blob) => {
-      const next = URL.createObjectURL(blob);
+      const pdf = isPdfBestand(item.naam, blob.type) || normaliseerMime(blob.type) === "application/pdf";
+      const typed = pdf && blob.type !== "application/pdf"
+        ? new Blob([blob], { type: "application/pdf" })
+        : blob;
+      const next = URL.createObjectURL(typed);
       if (stop) {
         URL.revokeObjectURL(next);
         return;
       }
       objectUrl = next;
-      if (isAfbeeldingBlob(blob)) {
+      if (!pdf && isAfbeeldingBlob(typed)) {
         toon(next, "foto");
         return;
       }
-      toon(next, isPdfBestand(item.naam, blob.type) ? "pdf" : "foto");
+      toon(next, pdf ? "pdf" : "foto");
     };
 
     const run = async () => {
@@ -133,6 +139,10 @@ export function BestandViewer({ items, startId, onClose, onDownload }: Props) {
           return;
         } catch (err) {
           if (stop) return;
+          if (isPdfBestand(item.naam, item.mimeType) && item.bekijkUrl) {
+            toon(item.bekijkUrl, "pdf");
+            return;
+          }
           const preview = item.previewUrl || (item.bekijkUrl ? `${item.bekijkUrl}&preview=1` : null);
           if (preview && (await probeerAfbeeldingUrl(preview))) {
             toon(preview, "foto");
@@ -144,16 +154,17 @@ export function BestandViewer({ items, startId, onClose, onDownload }: Props) {
         }
       }
 
+      if (isPdfBestand(item.naam, item.mimeType) && item.bekijkUrl) {
+        toon(item.bekijkUrl, "pdf");
+        return;
+      }
+
       const preview = item.previewUrl || (item.bekijkUrl ? `${item.bekijkUrl}&preview=1` : null);
       if (preview && (await probeerAfbeeldingUrl(preview))) {
         toon(preview, "foto");
         return;
       }
 
-      if (isPdfBestand(item.naam, item.mimeType) && item.bekijkUrl) {
-        toon(item.bekijkUrl, "pdf");
-        return;
-      }
       if (!stop) {
         setGeladenUrl(null);
         setFout("Dit bestand kan hier niet worden getoond.");
@@ -256,10 +267,10 @@ export function BestandViewer({ items, startId, onClose, onDownload }: Props) {
             )}
           </div>
           <div className="bestand-viewer-acties">
-            {soort === "pdf" && geladenUrl && (
+            {soort === "pdf" && (item.bekijkUrl || geladenUrl) && (
               <a
                 className="btn-secondary"
-                href={geladenUrl}
+                href={item.bekijkUrl || geladenUrl || "#"}
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -277,7 +288,7 @@ export function BestandViewer({ items, startId, onClose, onDownload }: Props) {
           </div>
         </header>
         <div className={`bestand-viewer-stage${soort === "pdf" ? " bestand-viewer-stage-pdf" : ""}`}>
-          {heeftVorige && soort !== "pdf" && (
+          {heeftVorige && (
             <button
               type="button"
               className="bestand-viewer-nav bestand-viewer-nav-prev"
@@ -289,14 +300,7 @@ export function BestandViewer({ items, startId, onClose, onDownload }: Props) {
           )}
           {laden && <p className="bestand-viewer-status">Laden…</p>}
           {fout && <p className="bestand-viewer-status">{fout}</p>}
-          {!laden && !fout && geladenUrl && soort === "pdf" && (
-            <div className="bestand-viewer-status">
-              <p>Deze PDF opent in Chrome.</p>
-              <a className="btn-secondary" href={geladenUrl} target="_blank" rel="noopener noreferrer">
-                Openen in Chrome
-              </a>
-            </div>
-          )}
+          {!laden && !fout && geladenUrl && soort === "pdf" && <PdfPaginas src={geladenUrl} />}
           {!laden && !fout && geladenUrl && soort !== "pdf" && (
             <img
               src={geladenUrl}
@@ -305,7 +309,7 @@ export function BestandViewer({ items, startId, onClose, onDownload }: Props) {
               onError={handleImgError}
             />
           )}
-          {heeftVorige && soort !== "pdf" && (
+          {heeftVorige && (
             <button
               type="button"
               className="bestand-viewer-nav bestand-viewer-nav-next"

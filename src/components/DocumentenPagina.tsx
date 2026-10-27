@@ -3,10 +3,9 @@ import {
   bestandBekijkUrl,
   bestandPreviewUrl,
   downloadBestand,
-  fetchBestandBlob,
-  openBestandInNieuwTab
+  fetchBestandBlob
 } from "../api";
-import { isBekijkbaarBestand, isPdfBestand, openAlsAfbeeldingInApp } from "../bestandUtils";
+import { isBekijkbaarBestand, isPdfBestand } from "../bestandUtils";
 import { flattenDocumenten, klantMatchtZoekterm, klantWeergave } from "../opdrachtenUtils";
 import { OpdrachtenWerkruimte } from "../hooks/useOpdrachtenWerkruimte";
 import { useLijstGezienStatus } from "../hooks/useLijstGezienStatus";
@@ -51,7 +50,7 @@ export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
           id: d.id,
           naam: d.origineleNaam,
           mimeType: d.mimeType,
-          fetchBlob: () => fetchBestandBlob(d.id, d.origineleNaam),
+          fetchBlob: () => fetchBestandBlob(d.id, d.origineleNaam, false),
           bekijkUrl: bestandBekijkUrl(d.id, "opdracht", d.origineleNaam),
           previewUrl: bestandPreviewUrl(d.id, "opdracht", d.origineleNaam)
         })),
@@ -78,23 +77,6 @@ export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
 
   const openViewer = async (id: string) => {
     markeerGeopend(id);
-    const doc = documenten.find((item) => item.id === id);
-    if (
-      doc &&
-      (await openAlsAfbeeldingInApp(
-        doc.origineleNaam,
-        doc.mimeType,
-        undefined,
-        bestandPreviewUrl(doc.id, "opdracht", doc.origineleNaam)
-      ))
-    ) {
-      setViewerId(id);
-      return;
-    }
-    if (doc && isPdfBestand(doc.origineleNaam, doc.mimeType)) {
-      const url = bestandBekijkUrl(id, "opdracht", doc.origineleNaam);
-      if (url && openBestandInNieuwTab(url)) return;
-    }
     setViewerId(id);
   };
 

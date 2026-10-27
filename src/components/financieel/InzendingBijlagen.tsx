@@ -5,10 +5,9 @@ import {
   bestandPreviewUrl,
   downloadInzendingBijlage,
   fetchInzendingBijlageBlob,
-  FinancieelInzendingBijlage,
-  openBestandInNieuwTab
+  FinancieelInzendingBijlage
 } from "../../api";
-import { isPdfBestand, openAlsAfbeeldingInApp } from "../../bestandUtils";
+import { isPdfBestand } from "../../bestandUtils";
 import { BestandBekijkLink, BestandViewer, BestandViewerItem } from "../BestandViewer";
 
 export function FinancieelFotos({
@@ -38,21 +37,6 @@ export function FinancieelFotos({
     [bijlagen, fetchBlob, bron]
   );
   const openBijlage = async (bijlage: FinancieelInzendingBijlage) => {
-    if (
-      await openAlsAfbeeldingInApp(
-        bijlage.origineleNaam,
-        bijlage.mimeType,
-        undefined,
-        bestandPreviewUrl(bijlage.id, bron, bijlage.origineleNaam)
-      )
-    ) {
-      setViewerId(bijlage.id);
-      return;
-    }
-    if (isPdfBestand(bijlage.origineleNaam, bijlage.mimeType)) {
-      const url = bestandBekijkUrl(bijlage.id, bron, bijlage.origineleNaam);
-      if (url && openBestandInNieuwTab(url)) return;
-    }
     setViewerId(bijlage.id);
   };
 

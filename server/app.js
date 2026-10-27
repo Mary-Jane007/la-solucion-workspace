@@ -147,7 +147,11 @@ app.use(
       useDefaults: true,
       directives: {
         "img-src": ["'self'", "data:", "blob:"],
-        "media-src": ["'self'", "blob:"]
+        "media-src": ["'self'", "blob:"],
+        "frame-src": ["'self'", "blob:"],
+        "object-src": ["'self'", "blob:"],
+        "child-src": ["'self'", "blob:"],
+        "worker-src": ["'self'", "blob:"]
       }
     }
   })
@@ -1016,6 +1020,15 @@ function setBestandDownloadHeaders(res, bestand, inline = false, buffer) {
   res.setHeader("Content-Type", bestandContentType(bestand, buffer));
   res.setHeader("Content-Disposition", contentDispositionValue(bestand.origineleNaam, inline));
   res.setHeader("Cache-Control", "private, no-store");
+  setBestandWeergaveCsp(res);
+}
+
+function setBestandWeergaveCsp(res) {
+  // Chrome's PDF-plugin blijft leeg als Helmet CSP op de bytes blijft staan.
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'none'; object-src 'self' blob:; frame-ancestors 'self'"
+  );
 }
 
 function stuurBestandBuffer(res, bestand, inline, buffer, preview = false) {
@@ -1030,6 +1043,7 @@ function stuurBestandBuffer(res, bestand, inline, buffer, preview = false) {
   res.setHeader("Content-Disposition", contentDispositionValue(naam, inline));
   res.setHeader("Cache-Control", "private, no-store");
   res.setHeader("Content-Length", body.length);
+  setBestandWeergaveCsp(res);
   return res.end(body);
 }
 
@@ -1287,6 +1301,7 @@ app.get(
     res.setHeader("Content-Type", bestandContentType(bijlage, inhoud));
     res.setHeader("Content-Disposition", contentDispositionValue(bijlage.origineleNaam, true));
     res.setHeader("Content-Length", inhoud.length);
+    setBestandWeergaveCsp(res);
     return res.end(inhoud);
   } catch (err) {
     console.error("Fout bij download post-afbeelding:", err);
@@ -1454,6 +1469,7 @@ app.get(
     res.setHeader("Content-Type", bestandContentType(bijlage, inhoud));
     res.setHeader("Content-Disposition", contentDispositionValue(bijlage.origineleNaam, true));
     res.setHeader("Content-Length", inhoud.length);
+    setBestandWeergaveCsp(res);
     return res.end(inhoud);
   } catch (err) {
     console.error("Fout bij download inzending-afbeelding:", err);
