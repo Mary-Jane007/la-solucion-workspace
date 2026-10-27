@@ -54,20 +54,23 @@ export function LoginScherm({ onLogin }: Props) {
 
   useEffect(() => {
     let cancelled = false;
+    let timer = 0;
     const checkServer = async () => {
       try {
         const res = await fetch("/api/health", { cache: "no-store" });
         const data = await res.json();
-        if (!cancelled) setServerOk(res.ok && Boolean(data.ok));
+        const ok = res.ok && Boolean(data.ok);
+        if (!cancelled) setServerOk(ok);
+        if (!cancelled) timer = window.setTimeout(checkServer, ok ? 60000 : 8000);
       } catch {
         if (!cancelled) setServerOk(false);
+        if (!cancelled) timer = window.setTimeout(checkServer, 8000);
       }
     };
-    checkServer();
-    const interval = window.setInterval(checkServer, 4000);
+    void checkServer();
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
+      window.clearTimeout(timer);
     };
   }, []);
 

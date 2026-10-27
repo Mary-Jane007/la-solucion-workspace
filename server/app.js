@@ -98,6 +98,10 @@ const CORS_ORIGIN_RAW = process.env.CORS_ORIGIN || "https://your-app-url.example
 const CORS_ORIGINS = CORS_ORIGIN_RAW.split(",").map((s) => s.trim().replace(/\/$/, "")).filter(Boolean);
 const NODE_ENV = process.env.NODE_ENV || "development";
 const APP_BASE_URL = process.env.APP_BASE_URL || "https://your-app-url.example";
+if (NODE_ENV === "production" || process.env.RENDER || process.env.VERCEL) {
+  // Render/Vercel zitten achter een proxy; zonder dit telt rate-limit iedereen als 1 IP.
+  app.set("trust proxy", 1);
+}
 
 const CORS_PLACEHOLDER = "https://your-app-url.example";
 if (NODE_ENV === "production") {
@@ -157,13 +161,35 @@ app.use(
   })
 );
 if (NODE_ENV === "production") {
+  const verzoekPad = (req) => String(req.originalUrl || req.url || "").split("?")[0];
+  // Alleen de API, niet HTML/JS/CSS — anders opent de app zelf niet meer.
   app.use(
+    "/api",
     rateLimit({
       windowMs: 15 * 60 * 1000,
-      limit: 300,
+      limit: 4000,
       standardHeaders: "draft-7",
-      legacyHeaders: false
+      legacyHeaders: false,
+      skip: (req) => {
+        if (req.method === "OPTIONS") return true;
+        const p = verzoekPad(req);
+        if (p === "/api/health") return true;
+        if (req.method === "GET" && /\/download(?:\/|$)/.test(p)) return true;
+        return false;
+      },
+      message: { error: "Te veel verzoeken. Wacht een paar minuten en probeer opnieuw." }
     })
+  );
+  const inlogLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 40,
+    standardHeaders: "draft-7",
+    legacyHeaders: false,
+    message: { error: "Te veel inlogpogingen. Wacht een paar minuten en probeer opnieuw." }
+  });
+  app.use(
+    ["/api/auth/login", "/api/auth/register", "/api/auth/forgot-password", "/api/auth/reset-password"],
+    inlogLimiter
   );
 }
 
