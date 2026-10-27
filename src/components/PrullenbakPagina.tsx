@@ -25,7 +25,7 @@ export function PrullenbakPagina({
   const [fout, setFout] = useState<string | null>(null);
 
   const itemIds = useMemo(() => prullenbak.map((o) => o.id), [prullenbak]);
-  const { isOngelezen, markeerGeopend } = useLijstGezienStatus(
+  const { markeerGeopend } = useLijstGezienStatus(
     "prullenbak",
     userId,
     itemIds,
@@ -96,11 +96,9 @@ export function PrullenbakPagina({
             </thead>
             <tbody>
               {prullenbak.map((o) => {
-                const ongelezen = isOngelezen(o.id);
                 return (
                   <tr
                     key={o.id}
-                    className={ongelezen ? "prullenbak-rij-ongelezen" : undefined}
                     onClick={() => markeerGeopend(o.id)}
                   >
                     <td>{klantWeergave(o.klantNaam, o.klantNummer)}</td>

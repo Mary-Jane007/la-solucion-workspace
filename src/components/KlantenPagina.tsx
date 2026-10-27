@@ -22,7 +22,7 @@ export function KlantenPagina({ werkruimte, userId, onGezien }: Props) {
   }, [alleOpdrachten, zoekterm]);
 
   const itemIds = useMemo(() => klantenItemIds(alleOpdrachten), [alleOpdrachten]);
-  const { isOngelezen, markeerGeopend } = useLijstGezienStatus("klanten", userId, itemIds, onGezien);
+  const { markeerGeopend } = useLijstGezienStatus("klanten", userId, itemIds, onGezien);
 
   return (
     <section className="card page-card">
@@ -42,11 +42,10 @@ export function KlantenPagina({ werkruimte, userId, onGezien }: Props) {
           const klantId = k.klantNummer
             ? `n:${k.klantNummer}`
             : k.klantNaam.trim().toLowerCase();
-          const ongelezen = isOngelezen(klantId);
           return (
             <article
               key={klantId}
-              className={`klant-kaart${ongelezen ? " klant-kaart-ongelezen" : ""}`}
+              className="klant-kaart"
               onClick={() => markeerGeopend(klantId)}
             >
               <h3>
@@ -63,7 +62,7 @@ export function KlantenPagina({ werkruimte, userId, onGezien }: Props) {
                   <li key={o.id}>
                     <button
                       type="button"
-                      className={`link-btn${ongelezen ? " link-btn-ongelezen" : ""}`}
+                      className="link-btn"
                       onClick={(e) => {
                         e.stopPropagation();
                         markeerGeopend(klantId);

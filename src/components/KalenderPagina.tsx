@@ -13,7 +13,7 @@ interface Props {
 export function KalenderPagina({ werkruimte, userId, onGezien }: Props) {
   const { zichtbareOpdrachten, openOpdracht } = werkruimte;
   const itemIds = useMemo(() => kalenderItemIds(zichtbareOpdrachten), [zichtbareOpdrachten]);
-  const { isOngelezen, markeerGeopend } = useLijstGezienStatus(
+  const { markeerGeopend } = useLijstGezienStatus(
     "kalender",
     userId,
     itemIds,
@@ -24,7 +24,6 @@ export function KalenderPagina({ werkruimte, userId, onGezien }: Props) {
     <section className="card page-card">
       <Kalender
         opdrachten={zichtbareOpdrachten}
-        isOngelezen={isOngelezen}
         onSelectOpdracht={(o) => {
           markeerGeopend(o.id);
           openOpdracht(o);

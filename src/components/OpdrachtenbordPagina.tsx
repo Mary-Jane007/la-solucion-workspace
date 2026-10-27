@@ -22,7 +22,7 @@ export function OpdrachtenbordPagina({
   const { zichtbareOpdrachten, openOpdracht, handleOpdrachtUpdate, handleVerwijderMetBevestiging, opdrachtFout } =
     werkruimte;
   const itemIds = useMemo(() => bordItemIds(zichtbareOpdrachten), [zichtbareOpdrachten]);
-  const { isOngelezen, markeerGeopend } = useLijstGezienStatus("bord", userId, itemIds, onGezien);
+  const { markeerGeopend } = useLijstGezienStatus("bord", userId, itemIds, onGezien);
 
   return (
     <section className="card page-card">
@@ -41,7 +41,6 @@ export function OpdrachtenbordPagina({
       <OpdrachtenBord
         opdrachten={zichtbareOpdrachten}
         isEigenaar={isEigenaar}
-        isOngelezen={isOngelezen}
         onOpdrachtKlik={(o) => {
           markeerGeopend(o.id);
           openOpdracht(o);

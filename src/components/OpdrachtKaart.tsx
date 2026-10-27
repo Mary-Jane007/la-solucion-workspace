@@ -11,7 +11,6 @@ import {
 interface Props {
   opdracht: Opdracht;
   isEigenaar: boolean;
-  isOngelezen?: boolean;
   onKlik: () => void;
   onStatusWijzig: (status: OpdrachtStatus) => void;
   onVerwijder?: () => void;
@@ -20,14 +19,13 @@ interface Props {
 export function OpdrachtKaart({
   opdracht,
   isEigenaar,
-  isOngelezen = false,
   onKlik,
   onStatusWijzig,
   onVerwijder
 }: Props) {
   const created = new Date(opdracht.datumAangemaakt).toLocaleDateString("nl-NL");
   const isOpgeslagen = Boolean(opdracht.id);
-  const kaartKleur = opdrachtKaartClassNaam(opdracht.status, opdracht.prioriteit, isOngelezen);
+  const kaartKleur = opdrachtKaartClassNaam(opdracht.status, opdracht.prioriteit);
 
   return (
     <div className={`card opdracht-card${kaartKleur ? ` ${kaartKleur}` : ""}`}>

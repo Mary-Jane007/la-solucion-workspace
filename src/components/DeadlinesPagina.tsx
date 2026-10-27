@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { groepeerDeadlines, klantWeergave } from "../opdrachtenUtils";
+import { groepeerDeadlines, klantWeergave, opdrachtLijstItemClassNaam } from "../opdrachtenUtils";
 import { OpdrachtenWerkruimte } from "../hooks/useOpdrachtenWerkruimte";
 import { useLijstGezienStatus } from "../hooks/useLijstGezienStatus";
 import { deadlineBadgeIds } from "../opdrachtenUtils";
@@ -14,7 +14,7 @@ export function DeadlinesPagina({ werkruimte, userId, onGezien }: Props) {
   const { zichtbareOpdrachten, openOpdracht } = werkruimte;
   const groepen = useMemo(() => groepeerDeadlines(zichtbareOpdrachten), [zichtbareOpdrachten]);
   const itemIds = useMemo(() => deadlineBadgeIds(zichtbareOpdrachten), [zichtbareOpdrachten]);
-  const { isOngelezen, markeerGeopend } = useLijstGezienStatus(
+  const { markeerGeopend } = useLijstGezienStatus(
     "deadlines",
     userId,
     itemIds,
@@ -33,12 +33,11 @@ export function DeadlinesPagina({ werkruimte, userId, onGezien }: Props) {
             <h2>{groep.label}</h2>
             <ul className="page-list">
               {groep.opdrachten.map((o) => {
-                const ongelezen = isOngelezen(o.id);
                 return (
                   <li key={o.id}>
                     <button
                       type="button"
-                      className={`page-list-item${ongelezen ? " melding-ongelezen" : ""}`}
+                      className={opdrachtLijstItemClassNaam(o.status, o.prioriteit)}
                       onClick={() => {
                         markeerGeopend(o.id);
                         openOpdracht(o);
@@ -48,13 +47,9 @@ export function DeadlinesPagina({ werkruimte, userId, onGezien }: Props) {
                         <strong>{klantWeergave(o.klantNaam, o.klantNummer)}</strong>
                         <span className={`pill pill-prio-${o.prioriteit}`}>P{o.prioriteit}</span>
                       </div>
-                      <span className={ongelezen ? "melding-ongelezen-sub" : "muted"}>
-                        {o.omschrijving}
-                      </span>
+                      <span className="muted">{o.omschrijving}</span>
                       {o.datumDeadline && (
-                        <span
-                          className={`page-list-meta${ongelezen ? " melding-ongelezen-sub" : ""}`}
-                        >
+                        <span className="page-list-meta">
                           {new Date(o.datumDeadline).toLocaleDateString("nl-NL")}
                         </span>
                       )}

@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Opdracht, OpdrachtStatus } from "../types";
-import { isOpdrachtOpen, klantWeergave } from "../opdrachtenUtils";
+import { isOpdrachtOpen, isP1Rood, klantWeergave } from "../opdrachtenUtils";
 import { OpdrachtenWerkruimte } from "../hooks/useOpdrachtenWerkruimte";
 import { useLijstGezienStatus } from "../hooks/useLijstGezienStatus";
 import { homeItemIds } from "../badgeItems";
@@ -50,7 +50,7 @@ export function Dashboard({
   const vandaagIso = new Date().toISOString().slice(0, 10);
   const vandaagDue = zichtbareOpdrachten.filter((o) => o.datumDeadline === vandaagIso);
   const itemIds = useMemo(() => homeItemIds(zichtbareOpdrachten), [zichtbareOpdrachten]);
-  const { isOngelezen, markeerGeopend } = useLijstGezienStatus("home", userId, itemIds, onGezien);
+  const { markeerGeopend } = useLijstGezienStatus("home", userId, itemIds, onGezien);
 
   const openMetGezien = (o: Opdracht) => {
     markeerGeopend(o.id);
@@ -80,12 +80,11 @@ export function Dashboard({
           <p className="metric-subtitle">Alleen openstaande opdrachten met hoge prioriteit (P1).</p>
           <div className="important-list">
             {belangrijksteOpdrachten.map((o) => {
-              const ongelezen = isOngelezen(o.id);
               return (
                 <button
                   key={o.id}
                   type="button"
-                  className={`important-item${ongelezen ? " melding-ongelezen" : ""}`}
+                  className={`important-item${isP1Rood(o.status, o.prioriteit) ? " important-item-prio-1" : ""}`}
                   onClick={() => openMetGezien(o)}
                 >
                   <div className="important-main">
@@ -153,7 +152,7 @@ export function Dashboard({
                 <li key={o.id}>
                   <button
                     type="button"
-                    className={`link-btn${isOngelezen(o.id) ? " link-btn-ongelezen" : ""}`}
+                    className="link-btn"
                     onClick={() => openMetGezien(o)}
                   >
                     {klantWeergave(o.klantNaam, o.klantNummer)} – {o.omschrijving}

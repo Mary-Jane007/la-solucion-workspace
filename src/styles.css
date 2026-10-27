@@ -2265,30 +2265,9 @@ a.btn-secondary {
   color: var(--color-unread-text);
 }
 
-.prullenbak-rij-ongelezen {
-  background: var(--color-unread-bg);
-  color: var(--color-danger-strong);
-  cursor: pointer;
-}
-
-.prullenbak-rij-ongelezen td {
-  color: inherit;
-}
-
 .melding-ongelezen-sub {
   color: var(--color-danger);
   font-size: 13px;
-}
-
-.link-btn-ongelezen {
-  color: var(--color-unread-text) !important;
-}
-
-.opdracht-card-ongelezen {
-  border-color: var(--color-unread-border) !important;
-  background: var(--color-unread-bg);
-  color: var(--color-unread-text);
-  box-shadow: 0 0 0 1px var(--color-unread-border);
 }
 
 .opdracht-card.opdracht-card-prio-1 {
@@ -2298,19 +2277,8 @@ a.btn-secondary {
   box-shadow: inset 4px 0 0 var(--color-danger);
 }
 
-.important-item.melding-ongelezen {
-  border-color: var(--color-unread-border);
-  background: var(--color-unread-bg);
-  color: var(--color-unread-text);
-}
-
-.klant-kaart-ongelezen {
-  border-color: var(--color-unread-border);
-  background: var(--color-unread-bg);
-}
-
-.calendar-day-opdracht.melding-ongelezen {
-  border-color: var(--color-unread-border);
+.important-item-prio-1 {
+  border: 1px solid var(--color-unread-border);
   background: var(--color-unread-bg);
   color: var(--color-unread-text);
 }

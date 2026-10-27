@@ -58,7 +58,7 @@ export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
   );
 
   const itemIds = useMemo(() => documentenItemIds(alleOpdrachten), [alleOpdrachten]);
-  const { isOngelezen, markeerGeopend } = useLijstGezienStatus(
+  const { markeerGeopend } = useLijstGezienStatus(
     "documenten",
     userId,
     itemIds,
@@ -110,12 +110,10 @@ export function DocumentenPagina({ werkruimte, userId, onGezien }: Props) {
             </thead>
             <tbody>
               {documenten.map((d) => {
-                const ongelezen = isOngelezen(d.id);
                 const bekijkbaar = isBekijkbaarBestand(d.origineleNaam, d.mimeType);
                 return (
                   <tr
                     key={d.id}
-                    className={ongelezen ? "prullenbak-rij-ongelezen" : undefined}
                     onClick={() => markeerGeopend(d.id)}
                   >
                     <td>

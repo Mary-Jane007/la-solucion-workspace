@@ -542,30 +542,24 @@ export function statusPillClass(status?: OpdrachtStatus | string | null): string
 
 export function opdrachtKaartClassNaam(
   status: OpdrachtStatus | string | null | undefined,
-  prioriteit: number | null | undefined,
-  ongelezen = false
+  prioriteit: number | null | undefined
 ): string {
   if (isP1Rood(status, prioriteit)) return "opdracht-card-prio-1";
   if (isOpdrachtGroen(status)) return "opdracht-card-groen";
   if (status === OpdrachtStatus.OnHold) return "opdracht-card-onhold";
   if (status === OpdrachtStatus.Oud) return "opdracht-card-oud";
-  if (ongelezen) return "opdracht-card-ongelezen";
   return "";
 }
 
 export function opdrachtLijstItemClassNaam(
   status: OpdrachtStatus | string | null | undefined,
-  prioriteit: number | null | undefined,
-  ongelezen = false
+  prioriteit: number | null | undefined
 ): string {
   const klassen = ["page-list-item"];
   if (isP1Rood(status, prioriteit)) klassen.push("page-list-item-prio-1");
   else if (isOpdrachtGroen(status)) klassen.push("page-list-item-groen");
   else if (status === OpdrachtStatus.OnHold) klassen.push("page-list-item-onhold");
   else if (status === OpdrachtStatus.Oud) klassen.push("page-list-item-oud");
-  if (ongelezen && !isP1Rood(status, prioriteit) && !isOpdrachtGroen(status)) {
-    klassen.push("melding-ongelezen");
-  }
   return klassen.join(" ");
 }
 

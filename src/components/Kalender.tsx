@@ -4,7 +4,6 @@ import { klantWeergave } from "../opdrachtenUtils";
 
 interface Props {
   opdrachten: Opdracht[];
-  isOngelezen?: (opdrachtId: string) => boolean;
   onSelectOpdracht: (opdracht: Opdracht) => void;
 }
 
@@ -57,7 +56,7 @@ function dagRedenLabel(item: KalenderDagOpdracht): string {
   return "Deadline op deze dag";
 }
 
-export function Kalender({ opdrachten, isOngelezen, onSelectOpdracht }: Props) {
+export function Kalender({ opdrachten, onSelectOpdracht }: Props) {
   const vandaag = new Date();
   const jaar = vandaag.getFullYear();
   const maand = vandaag.getMonth();
@@ -227,9 +226,7 @@ export function Kalender({ opdrachten, isOngelezen, onSelectOpdracht }: Props) {
                     <li key={o.id}>
                       <button
                         type="button"
-                        className={`calendar-day-opdracht calendar-item-prio-${o.prioriteit}${
-                          isOngelezen?.(o.id) ? " melding-ongelezen" : ""
-                        }`}
+                        className={`calendar-day-opdracht calendar-item-prio-${o.prioriteit}`}
                         onClick={() => openOpdracht(o)}
                       >
                         <span className="calendar-day-opdracht-top">

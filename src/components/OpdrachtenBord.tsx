@@ -6,7 +6,6 @@ import { OpdrachtKaart } from "./OpdrachtKaart";
 export interface OpdrachtenBordProps {
   opdrachten: Opdracht[];
   isEigenaar: boolean;
-  isOngelezen?: (opdrachtId: string) => boolean;
   onOpdrachtKlik: (opdracht: Opdracht) => void;
   onOpdrachtWijzig: (opdracht: Opdracht) => void | Promise<Opdracht>;
   onOpdrachtVerwijder?: (opdracht: Opdracht) => void | Promise<void>;
@@ -21,7 +20,6 @@ function opdrachtMatchtZoekterm(opdracht: Opdracht, zoekterm: string): boolean {
 export function OpdrachtenBord({
   opdrachten,
   isEigenaar,
-  isOngelezen,
   onOpdrachtKlik,
   onOpdrachtWijzig,
   onOpdrachtVerwijder
@@ -80,7 +78,6 @@ export function OpdrachtenBord({
                     key={o.id}
                     opdracht={o}
                     isEigenaar={isEigenaar}
-                    isOngelezen={isOngelezen?.(o.id)}
                     onKlik={() => onOpdrachtKlik(o)}
                     onStatusWijzig={(status) => veranderStatus(o, status)}
                     onVerwijder={

@@ -14,7 +14,7 @@ export function MijnOpdrachtenPagina({ werkruimte, userId, onGezien }: Props) {
   const { mijnOpdrachten, openOpdracht } = werkruimte;
   const openstaand = mijnOpdrachten.filter((o) => isOpdrachtOpen(o.status));
   const itemIds = useMemo(() => mijnOpdrachtenItemIds(mijnOpdrachten), [mijnOpdrachten]);
-  const { isOngelezen, markeerGeopend } = useLijstGezienStatus(
+  const { markeerGeopend } = useLijstGezienStatus(
     "mijn-opdrachten",
     userId,
     itemIds,
@@ -32,12 +32,11 @@ export function MijnOpdrachtenPagina({ werkruimte, userId, onGezien }: Props) {
       ) : (
         <ul className="page-list">
           {mijnOpdrachten.map((o) => {
-            const ongelezen = isOngelezen(o.id);
             return (
               <li key={o.id}>
                 <button
                   type="button"
-                  className={opdrachtLijstItemClassNaam(o.status, o.prioriteit, ongelezen)}
+                  className={opdrachtLijstItemClassNaam(o.status, o.prioriteit)}
                   onClick={() => {
                     markeerGeopend(o.id);
                     openOpdracht(o);
@@ -47,10 +46,8 @@ export function MijnOpdrachtenPagina({ werkruimte, userId, onGezien }: Props) {
                     <strong>{klantWeergave(o.klantNaam, o.klantNummer)}</strong>
                     <span className={`pill pill-prio-${o.prioriteit}`}>P{o.prioriteit}</span>
                   </div>
-                  <span className={ongelezen ? "melding-ongelezen-sub" : "muted"}>
-                    {o.omschrijving}
-                  </span>
-                  <span className={`page-list-meta${ongelezen ? " melding-ongelezen-sub" : ""}`}>
+                  <span className="muted">{o.omschrijving}</span>
+                  <span className="page-list-meta">
                     {statusLabel(o.status)}
                     {o.datumDeadline &&
                       ` · Deadline ${new Date(o.datumDeadline).toLocaleDateString("nl-NL")}`}
