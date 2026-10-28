@@ -1780,30 +1780,26 @@ function sleep(ms) {
 }
 
 async function keepDatabaseReady() {
-  let migrated = false;
-  let uploadsSynced = false;
   for (;;) {
     const ok = await pingDb();
-    if (ok && !migrated) {
+    if (ok) {
       try {
         await migrate();
         await ensureOwnerAccount();
-        migrated = true;
         console.log("Database is klaar.");
+        void syncUploadsNaarDatabase()
+          .then(() => undefined)
+          .catch((err) => {
+            console.warn("Uploads konden niet volledig in de database worden gezet:", err.message);
+          });
+        // Stop daarna met pingen. Een ping elke 30s houdt Neon 24/7 wakker
+        // en verbruikt de gratis CU-uren.
+        return;
       } catch (err) {
         console.error("Database-start mislukt:", err.message || err);
       }
     }
-    if (ok && migrated && !uploadsSynced) {
-      uploadsSynced = true;
-      void syncUploadsNaarDatabase()
-        .then(() => undefined)
-        .catch((err) => {
-          uploadsSynced = false;
-          console.warn("Uploads konden niet volledig in de database worden gezet:", err.message);
-        });
-    }
-    await sleep(ok ? 30000 : 4000);
+    await sleep(15000);
   }
 }
 
