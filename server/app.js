@@ -12,7 +12,7 @@ const fs = require("fs");
 const crypto = require("crypto");
 const multer = require("multer");
 const { v4: uuidv4 } = require("uuid");
-const { migrate, pingDb } = require("./db");
+const { migrate, pingDb, getDbStatus, isDbUnavailable } = require("./db");
 const { z } = require("zod");
 const {
   HELP_VIDEO_DIR,
@@ -570,6 +570,12 @@ app.post("/api/auth/register", async (req, res) => {
     });
   } catch (err) {
     console.error("Fout bij registreren:", err);
+    if (isDbUnavailable(err)) {
+      return res.status(503).json({
+        error:
+          "De database is even niet bereikbaar. Wacht een paar seconden en probeer opnieuw."
+      });
+    }
     return res.status(500).json({ error: "Interne serverfout bij registreren." });
   }
 });
@@ -626,6 +632,12 @@ app.post("/api/auth/login", async (req, res) => {
   } catch (err) {
     console.error("Fout bij inloggen:", err.message || err);
     console.error(err.stack);
+    if (isDbUnavailable(err)) {
+      return res.status(503).json({
+        error:
+          "De database is even niet bereikbaar. Wacht een paar seconden en probeer opnieuw in te loggen."
+      });
+    }
     return res.status(500).json({ error: "Interne serverfout bij inloggen." });
   }
 });
@@ -1666,14 +1678,14 @@ app.delete("/api/admin/help/video", authRequired, requireOwner, async (_req, res
   }
 });
 
-app.get("/api/health", async (_req, res) => {
-  try {
-    const db = hasDb() ? await pingDb(4000) : false;
-    res.json({ ok: true, env: NODE_ENV, db });
-  } catch (err) {
-    console.error("Health check-fout:", err);
-    res.json({ ok: true, env: NODE_ENV, db: false });
-  }
+app.get("/api/health", (_req, res) => {
+  const dbStatus = getDbStatus();
+  res.json({
+    ok: true,
+    env: NODE_ENV,
+    db: dbStatus.ok,
+    dbError: dbStatus.error
+  });
 });
 
 app.use("/api", (req, res) => {
@@ -1763,26 +1775,45 @@ function listenHttp() {
   });
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function keepDatabaseReady() {
+  let migrated = false;
+  let uploadsSynced = false;
+  for (;;) {
+    const ok = await pingDb();
+    if (ok && !migrated) {
+      try {
+        await migrate();
+        await ensureOwnerAccount();
+        migrated = true;
+        console.log("Database is klaar.");
+      } catch (err) {
+        console.error("Database-start mislukt:", err.message || err);
+      }
+    }
+    if (ok && migrated && !uploadsSynced) {
+      uploadsSynced = true;
+      void syncUploadsNaarDatabase()
+        .then(() => undefined)
+        .catch((err) => {
+          uploadsSynced = false;
+          console.warn("Uploads konden niet volledig in de database worden gezet:", err.message);
+        });
+    }
+    await sleep(ok ? 30000 : 4000);
+  }
+}
+
 async function startServer() {
   if (NODE_ENV === "production") {
     mountProductionFrontend();
   }
 
   const server = await listenHttp();
-
-  try {
-    await migrate();
-    await ensureOwnerAccount();
-  } catch (err) {
-    console.error("Database-start mislukt:", err.message || err);
-  }
-
-  void syncUploadsNaarDatabase()
-    .then(() => undefined)
-    .catch((err) => {
-      console.warn("Uploads konden niet volledig in de database worden gezet:", err.message);
-    });
-
+  void keepDatabaseReady();
   return server;
 }
 

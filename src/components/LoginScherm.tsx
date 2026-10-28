@@ -41,6 +41,7 @@ export function LoginScherm({ onLogin }: Props) {
   const [registratieSucces, setRegistratieSucces] = useState<string | null>(null);
   const [isBezig, setIsBezig] = useState(false);
   const [serverOk, setServerOk] = useState<boolean | null>(null);
+  const [databaseOk, setDatabaseOk] = useState<boolean | null>(null);
 
   const resetToken = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
@@ -61,15 +62,18 @@ export function LoginScherm({ onLogin }: Props) {
       try {
         const res = await fetch("/api/health", { cache: "no-store", signal: ac.signal });
         const text = await res.text();
-        let data: { ok?: boolean } = {};
+        let data: { ok?: boolean; db?: boolean } = {};
         try {
-          data = JSON.parse(text) as { ok?: boolean };
+          data = JSON.parse(text) as { ok?: boolean; db?: boolean };
         } catch {
           data = {};
         }
         const ok = res.ok && data.ok === true;
-        if (!cancelled) setServerOk(ok);
-        if (!cancelled) timer = window.setTimeout(checkServer, ok ? 60000 : 8000);
+        if (!cancelled) {
+          setServerOk(ok);
+          setDatabaseOk(ok ? data.db === true : false);
+        }
+        if (!cancelled) timer = window.setTimeout(checkServer, ok && data.db === true ? 60000 : 8000);
       } catch {
         if (!cancelled) setServerOk(false);
         if (!cancelled) timer = window.setTimeout(checkServer, 8000);
@@ -237,6 +241,11 @@ export function LoginScherm({ onLogin }: Props) {
               {["localhost", "127.0.0.1"].includes(window.location.hostname)
                 ? "De backend is offline. Start lokaal met npm run dev en ververs de pagina."
                 : "De server start nog of is even in slaap (Render). Wacht tot een minuut en ververs de pagina. Je kunt intussen al inloggen."}
+            </p>
+          )}
+          {serverOk === true && databaseOk === false && (
+            <p className="login-hint login-error" role="alert">
+              De database is even niet bereikbaar. Wacht een paar seconden en probeer opnieuw in te loggen.
             </p>
           )}
           <form onSubmit={handleSubmit} className="form">

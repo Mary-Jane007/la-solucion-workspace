@@ -1,4 +1,14 @@
+const dns = require("dns");
 const { Pool } = require("pg");
+
+// Node 18+ probeert IPv6 eerst; Render bereikt Neon daar vaak niet.
+try {
+  if (typeof dns.setDefaultResultOrder === "function") {
+    dns.setDefaultResultOrder("ipv4first");
+  }
+} catch {
+  /* oudere Node */
+}
 
 const DATABASE_URL = process.env.DATABASE_URL;
 const NODE_ENV = process.env.NODE_ENV || "development";
@@ -9,31 +19,120 @@ if (!DATABASE_URL) {
   }
 }
 
-/** Neon: channel_binding kan node-pg breken. */
+const RETRYABLE_DB_CODES = new Set([
+  "ETIMEDOUT",
+  "ECONNREFUSED",
+  "ENOTFOUND",
+  "ENETUNREACH",
+  "EAI_AGAIN",
+  "ECONNRESET",
+  "EPIPE",
+  "EHOSTUNREACH",
+  "57P01",
+  "57P02",
+  "57P03",
+  "08000",
+  "08001",
+  "08003",
+  "08004",
+  "08006",
+  "08007",
+  "53300"
+]);
+
+let lastPingOk = false;
+let lastPingError = null;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function stripWrappedQuotes(raw) {
+  let s = String(raw || "").trim().replace(/^\uFEFF/, "");
+  if (
+    (s.startsWith('"') && s.endsWith('"')) ||
+    (s.startsWith("'") && s.endsWith("'"))
+  ) {
+    s = s.slice(1, -1).trim();
+  }
+  return s;
+}
+
+function sanitizeDbError(err) {
+  if (!err) return { code: "UNKNOWN", message: "onbekend" };
+  const code = String(err.code || err.errno || "UNKNOWN");
+  let message = String(err.message || "onbekend");
+  message = message
+    .replace(/postgres(?:ql)?:\/\/[^\s]+/gi, "[redacted]")
+    .replace(/\bpassword[=:]\s*\S+/gi, "password=[redacted]")
+    .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, "[redacted]")
+    .replace(/\bep-[a-z0-9-]+\.[a-z0-9.-]+/gi, "[host]");
+  return { code, message: message.slice(0, 160) };
+}
+
+function isRetryableDbError(err) {
+  if (!err) return false;
+  const code = String(err.code || err.errno || "");
+  if (RETRYABLE_DB_CODES.has(code)) return true;
+  const msg = String(err.message || "");
+  return /timeout|terminat|connection|ssl|network|closed|not yet|not active|compute|ECONN|ENETUNREACH|too many clients/i.test(
+    msg
+  );
+}
+
+function isDbUnavailable(err) {
+  if (!err) return false;
+  if (isRetryableDbError(err)) return true;
+  const code = String(err.code || err.errno || "");
+  if (["28P01", "28000", "3D000"].includes(code)) return true;
+  return /Database niet geconfigureerd/i.test(String(err.message || ""));
+}
+
+function getDbStatus() {
+  return {
+    ok: lastPingOk,
+    error: lastPingOk ? null : lastPingError
+  };
+}
+
+/** Neon: quotes/channel_binding kunnen node-pg breken. */
 function normalizeDatabaseUrl(raw) {
   if (!raw) return raw;
+  const s = stripWrappedQuotes(raw);
   try {
-    const u = new URL(raw);
+    const u = new URL(s);
     u.searchParams.delete("channel_binding");
+    if (!u.searchParams.get("sslmode") && process.env.PGSSLMODE !== "disable") {
+      u.searchParams.set("sslmode", "require");
+    }
     return u.toString();
   } catch {
-    return String(raw).replace(/([?&])channel_binding=[^&]*&?/g, "$1").replace(/[?&]$/, "");
+    return s.replace(/([?&])channel_binding=[^&]*&?/g, "$1").replace(/[?&]$/, "");
   }
 }
 
 const pool = DATABASE_URL
   ? new Pool({
       connectionString: normalizeDatabaseUrl(DATABASE_URL),
-      ssl: process.env.PGSSLMODE === "disable" ? false : { rejectUnauthorized: false },
+      ssl: process.env.PGSSLMODE === "disable" ? false : { require: true, rejectUnauthorized: false },
       max: 10,
-      connectionTimeoutMillis: 15000,
-      idleTimeoutMillis: 30000
+      min: 0,
+      connectionTimeoutMillis: 12000,
+      idleTimeoutMillis: 30000,
+      keepAlive: true,
+      allowExitOnIdle: true
     })
   : null;
 
 if (pool) {
   pool.on("error", (err) => {
-    console.error("Databaseverbinding verbroken (idle); wordt opnieuw geopend bij de volgende query.", err.message);
+    lastPingOk = false;
+    lastPingError = sanitizeDbError(err);
+    console.error(
+      "Databaseverbinding verbroken (idle); wordt opnieuw geopend bij de volgende query.",
+      lastPingError.code,
+      lastPingError.message
+    );
   });
 }
 
@@ -41,25 +140,44 @@ async function query(text, params) {
   if (!pool) {
     throw new Error("Database niet geconfigureerd (DATABASE_URL ontbreekt).");
   }
-  const res = await pool.query(text, params);
-  return res;
+  let lastErr;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await pool.query(text, params);
+      lastPingOk = true;
+      lastPingError = null;
+      return res;
+    } catch (err) {
+      lastErr = err;
+      lastPingOk = false;
+      lastPingError = sanitizeDbError(err);
+      if (attempt === 3 || !isRetryableDbError(err)) throw err;
+      const waitMs = 1500 * attempt;
+      console.warn(
+        `Databasepoging ${attempt} mislukt (${lastPingError.code}). Opnieuw over ${waitMs}ms.`
+      );
+      await sleep(waitMs);
+    }
+  }
+  throw lastErr;
 }
 
-async function pingDb(timeoutMs = 5000) {
-  if (!pool) return false;
-  let timer;
-  try {
-    await Promise.race([
-      query("select 1 as ok"),
-      new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error("db ping timeout")), timeoutMs);
-      })
-    ]);
-    return true;
-  } catch {
+async function pingDb() {
+  if (!pool) {
+    lastPingOk = false;
+    lastPingError = { code: "NO_DATABASE_URL", message: "DATABASE_URL ontbreekt" };
     return false;
-  } finally {
-    if (timer) clearTimeout(timer);
+  }
+  try {
+    await pool.query("select 1 as ok");
+    lastPingOk = true;
+    lastPingError = null;
+    return true;
+  } catch (err) {
+    lastPingOk = false;
+    lastPingError = sanitizeDbError(err);
+    console.warn("Database-ping mislukt:", lastPingError.code, lastPingError.message);
+    return false;
   }
 }
 
@@ -602,6 +720,8 @@ module.exports = {
   pool,
   query,
   pingDb,
-  migrate
+  migrate,
+  getDbStatus,
+  isDbUnavailable
 };
 
