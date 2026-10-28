@@ -56,15 +56,25 @@ export function LoginScherm({ onLogin }: Props) {
     let cancelled = false;
     let timer = 0;
     const checkServer = async () => {
+      const ac = new AbortController();
+      const abortTimer = window.setTimeout(() => ac.abort(), 8000);
       try {
-        const res = await fetch("/api/health", { cache: "no-store" });
-        const data = await res.json();
-        const ok = res.ok && Boolean(data.ok);
+        const res = await fetch("/api/health", { cache: "no-store", signal: ac.signal });
+        const text = await res.text();
+        let data: { ok?: boolean } = {};
+        try {
+          data = JSON.parse(text) as { ok?: boolean };
+        } catch {
+          data = {};
+        }
+        const ok = res.ok && data.ok === true;
         if (!cancelled) setServerOk(ok);
         if (!cancelled) timer = window.setTimeout(checkServer, ok ? 60000 : 8000);
       } catch {
         if (!cancelled) setServerOk(false);
         if (!cancelled) timer = window.setTimeout(checkServer, 8000);
+      } finally {
+        window.clearTimeout(abortTimer);
       }
     };
     void checkServer();
@@ -224,9 +234,9 @@ export function LoginScherm({ onLogin }: Props) {
           </p>
           {serverOk === false && (
             <p className="login-hint login-error" role="alert">
-              De backend is offline — inloggen lukt nu niet. Start alles met{" "}
-              <code>npm run dev</code> (frontend + backend samen), of alleen de backend met{" "}
-              <code>npm run dev:server</code>. We proberen elke paar seconden opnieuw te verbinden.
+              {["localhost", "127.0.0.1"].includes(window.location.hostname)
+                ? "De backend is offline. Start lokaal met npm run dev en ververs de pagina."
+                : "De server start nog of is even in slaap (Render). Wacht tot een minuut en ververs de pagina. Je kunt intussen al inloggen."}
             </p>
           )}
           <form onSubmit={handleSubmit} className="form">

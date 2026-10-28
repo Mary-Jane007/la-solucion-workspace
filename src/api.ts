@@ -39,7 +39,7 @@ export async function login(email: string, password: string): Promise<{
   user: Gebruiker;
 }> {
   const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), 20000);
+  const timer = window.setTimeout(() => controller.abort(), 45000);
   let res: Response;
   try {
     res = await apiFetch("/api/auth/login", {
@@ -49,10 +49,19 @@ export async function login(email: string, password: string): Promise<{
       signal: controller.signal
     });
   } catch (err) {
+    const lokaal = ["localhost", "127.0.0.1"].includes(window.location.hostname);
     if (err instanceof DOMException && err.name === "AbortError") {
-      throw new Error("Inloggen duurde te lang. Controleer of de backend draait (npm run dev).");
+      throw new Error(
+        lokaal
+          ? "Inloggen duurde te lang. Controleer of de backend draait (npm run dev)."
+          : "Inloggen duurde te lang. De server start waarschijnlijk nog op — wacht even en probeer opnieuw."
+      );
     }
-    throw new Error("De server is niet bereikbaar. Start alles met npm run dev en probeer het opnieuw.");
+    throw new Error(
+      lokaal
+        ? "De server is niet bereikbaar. Start alles met npm run dev en probeer het opnieuw."
+        : "De server is even niet bereikbaar. Wacht tot de site is opgestart en probeer opnieuw."
+    );
   } finally {
     window.clearTimeout(timer);
   }

@@ -12,7 +12,7 @@ const fs = require("fs");
 const crypto = require("crypto");
 const multer = require("multer");
 const { v4: uuidv4 } = require("uuid");
-const { migrate } = require("./db");
+const { migrate, pingDb } = require("./db");
 const { z } = require("zod");
 const {
   HELP_VIDEO_DIR,
@@ -123,6 +123,12 @@ app.use(
       if (!origin) return cb(null, true);
       const o = origin.replace(/\/$/, "");
       if (CORS_ORIGINS.some((allowedOrigin) => o === allowedOrigin)) return cb(null, true);
+      try {
+        const host = new URL(o).hostname;
+        if (host.endsWith(".onrender.com") || host.endsWith(".vercel.app")) return cb(null, true);
+      } catch {
+        /* ignore */
+      }
       if (NODE_ENV !== "production") {
         try {
           const host = new URL(o).hostname;
@@ -1662,13 +1668,11 @@ app.delete("/api/admin/help/video", authRequired, requireOwner, async (_req, res
 
 app.get("/api/health", async (_req, res) => {
   try {
-    if (hasDb()) {
-      await getUsers();
-    }
-    res.json({ ok: true, env: NODE_ENV, db: hasDb() });
+    const db = hasDb() ? await pingDb(4000) : false;
+    res.json({ ok: true, env: NODE_ENV, db });
   } catch (err) {
-    console.error("Health check DB-fout:", err);
-    res.status(503).json({ ok: false, error: "Database niet bereikbaar." });
+    console.error("Health check-fout:", err);
+    res.json({ ok: true, env: NODE_ENV, db: false });
   }
 });
 
@@ -1690,61 +1694,53 @@ app.use((err, req, res, next) => {
   }
 });
 
-async function startServer() {
-  await migrate();
-  try {
-    await syncUploadsNaarDatabase();
-  } catch (err) {
-    console.warn("Uploads konden niet volledig in de database worden gezet:", err.message);
-  }
-  await ensureOwnerAccount();
-
-  if (NODE_ENV === "production") {
-    const distPath = path.join(__dirname, "..", "dist");
-    if (!fs.existsSync(distPath)) {
-      throw new Error(
-        "Map 'dist' ontbreekt. Voer eerst 'npm run build' uit (maakt de frontend-build aan)."
-      );
-    }
-    app.use(
-      express.static(distPath, {
-        index: false,
-        etag: true,
-        setHeaders(res, filePath) {
-          const name = path.basename(filePath);
-          if (/\.mjs$/i.test(name)) {
-            res.setHeader("Content-Type", "application/javascript; charset=utf-8");
-          }
-          if (
-            name === "index.html" ||
-            name === "version.json" ||
-            name === "manifest.webmanifest"
-          ) {
-            res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-            res.setHeader("Pragma", "no-cache");
-            res.setHeader("Expires", "0");
-            return;
-          }
-          if (/\.[a-f0-9]{8,}\./i.test(name)) {
-            res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-            return;
-          }
-          res.setHeader("Cache-Control", "no-cache");
-        }
-      })
+function mountProductionFrontend() {
+  const distPath = path.join(__dirname, "..", "dist");
+  if (!fs.existsSync(distPath)) {
+    throw new Error(
+      "Map 'dist' ontbreekt. Voer eerst 'npm run build' uit (maakt de frontend-build aan)."
     );
-    app.get("*", (req, res, next) => {
-      if (req.path.startsWith("/api")) return next();
-      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-      res.setHeader("Pragma", "no-cache");
-      res.setHeader("Expires", "0");
-      res.sendFile(path.join(distPath, "index.html"));
-    });
   }
+  app.use(
+    express.static(distPath, {
+      index: false,
+      etag: true,
+      setHeaders(res, filePath) {
+        const name = path.basename(filePath);
+        if (/\.mjs$/i.test(name)) {
+          res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+        }
+        if (
+          name === "index.html" ||
+          name === "version.json" ||
+          name === "manifest.webmanifest"
+        ) {
+          res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+          res.setHeader("Pragma", "no-cache");
+          res.setHeader("Expires", "0");
+          return;
+        }
+        if (/\.[a-f0-9]{8,}\./i.test(name)) {
+          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+          return;
+        }
+        res.setHeader("Cache-Control", "no-cache");
+      }
+    })
+  );
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/api")) return next();
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    res.sendFile(path.join(distPath, "index.html"));
+  });
+}
 
+function listenHttp() {
   return new Promise((resolve, reject) => {
-    const server = app.listen(PORT, () => {
-      console.log(`La-Solución backend draait op http://localhost:${PORT}`);
+    const server = app.listen(Number(PORT), "0.0.0.0", () => {
+      console.log(`La-Solución backend draait op http://0.0.0.0:${PORT}`);
       if (NODE_ENV === "production") {
         console.log(
           `Productie: frontend + API op PORT ${PORT}. Open de app via een van: ${CORS_ORIGINS.join(", ")}`
@@ -1765,6 +1761,29 @@ async function startServer() {
       reject(err);
     });
   });
+}
+
+async function startServer() {
+  if (NODE_ENV === "production") {
+    mountProductionFrontend();
+  }
+
+  const server = await listenHttp();
+
+  try {
+    await migrate();
+    await ensureOwnerAccount();
+  } catch (err) {
+    console.error("Database-start mislukt:", err.message || err);
+  }
+
+  void syncUploadsNaarDatabase()
+    .then(() => undefined)
+    .catch((err) => {
+      console.warn("Uploads konden niet volledig in de database worden gezet:", err.message);
+    });
+
+  return server;
 }
 
 module.exports = { app, startServer };

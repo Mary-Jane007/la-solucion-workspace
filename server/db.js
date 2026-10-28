@@ -24,7 +24,10 @@ function normalizeDatabaseUrl(raw) {
 const pool = DATABASE_URL
   ? new Pool({
       connectionString: normalizeDatabaseUrl(DATABASE_URL),
-      ssl: process.env.PGSSLMODE === "disable" ? false : { rejectUnauthorized: false }
+      ssl: process.env.PGSSLMODE === "disable" ? false : { rejectUnauthorized: false },
+      max: 10,
+      connectionTimeoutMillis: 15000,
+      idleTimeoutMillis: 30000
     })
   : null;
 
@@ -40,6 +43,24 @@ async function query(text, params) {
   }
   const res = await pool.query(text, params);
   return res;
+}
+
+async function pingDb(timeoutMs = 5000) {
+  if (!pool) return false;
+  let timer;
+  try {
+    await Promise.race([
+      query("select 1 as ok"),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error("db ping timeout")), timeoutMs);
+      })
+    ]);
+    return true;
+  } catch {
+    return false;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 async function migrateLegacyUsersTable() {
@@ -580,6 +601,7 @@ async function canoniseerFinancieleNaam(naam, account) {
 module.exports = {
   pool,
   query,
+  pingDb,
   migrate
 };
 
